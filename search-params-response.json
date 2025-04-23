@@ -1,0 +1,125 @@
+{
+    "success": true,
+    "searchParameters": {
+        "first_name": {
+            "name": "First Name",
+            "column": "first_name",
+            "type": "text"
+        },
+        "last_name": {
+            "name": "Last Name",
+            "column": "last_name",
+            "type": "text"
+        },
+        "email": {
+            "name": "Email",
+            "column": "email",
+            "type": "text"
+        },
+        "phone": {
+            "name": "Phone",
+            "column": "phone",
+            "type": "tel"
+        },
+        "company": {
+            "name": "Company",
+            "column": "company",
+            "type": "text"
+        },
+        "address": {
+            "name": "Address",
+            "column": "address",
+            "type": "text"
+        },
+        "suburb": {
+            "name": "Suburb",
+            "column": "suburb",
+            "type": "text"
+        },
+        "region": {
+            "name": "Region",
+            "column": "region",
+            "type": "text"
+        },
+        "country": {
+            "name": "Country",
+            "column": "country",
+            "type": "text"
+        },
+        "country_code": {
+            "name": "Country Code",
+            "column": "country_code",
+            "type": "text"
+        },
+        "api_shipment_id": {
+            "name": "Shipment Id",
+            "column": "api_shipment_id",
+            "type": "text"
+        },
+        "tracking_code": {
+            "name": "Tracking Code",
+            "column": "tracking_code",
+            "type": "text"
+        },
+        "carrier_code": {
+            "name": "Carrier",
+            "column": "carrier_code",
+            "type": "text"
+        },
+        "service_code": {
+            "name": "Service Code",
+            "column": "service_code",
+            "type": "text"
+        },
+        "total_price": {
+            "name": "Value",
+            "column": "total_price",
+            "type": "tel"
+        },
+        "shipping_title": {
+            "name": "Shipping Type",
+            "column": "shipping_title",
+            "type": "text"
+        },
+        "total_shipping": {
+            "name": "Shipping Cost",
+            "column": "total_shipping",
+            "type": "text"
+        },
+        "manifested": {
+            "name": "Manifested",
+            "column": "manifested",
+            "type": "boolean"
+        },
+        "has_been_relabled": {
+            "name": "Re-Labeled",
+            "column": "has_been_relabled",
+            "type": "boolean"
+        },
+        "wholesale": {
+            "name": "Wholesale",
+            "column": "wholesale",
+            "type": "boolean"
+        },
+        "status": {
+            "name": "Status",
+            "column": "status",
+            "type": "boolean"
+        },
+        "unl_done": {
+            "name": "UNL Done",
+            "column": "unl_done",
+            "type": "boolean"
+        },
+        "on_hold": {
+            "name": "On Hold",
+            "column": "on_hold",
+            "type": "boolean"
+        },
+        "label_printed": {
+            "name": "On Hold",
+            "column": "label_printed",
+            "type": "boolean"
+        }
+    }
+}
