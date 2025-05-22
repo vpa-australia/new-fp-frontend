@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react'; // Added useEffect and useState
-import { useRouter } from 'next/navigation'; // Import useRouter
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react'; 
+import { useRouter } from 'next/navigation'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -16,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ArrowUpIcon, BoxIcon, CheckCircleIcon, DollarSignIcon, FilterIcon, MoreHorizontalIcon, PlusIcon, PrinterIcon, SearchIcon, TrashIcon, TruckIcon, UserIcon, LogOutIcon, Loader2 } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2
+import { ArrowUpIcon, BoxIcon, CheckCircleIcon, DollarSignIcon, SearchIcon, TruckIcon, UserIcon, LogOutIcon, Loader2 } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
 import { ShipmentsTable } from '@/components/ShipmentsTable';
 
 // Define Warehouse interface
@@ -38,6 +37,7 @@ interface Shipment {
   email: string;
   address1: string;
   suburb: string;
+  invoicePrinted: boolean;
   region: string;
   postCode: string;
   country: string;
@@ -46,13 +46,20 @@ interface Shipment {
   serviceCode: string;
   tracking_code: string;
   labelPrinted: boolean;
+  sent: boolean;
+  unlDone: boolean;
   manifested: boolean;
   status: string | null;
+  carrierCodeDesired: string;
   quotes: Array<{
+    carrierCodeDesired: string;
     carrierCode: string;
     serviceCode: string;
     costIncludingTax: string;
   }>;
+  orderDate: number; // Added order date
+  totalPrice: string; // Added total price (as string based on API)
+  lastApiUpdate: number; // Added last API update time
 }
 
 const getStatusClass = (status: string | null) => {
@@ -81,14 +88,24 @@ export default function DashboardPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [loadingShipments, setLoadingShipments] = useState(true);
   const [selectedWarehouse, setSelectedWarehouse] = useState("All");
+  const [selectedShipmentIds, setSelectedShipmentIds] = useState<number[]>([]); // State to track selected shipment IDs
   const router = useRouter(); // Initialize router
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      router.push('/login');
+    }
+  }, [router]);
 
 
   // Logout handler function
   const handleLogout = () => {
     // Remove the authentication token from localStorage
-    localStorage.removeItem('authToken'); // Adjust 'authToken' if the key is different
+    localStorage.removeItem('authToken');
     // Redirect to the login page
+    router.push('/login');
   };
 
   useEffect(() => {
@@ -300,13 +317,34 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Toolbar */}
-      {/* ... existing toolbar code ... */}
-      <div className="flex items-center justify-between mb-4 bg-white p-4 rounded-lg shadow-sm">
-        <div className="flex items-center space-x-2">
-          <Checkbox id="select-all" />
-          <label htmlFor="select-all" className="text-sm font-medium">Select All</label>
-        </div>
+
+      {/* Tabs and Table */} 
+      <Tabs defaultValue="all" className="w-full" onValueChange={(value) => setSelectedWarehouse(value)}>
+        <div className='flex flex-row justify-between items-center'>
+        <TabsList className="bg-white p-1 rounded-lg shadow-sm mb-4 flex flex-wrap"> {/* Added flex-wrap */} 
+          <TabsTrigger value="all" className="text-sm px-4 py-1.5">All Locations</TabsTrigger>
+          {loadingWarehouses && (
+            <div className="flex items-center px-4 py-1.5 text-sm text-gray-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading Locations...
+            </div>
+          )}
+          {warehouseError && (
+            <div className="px-4 py-1.5 text-sm text-red-600">
+              Error: {warehouseError}
+            </div>
+          )}
+          {!loadingWarehouses && !warehouseError && warehouses.map((warehouse) => (
+            <TabsTrigger
+              key={warehouse.id}
+              value={warehouse.name} // Use a unique value, e.g., lowercase name or ID
+              className="text-sm px-4 py-1.5"
+            >
+              {warehouse.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
         <div className="flex items-center gap-4">
           <div className="relative flex-1 min-w-[300px]">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -334,35 +372,9 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Tabs and Table */} 
-      <Tabs defaultValue="all" className="w-full" onValueChange={(value) => setSelectedWarehouse(value)}>
-        <TabsList className="bg-white p-1 rounded-lg shadow-sm mb-4 flex flex-wrap"> {/* Added flex-wrap */} 
-          <TabsTrigger value="all" className="text-sm px-4 py-1.5">All Locations</TabsTrigger>
-          {loadingWarehouses && (
-            <div className="flex items-center px-4 py-1.5 text-sm text-gray-500">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading Locations...
-            </div>
-          )}
-          {warehouseError && (
-            <div className="px-4 py-1.5 text-sm text-red-600">
-              Error: {warehouseError}
-            </div>
-          )}
-          {!loadingWarehouses && !warehouseError && warehouses.map((warehouse) => (
-            <TabsTrigger
-              key={warehouse.id}
-              value={warehouse.name} // Use a unique value, e.g., lowercase name or ID
-              className="text-sm px-4 py-1.5"
-            >
-              {warehouse.name}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        </div>
         <TabsContent value="all">
-          <Card className="shadow-sm">
+          <Card className="shadow-sm w-full">
             <CardContent className="p-0">
               <ShipmentsTable 
                 shipments={shipments}
@@ -394,6 +406,11 @@ export default function DashboardPage() {
           </TabsContent>
         ))}
       </Tabs>
+
+
+      {/* Fixed Bottom Action Toolbar */}
+      
+
     </div>
   );
 }

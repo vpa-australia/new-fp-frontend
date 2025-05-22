@@ -19,7 +19,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const response = await fetch('https://ship-orders.vpa.com.au/api/login', {
+      const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -37,9 +37,23 @@ export default function LoginPage() {
       console.log('Login successful:', data);
       // Save token to localStorage
       localStorage.setItem('authToken', data.token);
-      // Redirect to dashboard on successful login
-      router.push('/dashboard');
 
+      const userResponse = await fetch('https://ship-orders.vpa.com.au/api/users/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${data.token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!userResponse.ok) {
+        throw new Error('Failed to fetch user information');
+      }
+
+      const userData = await userResponse.json();
+      localStorage.setItem('userData', JSON.stringify(userData));
+
+      router.push('/dashboard');
+ 
     } catch (err: any) {
       setError(err.message);
       console.error('Login error:', err);
@@ -83,7 +97,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)} 
                 className="block w-full px-3 py-2 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
               />
             </div>

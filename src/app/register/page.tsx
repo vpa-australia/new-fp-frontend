@@ -27,7 +27,7 @@ export default function RegisterPage() {
     }
     
     try {
-      const response = await fetch('https://ship-orders.vpa.com.au/api/register', {
+      const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
