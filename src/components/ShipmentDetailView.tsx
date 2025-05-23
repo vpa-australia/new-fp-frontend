@@ -83,6 +83,8 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [isLoadingLineItems, setIsLoadingLineItems] = useState(false);
   const [lineItemsError, setLineItemsError] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState(''); // State for the comment text
+  const [comments, setComments] = useState<any[]>(shipment?.shipment?.comments || []); // State for comments to allow dynamic updates
 
   // Fetch warehouses on component mount
 
@@ -239,6 +241,78 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
     }
   };
 
+  const handleSaveNote = async () => {
+    if (!commentText.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Comment cannot be empty.',
+      });
+      return;
+    }
+
+    const token = localStorage.getItem('authToken');
+    const userName = localStorage.getItem('userName') || 'Current User'; // Placeholder if not found
+    const userRole = localStorage.getItem('userRole') || 'User Role'; // Placeholder if not found
+
+    if (!token) {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'Authentication token not found. Please log in.',
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/comment/${shipment.shipment.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          comment: commentText,
+          name: userName,
+          title: userRole,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to save note');
+      }
+
+      const newComment = await response.json();
+      // Assuming the API returns the new comment object or a success message
+      // For now, let's assume it returns the new comment and we add it to our local state
+      // A more robust solution might involve re-fetching comments or having the API return the full updated list.
+      if (newComment && newComment.data) { // Adjust based on actual API response structure
+        setComments(prevComments => [...prevComments, newComment.data]); 
+      } else {
+        // If the structure is different, or if we need to re-fetch, handle that here.
+        // For simplicity, we'll just show a success toast and clear the input.
+        // You might need to fetch comments again if the API doesn't return the new comment.
+        console.log('Note saved, but response structure needs verification for UI update:', newComment);
+      }
+
+      toast({
+        variant: 'success',
+        title: 'Success',
+        description: 'Note saved successfully.',
+      });
+      setCommentText(''); // Clear the textarea
+    } catch (error: any) {
+      console.error('Error saving note:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to save note. Please try again.',
+      });
+    }
+  };
+
   return (
     <div className="grid grid-cols-3 gap-4 p-4">
       <div>
@@ -281,18 +355,18 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
         </CardHeader>
         <CardContent>
           <div className='h-[200px] overflow-y-scroll'>
-            {shipment?.shipment?.comments.length === 0 ? (
+            {comments.length === 0 ? (
               <p className="text-sm text-gray-500">No notes added yet.</p>
             ) :
-              shipment?.shipment?.comments.map((comment: any) => (
-                <div key={comment.id} className="mb-4 p-4 bg-gray-50 rounded-lg">
+              comments.map((comment: any) => (
+                <div key={comment.id || comment.time} className="mb-4 p-4 bg-gray-50 rounded-lg"> {/* Use comment.time as fallback key if id is not present immediately after adding */} 
                   <div className="flex items-center gap-2 mb-2">
                     <div className="font-medium text-gray-900">{comment.name}</div>
                     <div className="text-sm text-gray-500">{comment.title}</div>
                   </div>
                   <p className="text-gray-700 mb-2">{comment.comment}</p>
                   <div className="text-xs text-gray-500">
-                    {new Date(comment.time * 1000).toLocaleString()}
+                    {new Date((comment.time || Date.now() / 1000) * 1000).toLocaleString()} {/* Use current time as fallback */} 
                   </div>
                 </div>
               ))
@@ -300,10 +374,12 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
           </div>
           <Textarea 
             placeholder="Add your notes here..."
-            className="w-full h-24 text-sm"
+            className="w-full h-24 text-sm mt-2"
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
           />
           <div className="mt-2 flex justify-end">
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" onClick={handleSaveNote}>
               Save Note
             </Button>
           </div>

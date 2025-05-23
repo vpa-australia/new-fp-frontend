@@ -84,12 +84,13 @@ export default function DashboardPage() {
   const [searchParamsError, setSearchParamsError] = useState<string | null>(null);
   const [shipmentError, setShipmentError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalItems, setTotalItems] = useState(0);
   const [loadingShipments, setLoadingShipments] = useState(true);
   const [selectedWarehouse, setSelectedWarehouse] = useState("All");
-  const [selectedShipmentIds, setSelectedShipmentIds] = useState<number[]>([]); // State to track selected shipment IDs
-  const router = useRouter(); // Initialize router
+  const [selectedShipmentIds, setSelectedShipmentIds] = useState<number[]>([]);
+  const [lastPage, setLastPage] = useState(1); 
+  const router = useRouter();
 
   // Check authentication on component mount
   useEffect(() => {
@@ -221,6 +222,7 @@ export default function DashboardPage() {
     
             setShipments(data.shipments || []);
             setTotalItems(data.total || 0);
+            setLastPage(data.lastPage || 1);
         } catch (err: any) {
             console.error('Error fetching shipments:', err);
             setShipmentError(err.message || 'An unexpected error occurred.');
@@ -234,8 +236,8 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-screen bg-gray-50 p-6">
       <header className="mb-6 flex justify-between items-center"> {/* Added flex layout */} 
         <div> {/* Wrapped existing header content */} 
-          <h1 className="text-3xl font-bold text-gray-900">Orders Dashboard</h1>
-          <p className="text-gray-600">Manage and process customer orders</p>
+          <h1 className="text-3xl font-bold text-gray-900">VPA Fulfillments</h1>
+          {/* <p className="text-gray-600">Manage and process customer orders</p> */}
         </div>
         {/* Added User Avatar Dropdown */} 
         <DropdownMenu>
@@ -266,7 +268,7 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       {/* ... existing stats cards code ... */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
@@ -315,7 +317,7 @@ export default function DashboardPage() {
             </p>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
 
       {/* Tabs and Table */} 
@@ -344,39 +346,12 @@ export default function DashboardPage() {
             </TabsTrigger>
           ))}
         </TabsList>
-
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 min-w-[300px]">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input 
-              type="search" 
-              placeholder="Search orders..." 
-              className="pl-10 pr-24 py-2 border rounded-md text-sm" 
-              disabled={loadingSearchParams}
-            />
-            {searchParams?.searchParameters && (
-              <select 
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-white border-l pl-2 text-sm w-20"
-                onChange={(e) => {
-                  const [param, value] = e.target.value.split(':');
-                  console.log('Search param selected:', param, value);
-                }}
-              >
-                <option value="">Filter</option>
-                {Object.entries(searchParams.searchParameters).map(([key, param]: [string, any]) => (
-                  <option key={key} value={`${key}:${param.column}`}>
-                    {param.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
         </div>
         <TabsContent value="all">
           <Card className="shadow-sm w-full">
             <CardContent className="p-0">
               <ShipmentsTable 
+                lastPage={lastPage}
                 shipments={shipments}
                 currentPage={currentPage}
                 itemsPerPage={itemsPerPage}
@@ -393,6 +368,7 @@ export default function DashboardPage() {
             <Card className="shadow-sm">
             <CardContent className="p-0">
               <ShipmentsTable 
+                lastPage={lastPage}
                 shipments={shipments}
                 currentPage={currentPage}
                 itemsPerPage={itemsPerPage}
@@ -406,10 +382,6 @@ export default function DashboardPage() {
           </TabsContent>
         ))}
       </Tabs>
-
-
-      {/* Fixed Bottom Action Toolbar */}
-      
 
     </div>
   );

@@ -1,22 +1,26 @@
 'use client';
 
-import React, { useState, useEffect } from 'react'; // Added useState and useEffect
+import React, { useState, useEffect, useRef } from 'react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { CalendarClock, Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, FileText, MapPin, QrCode, Send, Tag, Truck, X, Zap } from 'lucide-react'; // Added toggle icons
-import { Checkbox } from '@/components/ui/checkbox'; // Added Checkbox import
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select imports
-import { ShipmentDetailView } from './ShipmentDetailView'; // Import the detail view component
+import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, MapPin, QrCode, SearchIcon, Send, Tag, Truck, X, Zap } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox'; 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; 
+import { ShipmentDetailView } from './ShipmentDetailView'; 
 import { useToast } from '@/hooks/use-toast';
 import { AiFillFile, AiFillTag, AiFillHdd } from "react-icons/ai";
-import { BsFillSendFill } from "react-icons/bs";
 import { PiCubeFocusBold } from "react-icons/pi";
-import { FaTimes, FaUser } from "react-icons/fa";
+import { FaCheck, FaLink, FaTimes, FaTruck, FaUser } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
 import { FaCalendarDay } from "react-icons/fa6";
+import { Input } from './ui/input';
+import { MdRefresh } from "react-icons/md";
 
 interface Shipment {
   id: number;
+  shopifyId: number;
   shopifyOrderNumber: string;
   orderName: string;
   email: string;
@@ -42,10 +46,10 @@ interface Shipment {
     serviceCode: string;
     costIncludingTax: string;
   }>;
-  orderDate: number; // Added order date
-  totalPrice: string; // Added total price (as string based on API)
-  lastApiUpdate: number; // Added last API update time
-  statusId?: number | null; // Add statusId to track the numeric ID
+  orderDate: number; 
+  totalPrice: string;
+  lastApiUpdate: number; 
+  statusId?: number | null; 
 }
 
 interface StatusOption {
@@ -56,7 +60,6 @@ interface StatusOption {
 }
 
 const defaultStatusOptions: StatusOption[] = [];
-// Status options will be fetched from API
 
 type ShipmentsTableProps = {
   shipments: Shipment[];
@@ -64,6 +67,7 @@ type ShipmentsTableProps = {
   currentPage: number;
   itemsPerPage: number;
   totalItems: number;
+  lastPage: number;
   setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
   setItemsPerPage: React.Dispatch<React.SetStateAction<number>>;
 };
@@ -83,16 +87,62 @@ export function ShipmentsTable({
   shipments, 
   currentPage,
   itemsPerPage,
-  totalItems,
   setCurrentPage,
-  setItemsPerPage
+  setItemsPerPage,
+  lastPage
 }: ShipmentsTableProps) {
-  const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(null); // State for selected row
-  const [selectedRows, setSelectedRows] = useState<Record<number, boolean>>({}); // State for selected checkboxes
-  const [detailedShipment, setDetailedShipment] = useState<Shipment | null>(null); // State for detailed shipment data
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false); // Loading state for detail fetch
+  const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(null); 
+  const [selectedRows, setSelectedRows] = useState<Record<number, boolean>>({}); 
+  const [detailedShipment, setDetailedShipment] = useState<Shipment | null>(null); 
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false); 
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>(defaultStatusOptions);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
+  const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 100 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isVertical, setIsVertical] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (toolbarRef.current) {
+      const rect = toolbarRef.current.getBoundingClientRect();
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+      setIsDragging(true);
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging && toolbarRef.current) {
+        const newX = e.clientX - dragOffset.x;
+        const newY = e.clientY - dragOffset.y;
+        setPosition({ x: newX, y: newY });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
+  const getTooltipSide = () => {
+    return 'top';
+  };
+  const [loadingSearchParams, setLoadingSearchParams] = useState(false);
+  const [searchParams, setSearchParams] = useState<Record<string, string>>({});
 
   // Fetch status options when component mounts
   useEffect(() => {
@@ -129,7 +179,6 @@ export function ShipmentsTable({
         }
       } catch (error) {
         console.error('Error fetching status options:', error);
-        // Fallback to empty status options
         setStatusOptions([]);
       } finally {
         setIsLoadingStatuses(false);
@@ -155,15 +204,10 @@ export function ShipmentsTable({
 
   const isAllSelected = shipments?.length > 0 && shipments.every((shipment) => selectedRows[shipment.id]);
 
-//   const filteredShipments = warehouseCode 
-//     ? shipments.filter(shipment => shipment.warehouseCode === warehouseCode)
-//     : shipments;
-
-  // Handler for status change
   const { toast } = useToast();
 
-  const handleStatusChange = async (shipmentId: number, newStatusId: string) => {
-    console.log(`Shipment ${shipmentId} status changed to ${newStatusId}`);
+  const handleStatusChange = async (shipmentId: number | number[], newStatusId: string) => {
+    console.log(`Shipment(s) ${Array.isArray(shipmentId) ? shipmentId.join(', ') : shipmentId} status changed to ${newStatusId}`);
 
     const token = localStorage.getItem('authToken');
     if (!token) {
@@ -175,16 +219,11 @@ export function ShipmentsTable({
       return;
     }
 
-    // The API endpoint uses the status ID in the path
-    const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/status/${newStatusId}?shipment_ids=${shipmentId}`;
-    
-    // The API expects shipment IDs as a comma-separated string in the query parameters
-    const params = new URLSearchParams({
-      shipment_ids: String(shipmentId) // Ensure shipmentId is treated as a string
-    });
+    const shipmentIdsString = Array.isArray(shipmentId) ? shipmentId.join(',') : String(shipmentId);
+    const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/status/${newStatusId}?shipment_ids=${shipmentIdsString}`;
 
     try {
-      const response = await fetch(`${apiUrl}`, {
+      const response = await fetch(apiUrl, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -203,7 +242,7 @@ export function ShipmentsTable({
       toast({
         variant: 'success',
         title: 'Status Updated',
-        description: 'Quote has been updated successfully',
+        description: 'Shipment status has been updated successfully.',
       });
 
     } catch (error: any) {
@@ -216,246 +255,600 @@ export function ShipmentsTable({
     }
   };
 
+  const handleBulkStatusChange = async (newStatusId: string) => {
+    const selectedIds = Object.entries(selectedRows)
+      .filter(([_, isChecked]) => isChecked)
+      .map(([id]) => parseInt(id, 10));
+
+    if (selectedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Please select at least one shipment to update status."
+      });
+      return;
+    }
+    await handleStatusChange(selectedIds, newStatusId);
+  };
+
+  const handleRefreshShipment = async (shipmentId: number) => {
+    console.log(`Refreshing shipment ${shipmentId}`);
+
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "Please log in to continue."
+      });
+      return;
+    }
+
+    const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/refresh/${shipmentId}`;
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to refresh shipment: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Shipment refreshed successfully:', result);
+
+      toast({
+        variant: 'success',
+        title: 'Shipment Refreshed',
+        description: 'Shipment data has been refreshed successfully.',
+      });
+
+    } catch (error: any) {
+      console.error('Error refreshing shipment:', error);
+      toast({
+        variant: "destructive",
+        title: "Refresh Failed",
+        description: error.message || "Failed to refresh shipment."
+      });
+    }
+  };
+
+  const handleMarkShipmentsAsShipped = async () => {
+    const checkedIds = Object.entries(selectedRows)
+      .filter(([_, isChecked]) => isChecked)
+      .map(([id]) => id.toString());
+
+    if (checkedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Please select at least one shipment to mark as shipped."
+      });
+      return;
+    }
+
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "Please log in to continue."
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/shipped/1?shipment_ids=${checkedIds.join(',')}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to mark shipments as shipped: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Shipments marked as shipped successfully:', result);
+
+      toast({
+        variant: "success",
+        title: "Success",
+        description: "Selected shipments have been marked as shipped."
+      });
+
+      // Clear selected rows after successful update
+      setSelectedRows({});
+
+      // Trigger refresh if callback is provided
+      // if (onStatusUpdateSuccess) {
+      //   onStatusUpdateSuccess();
+      // }
+
+    } catch (error: any) {
+      console.error('Error marking shipments as shipped:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to mark shipments as shipped."
+      });
+    }
+  };
+
+  const handleMarkShipmentsAsNotShipped = async () => {
+    const checkedIds = Object.entries(selectedRows)
+      .filter(([_, isChecked]) => isChecked)
+      .map(([id]) => id.toString());
+  
+    if (checkedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Please select at least one shipment to mark as not shipped."
+      });
+      return;
+    }
+  
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "Please log in to mark shipments as not shipped."
+      });
+      return;
+    }
+  
+    try {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/shipped/0?shipment_ids=${checkedIds.join(',')}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to mark shipments as not shipped: ${response.statusText}`);
+      }
+  
+      const result = await response.json();
+      toast({
+        title: "Success",
+        description: "Selected shipments have been marked as not shipped."
+      });
+  
+      // Clear selected rows
+      setSelectedRows({});
+  
+    } catch (error: any) {
+      console.error('Error marking shipments as not shipped:', error);
+      toast({
+        variant: "destructive",
+        title: "Operation Failed",
+        description: error.message || "Failed to mark shipments as not shipped."
+      });
+    }
+  };
+
+  const handleShipmentDetailClick = async (e: React.MouseEvent, shipmentId: number) => {
+    e.stopPropagation();
+    const newSelectedId = selectedShipmentId === shipmentId ? null : shipmentId;
+    setSelectedShipmentId(newSelectedId);
+
+    if (newSelectedId) {
+      setIsLoadingDetail(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          toast({
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "Please log in to continue."
+          });
+          throw new Error('Authentication token not found');
+        }
+
+        const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/${newSelectedId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch shipment details');
+        }
+
+        const data = await response.json();
+        setDetailedShipment(data);
+      } catch (error: any) {
+        console.error('Error fetching shipment details:', error);
+        setDetailedShipment(null);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error.message || "Failed to fetch shipment details."
+        });
+      } finally {
+        setIsLoadingDetail(false);
+      }
+    } else {
+      setDetailedShipment(null);
+    }
+  };
+
+  const handleDeleteShipment = async (shipmentId: number) => {
+    console.log(`Deleting shipment ${shipmentId}`);
+
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "Please log in to continue."
+      });
+      return;
+    }
+
+    const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/${shipmentId}`;
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+      });
+
+      if (!response.ok) {
+        // Attempt to parse error message from response if available
+        let errorMessage = `Failed to delete shipment: ${response.statusText}`;
+        try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+            // Ignore if response is not JSON or empty
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Assuming a successful DELETE request returns a 204 No Content or a success message
+      // If it returns data, you can parse it: const result = await response.json();
+      console.log('Shipment deleted successfully');
+
+      toast({
+        variant: 'success',
+        title: 'Shipment Deleted',
+        description: 'Shipment has been deleted successfully.',
+      });
+
+      // Trigger a refresh of the shipments list
+      // if (onStatusUpdateSuccess) {
+      //   onStatusUpdateSuccess();
+      // }
+
+    } catch (error: any) {
+      console.error('Error deleting shipment:', error);
+      toast({
+        variant: "destructive",
+        title: "Delete Failed",
+        description: error.message || "Failed to delete shipment."
+      });
+    }
+  };
+
+  
+  const handleGenerateLabels = async () => {
+    const selectedIds = Object.entries(selectedRows)
+      .filter(([_, isChecked]) => isChecked)
+      .map(([id]) => id);
+    
+    if (selectedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Please select at least one shipment to generate labels."
+      });
+      return;
+    }
+    
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        variant: "destructive",                
+        title: "Authentication Error",
+        description: "Please log in to continue."
+      });
+      return;
+    }
+    
+    try {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels?shipment_ids=${selectedIds.join(',')}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to generate labels: ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'shipment-labels.pdf';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        variant: "success",
+        title: "Labels Generated",
+        description: "Labels have been generated successfully."
+      });
+    } catch (error: any) {
+      console.error('Error generating labels:', error);
+      toast({
+        variant: "destructive",
+        title: "Generation Failed",
+        description: error.message || "Failed to generate labels."
+      });
+    }
+  };
+
+  const handleQuickPrint = async () => {
+    const selectedIds = Object.entries(selectedRows)
+      .filter(([_, isChecked]) => isChecked)
+      .map(([id]) => id);
+    
+    if (selectedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Please select at least one shipment to quick print."
+      });
+      return;
+    }
+    
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        variant: "destructive",                
+        title: "Authentication Error",
+        description: "Please log in to continue."
+      });
+      return;
+    }
+    
+    try {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/labels/quickPrint?shipment_ids=${selectedIds.join(',')}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to quick print: ${response.statusText}`);
+      }
+  
+      toast({
+        variant: "success",
+        title: "Quick Print Successful",
+        description: "Labels have been sent to the printer."
+      });
+    } catch (error: any) {
+      console.error('Error during quick print:', error);
+      toast({
+        variant: "destructive",
+        title: "Quick Print Failed",
+        description: error.message || "Failed to quick print labels."
+      });
+    }
+  };
+
   return (
     <>
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-md flex items-center justify-start gap-2 z-50">
-        <Button variant="outline" size="sm">
-          <FileText className="mr-2 h-4 w-4" /> Print Invoices
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={async () => {
-            const selectedIds = Object.entries(selectedRows)
-              .filter(([_, isChecked]) => isChecked)
-              .map(([id]) => id);
-            
-            if (selectedIds.length === 0) {
-              toast({
-                variant: "destructive",
-                title: "No Shipments Selected",
-                description: "Please select at least one shipment to generate labels."
-              });
-              return;
-            }
-            
-            const token = localStorage.getItem('authToken');
-            if (!token) {
-              toast({
-                variant: "destructive",                
-                title: "Authentication Error",
-                description: "Please log in to continue."
-              });
-              return;
-            }
-            
-            try {
-              const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels?shipment_ids=${selectedIds.join(',')}`, {
-                method: 'PUT',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Accept': 'application/json',
-                },
-              });
-              
-              if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `Failed to generate labels: ${response.statusText}`);
-              }
-              
-              const blob = await response.blob();
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = 'shipment-labels.pdf';
-              document.body.appendChild(a);
-              a.click();
-              window.URL.revokeObjectURL(url);
-              document.body.removeChild(a);
+    <div
+      ref={toolbarRef}
+      className={cn(
+        "fixed bg-background border rounded-lg shadow-lg p-2 select-none",
+        isVertical ? "flex flex-col items-center" : "flex flex-wrap items-center gap-2",
+        isDragging ? "cursor-grabbing transition-none" : "transition-all duration-300 ease-out",
+      )}
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        zIndex: 50,
+      }}
+      aria-label="Shipments Toolbar"
+    >
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="p-2 cursor-grab hover:bg-muted rounded-md"
+              onMouseDown={handleMouseDown}
+              aria-label="Drag handle"
+            >
+              <GripVertical className={cn("h-4 w-4", isVertical && "transform rotate-90")} />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side={getTooltipSide() as any}>
+            <p>Drag to move toolbar</p>
+          </TooltipContent>
+        </Tooltip>
 
-              toast({
-                variant: "success",
-                title: "Labels Generated",
-                description: "Labels have been generated successfully."
-              });
-            } catch (error: any) {
-              console.error('Error generating labels:', error);
-              toast({
-                variant: "destructive",
-                title: "Generation Failed",
-                description: error.message || "Failed to generate labels."
-              });
-            }
-          }}
-        >
-          <Tag className="mr-2 h-4 w-4" /> Generate Labels
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={async () => {
-            const selectedIds = Object.entries(selectedRows)
-              .filter(([_, isChecked]) => isChecked)
-              .map(([id]) => id);
-            
-            if (selectedIds.length === 0) {
-              toast({
-                variant: "destructive",
-                title: "No Shipments Selected",
-                description: "Please select at least one shipment to quick print."
-              });
-              return;
-            }
-            
-            const token = localStorage.getItem('authToken');
-            if (!token) {
-              toast({
-                variant: "destructive",                
-                title: "Authentication Error",
-                description: "Please log in to continue."
-              });
-              return;
-            }
-            
-            try {
-              const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/labels/quickPrint?shipment_ids=${selectedIds.join(',')}`, {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Accept': 'application/json',
-                },
-              });
-              
-              if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `Failed to quick print: ${response.statusText}`);
-              }
+        <div className={cn(isVertical ? "flex flex-col gap-2" : "flex flex-wrap gap-2")}>
+          <div className="flex-grow sm:flex-grow-0">
+            <Select onValueChange={handleBulkStatusChange} disabled={isLoadingStatuses}>
+              <SelectTrigger className="w-full sm:w-[180px] text-xs sm:text-sm">
+                <SelectValue placeholder="Change Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-" disabled>Change Status</SelectItem>
+                {statusOptions.map((option) => (
+                  <SelectItem className='-p-2' key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" className="flex-grow-0">
+                <FileText className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide() as any}>
+              <p>Print Invoices</p>
+            </TooltipContent>
+          </Tooltip>
 
-              toast({
-                variant: "success",
-                title: "Quick Print Successful",
-                description: "Labels have been sent to the printer."
-              });
-            } catch (error: any) {
-              console.error('Error during quick print:', error);
-              toast({
-                variant: "destructive",
-                title: "Quick Print Failed",
-                description: error.message || "Failed to quick print labels."
-              });
-            }
-          }}
-        >
-          <Zap className="mr-2 h-4 w-4" /> Quick Print
-        </Button>
-        <Button variant="outline" size="sm" onClick={async () => {
-          const checkedIds = Object.entries(selectedRows)
-            .filter(([_, isChecked]) => isChecked)
-            .map(([id]) => id.toString()); // Keep as strings as per API requirement
-          
-          if (checkedIds.length === 0) {
-            console.log('No shipments selected');
-            return;
-          }
-          
-          const token = localStorage.getItem('authToken');
-          if (!token) {
-            console.error('Authentication token not found. Please log in.');
-            return;
-          }
-          
-          try {
-            const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/shipped/1?shipment_ids=${checkedIds.join(',')}`, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-              },
-            });
-            
-            if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.message || `Failed to mark shipments as shipped: ${response.statusText}`);
-            }
-            
-            const result = await response.json();
-            console.log('Shipments marked as shipped successfully:', result);
-            // TODO: Add success feedback to user
-          } catch (error) {
-            console.error('Error marking shipments as shipped:', error);
-            // TODO: Add error feedback to user
-          }
-        }}>
-          <Check className="mr-2 h-4 w-4" /> Mark Shipped
-        </Button>
-        <Button variant="outline" size="sm" onClick={async () => {
-          const checkedIds = Object.entries(selectedRows)
-            .filter(([_, isChecked]) => isChecked)
-            .map(([id]) => id.toString()); // Keep as strings as per API requirement
-          
-          if (checkedIds.length === 0) {
-            console.log('No shipments selected');
-            return;
-          }
-          
-          const token = localStorage.getItem('authToken');
-          if (!token) {
-            console.error('Authentication token not found. Please log in.');
-            return;
-          }
-          
-          try {
-            const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/shipped/0?shipment_ids=${checkedIds.join(',')}`, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-              },
-            });
-            
-            if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.message || `Failed to mark shipments as shipped: ${response.statusText}`);
-            }
-            
-            const result = await response.json();
-            console.log('Shipments marked as shipped successfully:', result);
-            // TODO: Add success feedback to user
-          } catch (error) {
-            console.error('Error marking shipments as shipped:', error);
-            // TODO: Add error feedback to user
-          }
-        }}>
-          <X className="mr-2 h-4 w-4" /> Mark Not Shipped
-        </Button>
-        <Button variant="outline" size="sm">
-          <Send className="mr-2 h-4 w-4" /> Manifest
-        </Button>
-        <Button variant="outline" size="sm">
-          <MapPin className="mr-2 h-4 w-4" /> Change Order's Location
-        </Button>
-        <Button variant="outline" size="sm">
-          <QrCode className="mr-2 h-4 w-4" /> Manifest using Codes
-        </Button>
-      </div>
-    <Table>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={handleGenerateLabels}>
+                <Tag className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()  as any}>
+              <p>Generate Labels</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={handleQuickPrint}>
+                <Zap className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()  as any}>
+              <p>Quick Print</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={handleMarkShipmentsAsShipped}>
+                <Check className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide() as any}>
+              <p>Mark Shipped</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={handleMarkShipmentsAsNotShipped}>
+                <X className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide() as any}>
+              <p>Mark Not Shipped</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Send className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide() as any}>
+              <p>Manifest</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon">
+                <MapPin className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide() as any}>
+              <p>Change Location</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon">
+                <QrCode className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide() as any}>
+              <p>Manifest Codes</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
+    </div>
+    <Table className=''>
       <TableHeader>
         <TableRow className="">
-          <TableHead className="flex items-center gap-x-5">
-            <Checkbox 
-              checked={isAllSelected}
-              onCheckedChange={(checked) => handleSelectAll(Boolean(checked))} 
-              aria-label="Select all rows"
-            />
-            <div className="flex gap-x-2">
-              <div className="flex items-center gap-x-1">
-                <div className="w-4 h-4 rounded-sm bg-[#F46E6B]"></div>
-                <span>AusPost</span>
+          <TableHead className="flex justify-between items-center gap-x-5 mb-3">
+            <div className='flex gap-x-5 items-center'>
+              <Checkbox 
+                checked={isAllSelected}
+                onCheckedChange={(checked) => handleSelectAll(Boolean(checked))} 
+                aria-label="Select all rows"
+              />
+              <div className="flex gap-x-2">
+                <div className="flex items-center gap-x-1">
+                  <div className="w-4 h-4 rounded-sm bg-[#F46E6B]"></div>
+                  <span>AusPost</span>
+                </div>
+                <div className="flex items-center gap-x-1">
+                  <div className="w-4 h-4 rounded-sm bg-[#9370db]"></div>
+                  <span>Aramex</span>
+                </div>
               </div>
-              <div className="flex items-center gap-x-1">
-                <div className="w-4 h-4 rounded-sm bg-[#9370db]"></div>
-                <span>Aramex</span>
-              </div>
+            </div>
+            <div className="relative w-[300px] mr-2">
+              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input 
+                type="search" 
+                placeholder="Search orders..." 
+                className="pl-10 pr-24 py-2 border rounded-md text-sm" 
+                disabled={loadingSearchParams}
+              />
+              {searchParams?.searchParameters && (
+              <select 
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-white border-l pl-2 text-sm w-20"
+                onChange={(e) => {
+                  const [param, value] = e.target.value.split(':');
+                  console.log('Search param selected:', param, value);
+                }}
+              >
+                <option value="">Filter</option>
+                {Object.entries(searchParams.searchParameters).map(([key, param]: [string, any]) => (
+                  <option key={key} value={`${key}:${param.column}`}>
+                    {param.name}
+                  </option>
+                ))}
+              </select>
+              )}
             </div>
           </TableHead>
         </TableRow>
@@ -465,8 +858,9 @@ export function ShipmentsTable({
           <React.Fragment key={shipment.id}>
             <TableRow
               key={shipment.id}
+              className="py-1" // Add vertical padding reduction
             >
-              <TableCell id={`select-row-${shipment.id}`} className={`text-white ${shipment.carrierCode === 'auspost' ? 'bg-[#F46E6B]' : 'bg-[#9370db]'}`}>
+              <TableCell id={`select-row-${shipment.id}`} className={`text-white ${shipment.carrierCode === 'auspost' ? 'bg-[#F46E6B]' : 'bg-[#9370db]'} py-0`}>
               <div className='flex flex-row gap-x-3 items-center'>
                 <Checkbox 
                   checked={selectedRows[shipment.id] || false}
@@ -474,15 +868,24 @@ export function ShipmentsTable({
                   aria-labelledby={`select-row-${shipment.id}`}
                 />
                 {shipment.shopifyOrderNumber}
-                {shipment.invoicePrinted ? <AiFillFile  className="w-5 h-5 text-green-500" /> : <AiFillFile  className="w-5 h-5 text-gray-200" />}
-                {shipment.labelPrinted ? <AiFillTag className="w-5 h-5 text-green-500" /> : <AiFillTag className="w-5 h-5 text-gray-200" />}
-                {shipment.manifested ? <AiFillHdd className="w-5 h-5 text-green-500" /> : <AiFillHdd className="w-5 h-5 text-gray-200" />}
-                {shipment.sent ? <BsFillSendFill  className="w-5 h-5 text-green-500" /> : <BsFillSendFill  className="w-5 h-5 text-gray-200" />}
-                <div className='cursor-pointer'>
+                <a target='_blank' href={`https://admin.shopify.com/store/vpa-australia/orders/${shipment.shopifyId}`}>
+                <FaLink />
+                </a>
+                {shipment.invoicePrinted ? <AiFillFile  className="w-5 h-5 text-green-500" /> : <AiFillFile  className="w-5 h-5 text-gray-700" />}
+                {shipment.labelPrinted ? <AiFillTag className="w-5 h-5 text-green-500" /> : <AiFillTag className="w-5 h-5 text-gray-700" />}
+                {shipment.manifested ? <AiFillHdd className="w-5 h-5 text-green-500" /> : <AiFillHdd className="w-5 h-5 text-gray-700" />}
+                {shipment.sent ? <FaTruck  className="w-5 h-5 text-green-500" /> : <FaTruck  className="w-5 h-5 text-gray-700" />}
+                <div className='cursor-pointer' onClick={() => handleRefreshShipment(shipment.id)}>
+                <MdRefresh className="w-5 h-5 text-white" />
+                </div>
+                <div className='cursor-pointer' onClick={() => handleDeleteShipment(shipment.id)}>
                 <FaTimes className="w-5 h-5 text-white" />
                 </div>
-                <div className='ml-5 w-36 flex items-center gap-x-1'>
-                <FaUser className='w-4 h-4' /> {shipment.orderName}
+                {(statusOptions.filter(option => option.value == shipment.status))[0]?.greenTick == true ? <FaCheck  className="w-5 h-5 text-green-500" /> : <FaCheck  className="w-5 h-5 text-gray-700" />}
+
+                <div className='ml-5 w-52 flex items-center gap-x-1'>
+                <FaUser className='w-4 h-4' />
+                {shipment.orderName.length > 45 ? `${shipment.orderName.substring(0, 45)}...` : shipment.orderName.substring(0, 45)}
                 </div>
                 <div className="w-88 flex">
                   <FaLocationDot className='w-4 h-4' /> {(shipment.address1 +", "+ shipment.suburb).length > 45 ? `${(shipment.address1 + ", "+ shipment.suburb).substring(0, 45)}...` : (shipment.address1 + ", "+ shipment.suburb).substring(0, 45)}
@@ -511,8 +914,9 @@ export function ShipmentsTable({
                 <Select
                   defaultValue={`${shipment.status ? shipment.status : '-'}`}
                   onValueChange={(value) => handleStatusChange(shipment.id, value)}
+                  disabled={isLoadingStatuses}
                 >
-                  <SelectTrigger  className="w-[180px]">
+                  <SelectTrigger size='sm' className="w-[180px]">
                     <SelectValue placeholder="Select Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -527,46 +931,12 @@ export function ShipmentsTable({
                   </SelectContent>
                 </Select>
                 <Button 
-                  variant="ghost" 
-                  className="h-8 w-8 p-0 ml-28"
-                  onClick={async (e) => {
-                      e.stopPropagation(); // Prevent row selection if clicking button
-                      const newSelectedId = selectedShipmentId === shipment.id ? null : shipment.id;
-                      setSelectedShipmentId(newSelectedId);
-                      
-                      if (newSelectedId) {
-                        setIsLoadingDetail(true);
-                        try {
-                          const token = localStorage.getItem('authToken');
-                          if (!token) {
-                            throw new Error('Authentication token not found');
-                          }
-                          
-                          const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/${newSelectedId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`, {
-                            headers: {
-                              'Authorization': `Bearer ${token}`,
-                              'Accept': 'application/json'
-                            }
-                          });
-                          
-                          if (!response.ok) {
-                            throw new Error('Failed to fetch shipment details');
-                          }
-                          
-                          const data = await response.json();
-                          setDetailedShipment(data);
-                        } catch (error) {
-                          console.error('Error fetching shipment details:', error);
-                          setDetailedShipment(null);
-                        } finally {
-                          setIsLoadingDetail(false);
-                        }
-                      } else {
-                        setDetailedShipment(null);
-                      }
-                  }}
+                  size={"icon"}
+                  variant="link" 
+                  className="-p-3 ml-10"
+                  onClick={(e) => handleShipmentDetailClick(e, shipment.id)}
                 >
-                  {selectedShipmentId === shipment.id ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+                  {selectedShipmentId === shipment.id ? <ChevronDownIcon className="h-7 w-7 text-white rounded" /> : <ChevronRightIcon className="h-7 w-7 text-white rounded" />}
                 </Button>
               </div>
               </TableCell>
@@ -588,9 +958,9 @@ export function ShipmentsTable({
         ))}
       </TableBody>
     </Table>
-    <div className="flex items-center justify-between p-4 border-t">
+    <div className="flex items-center justify-between p-4 border-t mb-10">
       <div className="text-sm text-gray-600">
-        Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}-{Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} shipments
+        {/* Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}-{Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} shipments */}
       </div>
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2">
@@ -610,14 +980,14 @@ export function ShipmentsTable({
           <Button 
             variant="outline" 
             onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
-            // disabled={currentPage === 1}
+            disabled={currentPage === 1}
           >
             Previous
           </Button>
           <Button 
             variant="outline" 
             onClick={() => setCurrentPage(currentPage + 1)}
-            // disabled={currentPage * itemsPerPage >= totalItems}
+            disabled={currentPage === lastPage}
           >
             Next
           </Button>
@@ -627,16 +997,3 @@ export function ShipmentsTable({
     </>
   );
 }
-
-// REMOVE THE FOLLOWING FUNCTION COMPLETELY
-/*
-function getStatusClass(status: string | null) {
-  if (!status) return 'bg-gray-100 text-gray-800';
-  switch (status.toLowerCase()) {
-    case 'manifested': return 'bg-green-100 text-green-800';
-    case 'label_printed': return 'bg-blue-100 text-blue-800';
-    case 'on_hold': return 'bg-yellow-100 text-yellow-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
-}
-*/
