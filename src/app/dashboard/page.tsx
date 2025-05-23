@@ -32,6 +32,7 @@ interface Warehouse {
 
 interface Shipment {
   id: number;
+  shopifyId: number;
   shopifyOrderNumber: string;
   orderName: string;
   email: string;

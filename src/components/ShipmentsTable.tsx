@@ -97,7 +97,7 @@ export function ShipmentsTable({
   const [isLoadingDetail, setIsLoadingDetail] = useState(false); 
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>(defaultStatusOptions);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
-  const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 100 });
+  const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isVertical, setIsVertical] = useState(false);
