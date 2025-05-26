@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ArrowUpIcon, BoxIcon, CheckCircleIcon, DollarSignIcon, SearchIcon, TruckIcon, UserIcon, LogOutIcon, Loader2 } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
+import { ArrowUpIcon, BoxIcon, CheckCircleIcon, DollarSignIcon, SearchIcon, TruckIcon, UserIcon, LogOutIcon, Loader2, CogIcon } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
 import { ShipmentsTable } from '@/components/ShipmentsTable';
 
 // Define Warehouse interface
@@ -91,6 +91,7 @@ export default function DashboardPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState("All");
   const [selectedShipmentIds, setSelectedShipmentIds] = useState<number[]>([]);
   const [lastPage, setLastPage] = useState(1); 
+  const [action, setAction] = useState(0);
   const router = useRouter();
 
   // Check authentication on component mount
@@ -180,7 +181,7 @@ export default function DashboardPage() {
 
     fetchWarehouses();
     fetchSearchParams();
-  }, [itemsPerPage, currentPage]);
+  }, [itemsPerPage, currentPage, action]);
 
   useEffect(() => {
     (async () => {
@@ -231,7 +232,7 @@ export default function DashboardPage() {
             setLoadingShipments(false);
         }
     })();
-  }, [itemsPerPage, currentPage, selectedWarehouse]);
+  }, [itemsPerPage, currentPage, selectedWarehouse, action]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 p-6">
@@ -255,7 +256,12 @@ export default function DashboardPage() {
               <UserIcon className="mr-2 h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>
+            {/* <DropdownMenuItem className="cursor-pointer">
+              <CogIcon className="mr-2 h-4 w-4" />
+              <span>Settings</span>
+            </DropdownMenuItem> */}
             <DropdownMenuSeparator />
+            
             <DropdownMenuItem
               className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
               onClick={handleLogout} // Add onClick handler
@@ -352,6 +358,7 @@ export default function DashboardPage() {
           <Card className="shadow-sm w-full">
             <CardContent className="p-0">
               <ShipmentsTable 
+                setAction={setAction}
                 lastPage={lastPage}
                 shipments={shipments}
                 currentPage={currentPage}
@@ -369,6 +376,7 @@ export default function DashboardPage() {
             <Card className="shadow-sm">
             <CardContent className="p-0">
               <ShipmentsTable 
+                setAction={setAction}
                 lastPage={lastPage}
                 shipments={shipments}
                 currentPage={currentPage}

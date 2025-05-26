@@ -19,6 +19,7 @@ interface LineItem {
   quantity: number;
   price: string;
   url: string | null;
+  variantId: string;
 }
 
 interface Shipment {
@@ -65,15 +66,32 @@ interface Carrier {
 
 interface ShipmentDetailViewProps {
   shipment: any;
+  setAction: React.Dispatch<React.SetStateAction<number>>;
 }
 
-export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
+export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewProps) {
   const { toast } = useToast();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(true);
   const [warehouseError, setWarehouseError] = useState<string | null>(null);
-  const [selectedStockStatus, setSelectedStockStatus] = useState<Record<number, 'yes' | 'no'>>({});
-  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, 'B' | 'M'>>({});
+  const [selectedStockStatus, setSelectedStockStatus] = useState<Record<number, 'yes' | 'no'>>(() => {
+    const initialStockStatus: Record<number, 'yes' | 'no'> = {};
+    shipment?.shipment?.orderLines?.forEach((item: any) => {
+      const isOutOfStock = item.oosWarehouses?.some((wh: any) => 
+        wh.warehouseCode === shipment.shipment.warehouseCode && 
+        wh.variantId === item.variantId
+      );
+      initialStockStatus[item.id] = isOutOfStock ? 'no' : 'yes';
+    });
+    return initialStockStatus;
+  });
+  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, 'B' | 'M'>>(() => {
+    const initialDispatch: Record<number, 'B' | 'M'> = {};
+    shipment?.shipment?.orderLines?.forEach((item: LineItem) => {
+      initialDispatch[item.id] = shipment.shipment.warehouseCode === 'Brisbane' ? 'B' : 'M';
+    });
+    return initialDispatch;
+  });
 
   // State for carriers, loading, and error handling
   const [carriers, setCarriers] = useState<Carrier[]>([]);
@@ -231,12 +249,101 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
         title: 'Success',
         description: 'Quote has been updated successfully',
       });
+
+      setAction(prev => prev + 1);
+
     } catch (error) {
       console.error('Error updating quote:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
         description: 'Failed to update quote. Please try again.',
+      });
+    }
+  };
+
+  const handleMarkInStock = async (item: LineItem) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Authentication token not found. Please log in again.'
+        });
+        return;
+      }
+
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?variant_id=${item.variantId}&warehouse_code=${shipment.shipment.warehouseCode}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update stock status');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setSelectedStockStatus(prev => ({ ...prev, [item.id]: 'yes' }));
+        toast({
+          variant: 'success',
+          title: 'Success',
+          description: 'Stock status updated successfully'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating stock status:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update stock status'
+      });
+    }
+  };
+
+  const handleMarkOutOfStock = async (item: LineItem) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Authentication token not found. Please log in again.'
+        });
+        return;
+      }
+
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?variant_id=${item.variantId}&warehouse_code=${shipment.shipment.warehouseCode}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update stock status');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setSelectedStockStatus(prev => ({ ...prev, [item.id]: 'no' }));
+        toast({
+          variant: 'success',
+          title: 'Success',
+          description: 'Stock status updated successfully'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating stock status:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update stock status'
       });
     }
   };
@@ -252,19 +359,22 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
     }
 
     const token = localStorage.getItem('authToken');
-    const userName = localStorage.getItem('userName') || 'Current User'; // Placeholder if not found
-    const userRole = localStorage.getItem('userRole') || 'User Role'; // Placeholder if not found
-
-    if (!token) {
+    const userDataStr = localStorage.getItem('userData');
+    
+    if (!token || !userDataStr) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
-        description: 'Authentication token not found. Please log in.',
+        description: 'Authentication data not found. Please log in again.',
       });
       return;
     }
 
     try {
+      const userData = JSON.parse(userDataStr);
+      const userName = userData.data.name;
+      const userRole = userData.roles.roles.length > 0 ? userData.roles.roles[0] : 'User';
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/comment/${shipment.shipment.id}`, {
         method: 'POST',
         headers: {
@@ -285,24 +395,24 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       }
 
       const newComment = await response.json();
-      // Assuming the API returns the new comment object or a success message
-      // For now, let's assume it returns the new comment and we add it to our local state
-      // A more robust solution might involve re-fetching comments or having the API return the full updated list.
-      if (newComment && newComment.data) { // Adjust based on actual API response structure
-        setComments(prevComments => [...prevComments, newComment.data]); 
-      } else {
-        // If the structure is different, or if we need to re-fetch, handle that here.
-        // For simplicity, we'll just show a success toast and clear the input.
-        // You might need to fetch comments again if the API doesn't return the new comment.
-        console.log('Note saved, but response structure needs verification for UI update:', newComment);
-      }
-
+      
+      // Add the new comment to the local state with current timestamp
+      const commentToAdd = {
+        id: Date.now(), // Temporary ID for new comments
+        comment: commentText,
+        name: userName,
+        title: userRole,
+        time: Math.floor(Date.now() / 1000), // Current timestamp in seconds
+      };
+      
+      setComments(prevComments => [...prevComments, commentToAdd]);
+      setCommentText(''); // Clear the textarea
+      
       toast({
         variant: 'success',
         title: 'Success',
         description: 'Note saved successfully.',
       });
-      setCommentText(''); // Clear the textarea
     } catch (error: any) {
       console.error('Error saving note:', error);
       toast({
@@ -318,12 +428,12 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       <div>
         {/* Shipping Quotes Section */}
         <Card className="col-span-1 mb-5">
-          <CardHeader className="pb-2">
+          <CardHeader className="">
             <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Shipping Quotes</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className='mb-4 -mt-3'>Desired Carrier Code: {shipment.shipment.carrierCodeDesired}</p>
-            <p className='mb-5 -mt-3'>Selected Carrier Code: {shipment.shipment.carrierCode}</p>
+            {/* <p className='mb-4 -mt-3'>Desired Carrier Code: {shipment.shipment.carrierCodeDesired}</p>
+            <p className='mb-5 -mt-3'>Selected Carrier Code: {shipment.shipment.carrierCode}</p> */}
             <RadioGroup 
               className=''
               defaultValue={`${shipment.id}`}
@@ -335,7 +445,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
                 <div key={quote.id} className="flex items-center space-x-2 mb-2">
                   <RadioGroupItem value={`${quote.id}-${quote.carrierCode}-${quote.serviceCode}`} id={`quote-${quote.id}`} />
                   <Label htmlFor={`quote-${quote.id}`} className="flex-grow text-sm">
-                    ${parseFloat(quote.costIncludingTax).toFixed(2)} {quote.carrierCode} ({quote.serviceCode})
+                    ${parseFloat(quote.costIncludingTax).toFixed(2)} {quote.carrierCode.charAt(0).toUpperCase() + quote.carrierCode.slice(1)}
                   </Label>
                 </div>
               ))}
@@ -401,13 +511,13 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
                       <span className="text-xs text-gray-500 mb-1">In Stock</span>
                       <div className="flex gap-1">
                         <button 
-                          onClick={() => setSelectedStockStatus(prev => ({ ...prev, [item.id]: 'yes' }))} 
+                          onClick={() => handleMarkInStock(item)} 
                           className={`px-2 py-1 ${selectedStockStatus[item.id] === 'yes' ? 'bg-green-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'} text-xs font-medium rounded transition-colors`}
                         >
                           YES
                         </button>
                         <button 
-                          onClick={() => setSelectedStockStatus(prev => ({ ...prev, [item.id]: 'no' }))} 
+                          onClick={() => handleMarkOutOfStock(item)} 
                           className={`px-2 py-1 ${selectedStockStatus[item.id] === 'no' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'} text-xs font-medium rounded transition-colors`}
                         >
                           NO
@@ -458,16 +568,63 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
           <div className="mt-4 flex justify-end">
             <Button 
               className="bg-blue-500 hover:bg-blue-600 text-white" 
-              onClick={() => {
-                // Handle move action here
-                console.log('Move items with selections:', {
-                  stockStatus: selectedStockStatus,
-                  dispatchFrom: selectedDispatchFrom
-                });
-                toast({
-                  title: "Move Initiated",
-                  description: "Processing selected items...",
-                });
+              onClick={async () => {
+                const token = localStorage.getItem('authToken');
+                if (!token) {
+                  toast({
+                    title: "Authentication Error",
+                    description: "Authentication token not found. Please log in again.",
+                    variant: 'destructive'
+                  });
+                  return;
+                }
+                // Group line items by selected dispatch warehouse
+                const brisbaneIds = Object.entries(selectedDispatchFrom)
+                  .filter(([_, v]) => v === 'B')
+                  .map(([k]) => k);
+                const melbourneIds = Object.entries(selectedDispatchFrom)
+                  .filter(([_, v]) => v === 'M')
+                  .map(([k]) => k);
+                if (brisbaneIds.length === 0 && melbourneIds.length === 0) {
+                  toast({
+                    title: "No Items Selected",
+                    description: "Please select at least one item to move.",
+                    variant: 'destructive'
+                  });
+                  return;
+                }
+                const params = [];
+                if (brisbaneIds.length > 0) params.push(`Brisbane=${brisbaneIds.join(',')}`);
+                if (melbourneIds.length > 0) params.push(`Melbourne=${melbourneIds.join(',')}`);
+                const url = `https://ship-orders.vpa.com.au/api/shipments/move/${shipment.shipment.id}?${params.join('&')}`;
+                try {
+                  const response = await fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Accept': 'application/json'
+                    }
+                  });
+                  if (!response.ok) {
+                    throw new Error('Failed to move items');
+                  }
+                  const result = await response.json();
+                  if (result.success) {
+                    toast({
+                      title: "Move Successful",
+                      description: "Selected items have been moved.",
+                      variant: 'success'
+                    });
+                  } else {
+                    throw new Error(result.message || 'Failed to move items');
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "Move Failed",
+                    description: error.message || 'Failed to move items.',
+                    variant: 'destructive'
+                  });
+                }
               }}
             >
               MOVE

@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, MapPin, QrCode, SearchIcon, Send, Tag, Truck, X, Zap } from 'lucide-react';
+import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, MapPin, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, UserIcon } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; 
 import { ShipmentDetailView } from './ShipmentDetailView'; 
@@ -17,6 +17,7 @@ import { FaLocationDot } from "react-icons/fa6";
 import { FaCalendarDay } from "react-icons/fa6";
 import { Input } from './ui/input';
 import { MdRefresh } from "react-icons/md";
+import { GrStatusGood } from "react-icons/gr";
 
 interface Shipment {
   id: number;
@@ -62,6 +63,7 @@ interface StatusOption {
 const defaultStatusOptions: StatusOption[] = [];
 
 type ShipmentsTableProps = {
+  setAction: React.Dispatch<React.SetStateAction<number>>; // ADDED ACTION TRACKER FOR ACTIONS ON SHIPMENTS DAT
   shipments: Shipment[];
   warehouseCode?: string;
   currentPage: number;
@@ -83,7 +85,17 @@ const formatRelativeTime = (timestamp: number) => {
   return `${Math.floor(seconds / 31536000)}y`;
 };
 
+interface DraggableToolbarProps {
+  onIncrement?: () => void
+  onDecrement?: () => void
+  onReset?: () => void
+  className?: string
+}
+
+type EdgePosition = "top" | "bottom" | "left" | "right"
+
 export function ShipmentsTable({ 
+  setAction,
   shipments, 
   currentPage,
   itemsPerPage,
@@ -97,54 +109,9 @@ export function ShipmentsTable({
   const [isLoadingDetail, setIsLoadingDetail] = useState(false); 
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>(defaultStatusOptions);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
-  const [position, setPosition] = useState({ x: 20, y: 20 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [isVertical, setIsVertical] = useState(false);
-  const toolbarRef = useRef<HTMLDivElement>(null);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (toolbarRef.current) {
-      const rect = toolbarRef.current.getBoundingClientRect();
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      });
-      setIsDragging(true);
-    }
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging && toolbarRef.current) {
-        const newX = e.clientX - dragOffset.x;
-        const newY = e.clientY - dragOffset.y;
-        setPosition({ x: newX, y: newY });
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, dragOffset]);
-
-  const getTooltipSide = () => {
-    return 'top';
-  };
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
   const [searchParams, setSearchParams] = useState<Record<string, string>>({});
 
-  // Fetch status options when component mounts
   useEffect(() => {
     const fetchStatusOptions = async () => {
       setIsLoadingStatuses(true);
@@ -188,6 +155,134 @@ export function ShipmentsTable({
     fetchStatusOptions();
   }, []);
 
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [edge, setEdge] = useState<EdgePosition>("bottom")
+  const toolbarRef = useRef<HTMLDivElement>(null)
+
+  // Calculate which edge is closest and snap to it
+  const snapToEdge = (x: number, y: number) => {
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+
+    if (!toolbarRef.current) return
+
+    const toolbarWidth = toolbarRef.current.offsetWidth
+    const toolbarHeight = toolbarRef.current.offsetHeight
+
+    // Calculate distances to each edge
+    const distanceToLeft = x
+    const distanceToRight = viewportWidth - (x + toolbarWidth)
+    const distanceToTop = y
+    const distanceToBottom = viewportHeight - (y + toolbarHeight)
+
+    // Find the closest edge
+    const minDistance = Math.min(distanceToLeft, distanceToRight, distanceToTop, distanceToBottom)
+
+    let newEdge: EdgePosition
+    let newX: number
+    let newY: number
+
+    if (minDistance === distanceToLeft) {
+      newEdge = "left"
+      newX = 20
+      newY = Math.max(20, Math.min(y, viewportHeight - toolbarHeight - 20))
+    } else if (minDistance === distanceToRight) {
+      newEdge = "right"
+      newX = viewportWidth - toolbarWidth - 20
+      newY = Math.max(20, Math.min(y, viewportHeight - toolbarHeight - 20))
+    } else if (minDistance === distanceToTop) {
+      newEdge = "top"
+      newX = Math.max(20, Math.min(x, viewportWidth - toolbarWidth - 20))
+      newY = 20
+    } else {
+      newEdge = "bottom"
+      newX = Math.max(20, Math.min(x, viewportWidth - toolbarWidth - 20))
+      newY = viewportHeight - toolbarHeight - 20
+    }
+
+    setEdge(newEdge)
+    setPosition({ x: newX, y: newY })
+  }
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (toolbarRef.current) {
+      const rect = toolbarRef.current.getBoundingClientRect()
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      })
+      setIsDragging(true)
+    }
+  }
+
+  // Handle mouse move when dragging
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging && toolbarRef.current) {
+        const newX = e.clientX - dragOffset.x
+        const newY = e.clientY - dragOffset.y
+
+        // Update position while dragging (free movement)
+        setPosition({ x: newX, y: newY })
+      }
+    }
+
+    const handleMouseUp = () => {
+      if (isDragging) {
+        // Snap to nearest edge when drag ends
+        snapToEdge(position.x, position.y)
+        setIsDragging(false)
+      }
+    }
+
+    if (isDragging) {
+      document.addEventListener("mousemove", handleMouseMove)
+      document.addEventListener("mouseup", handleMouseUp)
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [isDragging, dragOffset, position])
+
+  // Initialize position on mount
+  useEffect(() => {
+    if (toolbarRef.current) {
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const toolbarWidth = toolbarRef.current.offsetWidth
+      const toolbarHeight = toolbarRef.current.offsetHeight
+
+      setPosition({
+        x: Math.max(20, (viewportWidth - toolbarWidth) / 2),
+        y: viewportHeight - toolbarHeight - 20,
+      })
+    }
+  }, [])
+
+  const isVertical = edge === "left" || edge === "right"
+
+  // Determine tooltip side based on toolbar position
+  const getTooltipSide = (): "top" | "right" | "bottom" | "left" => {
+    switch (edge) {
+      case "left":
+        return "right"
+      case "right":
+        return "left"
+      case "top":
+        return "bottom"
+      case "bottom":
+        return "top"
+      default:
+        return "right"
+    }
+  }
+
+  const isAllSelected = shipments?.length > 0 && shipments.every((shipment) => selectedRows[shipment.id]);
+
   const handleSelectRow = (id: number, checked: boolean) => {
     setSelectedRows((prev) => ({ ...prev, [id]: checked }));
   };
@@ -201,8 +296,6 @@ export function ShipmentsTable({
     }
     setSelectedRows(newSelectedRows);
   };
-
-  const isAllSelected = shipments?.length > 0 && shipments.every((shipment) => selectedRows[shipment.id]);
 
   const { toast } = useToast();
 
@@ -245,7 +338,10 @@ export function ShipmentsTable({
         description: 'Shipment status has been updated successfully.',
       });
 
+      setAction(prev => prev + 1);
+
     } catch (error: any) {
+      //
       console.error('Error updating shipment status:', error);
       toast({
         variant: "destructive",
@@ -269,6 +365,8 @@ export function ShipmentsTable({
       return;
     }
     await handleStatusChange(selectedIds, newStatusId);
+    setAction(prev => prev + 1);
+
   };
 
   const handleRefreshShipment = async (shipmentId: number) => {
@@ -308,6 +406,8 @@ export function ShipmentsTable({
         title: 'Shipment Refreshed',
         description: 'Shipment data has been refreshed successfully.',
       });
+
+      setAction(prev => prev + 1);
 
     } catch (error: any) {
       console.error('Error refreshing shipment:', error);
@@ -365,6 +465,7 @@ export function ShipmentsTable({
         title: "Success",
         description: "Selected shipments have been marked as shipped."
       });
+      setAction(prev => prev + 1);
 
       // Clear selected rows after successful update
       setSelectedRows({});
@@ -427,7 +528,9 @@ export function ShipmentsTable({
         title: "Success",
         description: "Selected shipments have been marked as not shipped."
       });
-  
+
+      setAction(prev => prev + 1);
+      
       // Clear selected rows
       setSelectedRows({});
   
@@ -488,6 +591,50 @@ export function ShipmentsTable({
     }
   };
 
+  const handleUnlStatusUpdate = async (shipment: Shipment) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Authentication token not found. Please log in again.'
+        });
+        return;
+      }
+
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/unlDone/${shipment.unlDone ? 0 : 1}?shipment_ids=${shipment.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update UNL status');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        toast({
+          variant: 'success',
+          title: 'Success',
+          description: `UNL status ${!shipment.unlDone ? 'completed' : 'pending'}`
+        });
+        setAction(prev => prev + 1);
+
+      }
+    } catch (error) {
+      console.error('Error updating UNL status:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update UNL status'
+      });
+    }
+  };
+
   const handleDeleteShipment = async (shipmentId: number) => {
     console.log(`Deleting shipment ${shipmentId}`);
 
@@ -533,6 +680,8 @@ export function ShipmentsTable({
         title: 'Shipment Deleted',
         description: 'Shipment has been deleted successfully.',
       });
+      setAction(prev => prev + 1);
+
 
       // Trigger a refresh of the shipments list
       // if (onStatusUpdateSuccess) {
@@ -603,6 +752,8 @@ export function ShipmentsTable({
         title: "Labels Generated",
         description: "Labels have been generated successfully."
       });
+      setAction(prev => prev + 1);
+
     } catch (error: any) {
       console.error('Error generating labels:', error);
       toast({
@@ -656,6 +807,8 @@ export function ShipmentsTable({
         title: "Quick Print Successful",
         description: "Labels have been sent to the printer."
       });
+      setAction(prev => prev + 1);
+
     } catch (error: any) {
       console.error('Error during quick print:', error);
       toast({
@@ -666,23 +819,79 @@ export function ShipmentsTable({
     }
   };
 
+  const handleInvoicePrint = async () => {
+    const selectedIds = Object.entries(selectedRows)
+      .filter(([_, isChecked]) => isChecked)
+      .map(([id]) => id);
+    
+    if (selectedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Please select at least one shipment to quick print."
+      });
+      return;
+    }
+    
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        variant: "destructive",                
+        title: "Authentication Error",
+        description: "Please log in to continue."
+      });
+      return;
+    }
+    
+    try {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/invoices?shipment_ids=${selectedIds.join(',')}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to print Invoices: ${response.statusText}`);
+      }
+  
+      toast({
+        variant: "success",
+        title: "Quick Print Successful",
+        description: "Labels have been sent to the printer."
+      });
+      setAction(prev => prev + 1);
+
+    } catch (error: any) {
+      console.error('Error during Invoices print:', error);
+      toast({
+        variant: "destructive",
+        title: "Quick Print Failed",
+        description: error.message || "Failed to quick print Invoices."
+      });
+    }
+  };
+
   return (
     <>
-    <div
-      ref={toolbarRef}
-      className={cn(
-        "fixed bg-background border rounded-lg shadow-lg p-2 select-none",
-        isVertical ? "flex flex-col items-center" : "flex flex-wrap items-center gap-2",
-        isDragging ? "cursor-grabbing transition-none" : "transition-all duration-300 ease-out",
-      )}
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        zIndex: 50,
-      }}
-      aria-label="Shipments Toolbar"
-    >
+   
       <TooltipProvider delayDuration={300}>
+      <div
+        ref={toolbarRef}
+        className={cn(
+          "fixed bg-background border rounded-lg shadow-lg p-1 select-none",
+          isVertical ? "flex flex-col items-center" : "flex items-center",
+          isDragging ? "cursor-grabbing transition-none" : "transition-all duration-300 ease-out",
+        )}
+        style={{
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          zIndex: 50,
+        }}
+        aria-label="Toolbar"
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <div
@@ -701,8 +910,8 @@ export function ShipmentsTable({
         <div className={cn(isVertical ? "flex flex-col gap-2" : "flex flex-wrap gap-2")}>
           <div className="flex-grow sm:flex-grow-0">
             <Select onValueChange={handleBulkStatusChange} disabled={isLoadingStatuses}>
-              <SelectTrigger className="w-full sm:w-[180px] text-xs sm:text-sm">
-                <SelectValue placeholder="Change Status" />
+              <SelectTrigger className="w-full sm:w-[60px] text-xs sm:text-sm">
+                <GrStatusGood />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="-" disabled>Change Status</SelectItem>
@@ -716,7 +925,7 @@ export function ShipmentsTable({
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" className="flex-grow-0">
+              <Button onClick={handleInvoicePrint} variant="outline" size="icon" className="flex-grow-0">
                 <FileText className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -780,7 +989,7 @@ export function ShipmentsTable({
             </TooltipContent>
           </Tooltip>
 
-          <Tooltip>
+          {/* <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="outline" size="icon">
                 <MapPin className="h-4 w-4" />
@@ -789,7 +998,7 @@ export function ShipmentsTable({
             <TooltipContent side={getTooltipSide() as any}>
               <p>Change Location</p>
             </TooltipContent>
-          </Tooltip>
+          </Tooltip> */}
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -802,8 +1011,9 @@ export function ShipmentsTable({
             </TooltipContent>
           </Tooltip>
         </div>
+      </div>
       </TooltipProvider>
-    </div>
+
     <Table className=''>
       <TableHeader>
         <TableRow className="">
@@ -868,20 +1078,79 @@ export function ShipmentsTable({
                   aria-labelledby={`select-row-${shipment.id}`}
                 />
                 {shipment.shopifyOrderNumber}
-                <a target='_blank' href={`https://admin.shopify.com/store/vpa-australia/orders/${shipment.shopifyId}`}>
-                <FaLink />
-                </a>
-                {shipment.invoicePrinted ? <AiFillFile  className="w-5 h-5 text-green-500" /> : <AiFillFile  className="w-5 h-5 text-gray-700" />}
-                {shipment.labelPrinted ? <AiFillTag className="w-5 h-5 text-green-500" /> : <AiFillTag className="w-5 h-5 text-gray-700" />}
-                {shipment.manifested ? <AiFillHdd className="w-5 h-5 text-green-500" /> : <AiFillHdd className="w-5 h-5 text-gray-700" />}
-                {shipment.sent ? <FaTruck  className="w-5 h-5 text-green-500" /> : <FaTruck  className="w-5 h-5 text-gray-700" />}
-                <div className='cursor-pointer' onClick={() => handleRefreshShipment(shipment.id)}>
-                <MdRefresh className="w-5 h-5 text-white" />
-                </div>
-                <div className='cursor-pointer' onClick={() => handleDeleteShipment(shipment.id)}>
-                <FaTimes className="w-5 h-5 text-white" />
-                </div>
-                {(statusOptions.filter(option => option.value == shipment.status))[0]?.greenTick == true ? <FaCheck  className="w-5 h-5 text-green-500" /> : <FaCheck  className="w-5 h-5 text-gray-700" />}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a target='_blank' href={`https://admin.shopify.com/store/vpa-australia/orders/${shipment.shopifyId}`}>
+                      <FaLink className="w-5 h-5" />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>View in Shopify</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      {shipment.invoicePrinted ? <AiFillFile className="w-5 h-5 text-green-500" /> : <AiFillFile className="w-5 h-5 text-gray-700" />}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>Invoice {shipment.invoicePrinted ? 'Printed' : 'Not Printed'}</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      {shipment.labelPrinted ? <AiFillTag className="w-5 h-5 text-green-500" /> : <AiFillTag className="w-5 h-5 text-gray-700" />}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>Label {shipment.labelPrinted ? 'Printed' : 'Not Printed'}</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      {shipment.manifested ? <AiFillHdd className="w-5 h-5 text-green-500" /> : <AiFillHdd className="w-5 h-5 text-gray-700" />}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{shipment.manifested ? 'Manifested' : 'Not Manifested'}</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      {shipment.sent ? <FaTruck className="w-5 h-5 text-green-500" /> : <FaTruck className="w-5 h-5 text-gray-700" />}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{shipment.sent ? 'Sent' : 'Not Sent'}</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className='cursor-pointer' onClick={() => handleRefreshShipment(shipment.id)}>
+                      <MdRefresh className="w-5 h-5 text-white" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>Refresh Shipment</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className='cursor-pointer' onClick={() => handleDeleteShipment(shipment.id)}>
+                      <FaTimes className="w-5 h-5 text-white" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>Delete Shipment</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      {(statusOptions.filter(option => option.value == shipment.status))[0]?.greenTick == true ? 
+                        <FaCheck className="w-5 h-5 text-green-500" /> : 
+                        <FaCheck className="w-5 h-5 text-gray-700" />}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>Status Check</TooltipContent>
+                </Tooltip>
 
                 <div className='ml-5 w-52 flex items-center gap-x-1'>
                 <FaUser className='w-4 h-4' />
@@ -900,16 +1169,26 @@ export function ShipmentsTable({
                 </div>
                 <div className='flex gap-x-2 items-center w-28'>
                   <Truck className='w-4 h-4' />
-                {shipment.carrierCode ? shipment.carrierCode.charAt(0).toUpperCase() + shipment.carrierCode.slice(1) : shipment.carrierCodeDesired.charAt(0).toUpperCase() + shipment.carrierCodeDesired.slice(1)}
+                {shipment.carrierCode ? shipment.carrierCode?.charAt(0).toUpperCase() + shipment.carrierCode?.slice(1) : shipment.carrierCodeDesired?.charAt(0).toUpperCase() + shipment.carrierCodeDesired?.slice(1)}
                 </div>
                 <div className='flex gap-x-1 items-center w-16'>
                   <Clock className='w-4 h-4' />
                   {formatRelativeTime(shipment.lastApiUpdate)}
                 </div>
                 <div className='w-13'>
-                  <div className='cursor-pointer'>
-                  {shipment.unlDone ? <PiCubeFocusBold className="w-6 h-6 text-green-500" /> : <PiCubeFocusBold size={22} className="text-gray-300" />}
-                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className='cursor-pointer' onClick={() => handleUnlStatusUpdate(shipment)}>
+                        {shipment.unlDone ? 
+                          <PiCubeFocusBold className="w-6 h-6 text-green-500" /> : 
+                          <PiCubeFocusBold size={22} className="text-gray-700" />
+                        }
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {shipment.unlDone ? 'UNL Completed' : 'UNL Pending'}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
                 <Select
                   defaultValue={`${shipment.status ? shipment.status : '-'}`}
@@ -949,7 +1228,7 @@ export function ShipmentsTable({
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                     </div>
                   ) : (
-                    <ShipmentDetailView shipment={detailedShipment as any} />
+                    <ShipmentDetailView setAction={setAction} shipment={detailedShipment as any} />
                   )}
                 </TableCell>
               </TableRow>
