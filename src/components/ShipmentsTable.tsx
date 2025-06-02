@@ -18,6 +18,7 @@ import { FaCalendarDay } from "react-icons/fa6";
 import { Input } from './ui/input';
 import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
+import { PdfViewer } from "./ui/pdf-viewer";
 
 interface Shipment {
   id: number;
@@ -72,6 +73,7 @@ type ShipmentsTableProps = {
   lastPage: number;
   setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
   setItemsPerPage: React.Dispatch<React.SetStateAction<number>>;
+  selectedWarehouse: string | null;
 };
 
 const formatRelativeTime = (timestamp: number) => {
@@ -101,10 +103,14 @@ export function ShipmentsTable({
   itemsPerPage,
   setCurrentPage,
   setItemsPerPage,
-  lastPage
+  lastPage,
+  selectedWarehouse
 }: ShipmentsTableProps) {
   const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(null); 
-  const [selectedRows, setSelectedRows] = useState<Record<number, boolean>>({}); 
+  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
+  const [pdfUrl, setPdfUrl] = useState<string>("");
+  const [isPdfOpen, setIsPdfOpen] = useState(false);
+  const [pdfTitle, setPdfTitle] = useState<string>("");
   const [detailedShipment, setDetailedShipment] = useState<Shipment | null>(null); 
   const [isLoadingDetail, setIsLoadingDetail] = useState(false); 
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>(defaultStatusOptions);
@@ -728,7 +734,7 @@ export function ShipmentsTable({
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
+          'Accept': 'application/pdf',
         },
       });
       
@@ -736,16 +742,6 @@ export function ShipmentsTable({
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to generate labels: ${response.statusText}`);
       }
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'shipment-labels.pdf';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
 
       toast({
         variant: "success",
@@ -793,7 +789,7 @@ export function ShipmentsTable({
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
+          'Accept': 'application/pdf',
         },
       });
       
@@ -801,11 +797,17 @@ export function ShipmentsTable({
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to quick print: ${response.statusText}`);
       }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      setPdfUrl(url);
+      setIsPdfOpen(true);
+      setPdfTitle('Quick Print Labels Preview');
   
       toast({
         variant: "success",
-        title: "Quick Print Successful",
-        description: "Labels have been sent to the printer."
+        title: "Quick Print Ready",
+        description: "Labels are ready for printing."
       });
       setAction(prev => prev + 1);
 
@@ -848,7 +850,7 @@ export function ShipmentsTable({
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
+          'Accept': 'application/pdf',
         },
       });
       
@@ -856,11 +858,17 @@ export function ShipmentsTable({
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to print Invoices: ${response.statusText}`);
       }
-  
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      setPdfUrl(url);
+      setIsPdfOpen(true);
+      setPdfTitle('Invoice Preview');
+      
       toast({
         variant: "success",
-        title: "Quick Print Successful",
-        description: "Labels have been sent to the printer."
+        title: "Invoice Generated",
+        description: "The invoice PDF has been generated successfully."
       });
       setAction(prev => prev + 1);
 
@@ -868,15 +876,28 @@ export function ShipmentsTable({
       console.error('Error during Invoices print:', error);
       toast({
         variant: "destructive",
-        title: "Quick Print Failed",
-        description: error.message || "Failed to quick print Invoices."
+        title: "Invoice Generation Failed",
+        description: error.message || "Failed to generate invoice PDF."
       });
+    }
+  };
+
+  const handlePdfClose = () => {
+    setIsPdfOpen(false);
+    if (pdfUrl) {
+      window.URL.revokeObjectURL(pdfUrl);
+      setPdfUrl("");
     }
   };
 
   return (
     <>
-   
+     <PdfViewer
+        isOpen={isPdfOpen}
+        onClose={handlePdfClose}
+        pdfUrl={pdfUrl}
+        title={pdfTitle}
+      />
       <TooltipProvider delayDuration={300}>
       <div
         ref={toolbarRef}
@@ -909,7 +930,7 @@ export function ShipmentsTable({
 
         <div className={cn(isVertical ? "flex flex-col gap-2" : "flex flex-wrap gap-2")}>
           <div className="flex-grow sm:flex-grow-0">
-            <Select onValueChange={handleBulkStatusChange} disabled={isLoadingStatuses}>
+            <Select disabled={isLoadingStatuses || selectedWarehouse === "All"} onValueChange={handleBulkStatusChange}>
               <SelectTrigger className="w-full sm:w-[60px] text-xs sm:text-sm">
                 <GrStatusGood />
               </SelectTrigger>
@@ -925,7 +946,7 @@ export function ShipmentsTable({
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button onClick={handleInvoicePrint} variant="outline" size="icon" className="flex-grow-0">
+              <Button disabled={isLoadingStatuses || selectedWarehouse === "All"} onClick={handleInvoicePrint} variant="outline" size="icon" className="flex-grow-0">
                 <FileText className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -936,7 +957,7 @@ export function ShipmentsTable({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={handleGenerateLabels}>
+              <Button disabled={isLoadingStatuses || selectedWarehouse === "All"} variant="outline" size="icon" onClick={handleGenerateLabels}>
                 <Tag className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -947,7 +968,7 @@ export function ShipmentsTable({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={handleQuickPrint}>
+              <Button disabled={isLoadingStatuses || selectedWarehouse === "All"} variant="outline" size="icon" onClick={handleQuickPrint}>
                 <Zap className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -958,7 +979,7 @@ export function ShipmentsTable({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={handleMarkShipmentsAsShipped}>
+              <Button disabled={isLoadingStatuses || selectedWarehouse === "All"} variant="outline" size="icon" onClick={handleMarkShipmentsAsShipped}>
                 <Check className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -969,7 +990,7 @@ export function ShipmentsTable({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={handleMarkShipmentsAsNotShipped}>
+              <Button disabled={isLoadingStatuses || selectedWarehouse === "All"} variant="outline" size="icon" onClick={handleMarkShipmentsAsNotShipped}>
                 <X className="h-4 w-4" />
               </Button>
             </TooltipTrigger>

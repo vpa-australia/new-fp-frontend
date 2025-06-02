@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -117,6 +116,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         console.log('Token:', token);
         if (!token) {
           throw new Error('Authentication token not found. Please log in.');
+          
         }
 
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
@@ -445,7 +445,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                 <div key={quote.id} className="flex items-center space-x-2 mb-2">
                   <RadioGroupItem value={`${quote.id}-${quote.carrierCode}-${quote.serviceCode}`} id={`quote-${quote.id}`} />
                   <Label htmlFor={`quote-${quote.id}`} className="flex-grow text-sm">
-                    ${parseFloat(quote.costIncludingTax).toFixed(2)} {quote.carrierCode.charAt(0).toUpperCase() + quote.carrierCode.slice(1)}
+                    {quote.carrier.manual !== true ? `$${(quote.costIncludingTax.toString().split('.')[0] + '.' + (quote.costIncludingTax.toString().split('.')[1] || '00').substring(0,2))} ` : ''}{quote.carrier.name} {quote.isExpress ? "(Express)": ""}
                   </Label>
                 </div>
               ))}

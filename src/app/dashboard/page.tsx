@@ -256,10 +256,10 @@ export default function DashboardPage() {
               <UserIcon className="mr-2 h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>
-            {/* <DropdownMenuItem className="cursor-pointer">
+            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/dashboard/settings')}>
               <CogIcon className="mr-2 h-4 w-4" />
               <span>Settings</span>
-            </DropdownMenuItem> */}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             
             <DropdownMenuItem
@@ -352,12 +352,14 @@ export default function DashboardPage() {
               {warehouse.name}
             </TabsTrigger>
           ))}
+          <TabsTrigger value="archived" className="text-sm px-4 py-1.5">Archived</TabsTrigger>
         </TabsList>
         </div>
         <TabsContent value="all">
           <Card className="shadow-sm w-full">
             <CardContent className="p-0">
               <ShipmentsTable 
+                selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
                 lastPage={lastPage}
                 shipments={shipments}
@@ -376,6 +378,7 @@ export default function DashboardPage() {
             <Card className="shadow-sm">
             <CardContent className="p-0">
               <ShipmentsTable 
+                selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
                 lastPage={lastPage}
                 shipments={shipments}
