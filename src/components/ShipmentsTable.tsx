@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, MapPin, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, UserIcon } from 'lucide-react';
+import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, MapPin, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, UserIcon, Lock, Unlock } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; 
 import { ShipmentDetailView } from './ShipmentDetailView'; 
@@ -31,6 +31,7 @@ interface Shipment {
   region: string;
   postCode: string;
   country: string;
+  locked: boolean;
   warehouseCode: string;
   carrierCode: string;
   serviceCode: string;
@@ -1196,7 +1197,7 @@ export function ShipmentsTable({
                   <Clock className='w-4 h-4' />
                   {formatRelativeTime(shipment.lastApiUpdate)}
                 </div>
-                <div className='w-13'>
+                <div className='w-16 flex gap-x-3 items-center'>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className='cursor-pointer' onClick={() => handleUnlStatusUpdate(shipment)}>
@@ -1208,6 +1209,19 @@ export function ShipmentsTable({
                     </TooltipTrigger>
                     <TooltipContent>
                       {shipment.unlDone ? 'UNL Completed' : 'UNL Pending'}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className='cursor-pointer' onClick={() => handleUnlStatusUpdate(shipment)}>
+                        {shipment.locked ? 
+                          <Lock size={17} className="text-red-500" /> : 
+                          <Unlock  size={17} className="text-gray-700" />
+                        }
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {shipment.locked ? 'Locked' : 'Un-Locked'}
                     </TooltipContent>
                   </Tooltip>
                 </div>

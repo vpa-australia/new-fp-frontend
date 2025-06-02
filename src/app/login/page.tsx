@@ -35,8 +35,9 @@ export default function LoginPage() {
 
       const data = await response.json();
       console.log('Login successful:', data);
-      // Save token to localStorage
+      // Save token and email to localStorage
       localStorage.setItem('authToken', data.token);
+      localStorage.setItem('userEmail', email);
 
       const userResponse = await fetch('https://ship-orders.vpa.com.au/api/users/auth/me', {
         headers: {

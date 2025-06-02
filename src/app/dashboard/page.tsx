@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ArrowUpIcon, BoxIcon, CheckCircleIcon, DollarSignIcon, SearchIcon, TruckIcon, UserIcon, LogOutIcon, Loader2, CogIcon } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
 import { ShipmentsTable } from '@/components/ShipmentsTable';
+import Image from 'next/image';
 
 // Define Warehouse interface
 interface Warehouse {
@@ -42,6 +43,7 @@ interface Shipment {
   region: string;
   postCode: string;
   country: string;
+  locked: boolean;
   warehouseCode: string;
   carrierCode: string;
   serviceCode: string;
@@ -94,19 +96,25 @@ export default function DashboardPage() {
   const [action, setAction] = useState(0);
   const router = useRouter();
 
-  // Check authentication on component mount
+  const [userEmail, setUserEmail] = useState('');
+
+  // Check authentication and get user email on component mount
   useEffect(() => {
     const token = localStorage.getItem('authToken');
+    const email = localStorage.getItem('userEmail');
     if (!token) {
       router.push('/login');
+    } else if (email) {
+      setUserEmail(email);
     }
   }, [router]);
 
 
   // Logout handler function
   const handleLogout = () => {
-    // Remove the authentication token from localStorage
+    // Remove the authentication token and user email from localStorage
     localStorage.removeItem('authToken');
+    localStorage.removeItem('userEmail');
     // Redirect to the login page
     router.push('/login');
   };
@@ -237,16 +245,17 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 p-6">
       <header className="mb-6 flex justify-between items-center"> {/* Added flex layout */} 
-        <div> {/* Wrapped existing header content */} 
-          <h1 className="text-3xl font-bold text-gray-900">VPA Fulfillments</h1>
+        <div className='flex gap-x-3 items-center'> {/* Wrapped existing header content */} 
+          <Image src="/vpa-full-logo_410x.avif" alt='VPA Logo' width={80} height={20} />
+          <h1 className="text-3xl font-bold text-gray-900">Fulfillments</h1>
           {/* <p className="text-gray-600">Manage and process customer orders</p> */}
         </div>
         {/* Added User Avatar Dropdown */} 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Avatar className="cursor-pointer">
-              <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
-              <AvatarFallback>CN</AvatarFallback>
+              <AvatarImage src="" alt={userEmail} />
+              <AvatarFallback className='font-bold bg-gray-3  00'>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
