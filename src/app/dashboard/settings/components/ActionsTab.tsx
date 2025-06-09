@@ -57,7 +57,10 @@ export default function ActionsTab() {
       }
     };
 
-    fetchStatuses();
+    // Only run on the client side
+    if (typeof window !== 'undefined') {
+      fetchStatuses();
+    }
   }, []);
 
   const handleViewDetails = (status: Status) => {
@@ -130,7 +133,7 @@ export default function ActionsTab() {
                   <Button variant="ghost" size="sm" onClick={() => handleViewDetails(status)}>
                     View Details
                   </Button>
-                  <Button variant="ghost" size="sm">Edit</Button>
+                  {/* <Button variant="ghost" size="sm">Edit</Button> */}
                 </TableCell>
               </TableRow>
             ))}

@@ -36,26 +36,34 @@ interface UsersResponse {
   users: User[];
 }
 
+interface UpdateUserData {
+  name: string;
+}
+
 export default function UsersTab() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
+  const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
     password: '',
     roles: [] as string[]
   });
+  const [editUserData, setEditUserData] = useState<UpdateUserData>({
+    name: ''
+  });
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const token = localStorage.getItem('authToken');
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-       
+        const token = localStorage.getItem('authToken');
         const response = await fetch('https://ship-orders.vpa.com.au/api/users', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -77,10 +85,13 @@ export default function UsersTab() {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setLoading(false);
-      }
+      } 
     };
 
-    fetchUsers();
+    // Only run on the client side
+    if (typeof window !== 'undefined') {
+      fetchUsers();
+    }
   }, []);
 
   const handleRoleChange = (role: string, checked: boolean) => {
@@ -94,6 +105,73 @@ export default function UsersTab() {
         ...prev,
         roles: prev.roles.filter(r => r !== role)
       }));
+    }
+  };
+
+  const handleUpdateUser = (user: User) => {
+    setSelectedUser(user);
+    setEditUserData({
+      name: user.data.name
+    });
+    setIsEditUserDialogOpen(true);
+  };
+
+  const handleSubmitUpdate = async () => {
+    if (!selectedUser) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/users/${selectedUser.data.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editUserData)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update user');
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to update user');
+      }
+      
+      toast({
+        title: 'Success',
+        description: 'User updated successfully',
+      });
+      
+      // Update the user in the local state
+      const updatedUsers = users.map(user => {
+        if (user.data.id === selectedUser.data.id) {
+          return {
+            ...user,
+            data: {
+              ...user.data,
+              name: editUserData.name
+            }
+          };
+        }
+        return user;
+      });
+      
+      setUsers(updatedUsers);
+      setIsEditUserDialogOpen(false);
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to update user',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -114,7 +192,7 @@ export default function UsersTab() {
           name: newUser.name,
           email: newUser.email,
           password: newUser.password,
-          roles: newUser.roles.filter(role => role !== '') // Filter out any empty roles
+          roles: newUser.roles.filter(role => role !== '')
         }),
       });
 
@@ -123,7 +201,6 @@ export default function UsersTab() {
         throw new Error(errorData.message || 'Failed to create user');
       }
 
-      // Refresh the user list
       const updatedResponse = await fetch('https://ship-orders.vpa.com.au/api/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -288,13 +365,43 @@ export default function UsersTab() {
                 <TableCell>{user.data.email}</TableCell>
                 <TableCell>{user.roles.roles.join(', ') || 'No roles assigned'}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm">Edit</Button>
-                  <Button variant="ghost" size="sm" className="text-red-600">Delete</Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleUpdateUser(user)}>Edit</Button>
+                  {/* <Button variant="ghost" size="sm" className="text-red-600">Delete</Button> */}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+
+        {/* Edit User Dialog */}
+        <Dialog open={isEditUserDialogOpen} onOpenChange={setIsEditUserDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="edit-name"
+                  value={editUserData.name}
+                  onChange={(e) => setEditUserData({ ...editUserData, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditUserDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmitUpdate} disabled={isSubmitting}>
+                {isSubmitting ? 'Updating...' : 'Update User'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

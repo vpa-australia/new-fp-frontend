@@ -82,7 +82,10 @@ export default function CarriersTab() {
       }
     };
 
-    fetchCarriers();
+    // Only run on the client side
+    if (typeof window !== 'undefined') {
+      fetchCarriers();
+    }
   }, []);
 
   const handleViewDetails = (carrier: Carrier) => {
