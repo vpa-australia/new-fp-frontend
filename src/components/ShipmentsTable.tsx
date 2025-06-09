@@ -644,6 +644,50 @@ export function ShipmentsTable({
     }
   };
 
+  const handleLockUnlockShipment = async (shipment: Shipment) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Authentication token not found. Please log in again.'
+        });
+        return;
+      }
+
+      const endpoint = shipment.locked ? 'unlock' : 'lock';
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/${endpoint}/${shipment.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${endpoint} shipment`);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        toast({
+          variant: 'success',
+          title: 'Success',
+          description: `Shipment ${shipment.locked ? 'unlocked' : 'locked'} successfully`
+        });
+        setAction(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error(`Error ${shipment.locked ? 'unlocking' : 'locking'} shipment:`, error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: `Failed to ${shipment.locked ? 'unlock' : 'lock'} shipment`
+      });
+    }
+  };
+
   const handleDeleteShipment = async (shipmentId: number) => {
     console.log(`Deleting shipment ${shipmentId}`);
 
@@ -1221,7 +1265,8 @@ export function ShipmentsTable({
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className='cursor-pointer' onClick={() => handleUnlStatusUpdate(shipment)}>
+                      <div className={shipment.locked ? 'cursor-pointer' : ''} 
+                           onClick={shipment.locked ? () => handleLockUnlockShipment(shipment) : undefined}>
                         {shipment.locked ? 
                           <Lock size={17} className="text-red-500" /> : 
                           <Unlock  size={17} className="text-gray-700" />

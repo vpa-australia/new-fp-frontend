@@ -71,10 +71,10 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     return initialStockStatus;
   });
 
-  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, 'B' | 'M' | 'T'>>(() => {
-    const initialDispatch: Record<number, 'B' | 'M' | 'T'> = {};
+  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, string>>(() => {
+    const initialDispatch: Record<number, string> = {};
     shipment?.shipment?.orderLines?.forEach((item: LineItem) => {
-      initialDispatch[item.id] = shipment.shipment.warehouseCode === 'Brisbane' ? 'B' : 'M';
+      initialDispatch[item.id] = shipment.shipment.warehouseCode?.[0] || '';
     });
     return initialDispatch;
   });
@@ -85,47 +85,44 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
   // Fetch warehouses on component mount
 
+  const [warehouses, setWarehouses] = useState<Array<{code: string; name: string}>>([]);
+
   useEffect(() => {
     const fetchWarehouses = async () => {
       try {
         const token = localStorage.getItem('authToken');
-        console.log('Token:', token);
         if (!token) {
           throw new Error('Authentication token not found. Please log in.');
-          
         }
 
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-            },
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
         });
         if (!response.ok) {
           throw new Error('Failed to fetch warehouses');
         }
         const data = await response.json();
 
-        console.log('Warehouse data:', data); // Log the fetched data
-
-        // Check if the response has the expected structure
         if (data && data.success && data.warehouses) {
-          // Extract the warehouse objects into an array
           const warehouseArray = Object.values(data.warehouses);
-          // Ensure the extracted data matches the Warehouse interface
           const formattedWarehouses = warehouseArray.map((wh: any) => ({
             code: wh.code,
             name: wh.name,
           }));
+          setWarehouses(formattedWarehouses);
         } else {
-          // Handle unexpected response structure
-          console.error('Unexpected API response structure for warehouses:', data);
           throw new Error('Unexpected data format received for warehouses.');
         }
-
       } catch (error) {
         console.error('Error fetching warehouses:', error);
-      } finally {
+        toast({
+          title: "Error",
+          description: "Failed to fetch warehouses. Please try again.",
+          variant: "destructive",
+        });
       }
     };
 
@@ -242,7 +239,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         return;
       }
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?variant_id=${item.variantId}&warehouse_code=${shipment.shipment.warehouseCode}`, {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?variant_id=${item.sku}&warehouse_code=${shipment.shipment.warehouseCode}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -285,7 +282,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         return;
       }
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?variant_id=${item.variantId}&warehouse_code=${shipment.shipment.warehouseCode}`, {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?variant_id=${item.sku}&warehouse_code=${shipment.shipment.warehouseCode}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -478,19 +475,30 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                       <div className="flex flex-col items-center">
                       <span className="text-xs text-gray-500 mb-1">In Stock</span>
                       <div className="flex gap-1">
-                        <button 
+                      {warehouses.map((warehouse) => (
+                          <button
+                            key={warehouse.code}
+                            onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: warehouse.code[0] }))}
+                            className={`px-2 py-1 ${selectedDispatchFrom[item.id] === warehouse.code[0] ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
+                          >
+                            {warehouse.code[0]}
+                          </button>
+                        ))}  
+                        {/* <button 
                           onClick={() => handleMarkInStock(item)} 
-                          className={`px-2 py-1 ${selectedStockStatus[item.id] === 'yes' ? 'bg-green-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'} text-xs font-medium rounded transition-colors`}
+                          className={`px-2 py-1 ${selectedStockStatus[item.sku as any] === 'yes' ? 'bg-green-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'} text-xs font-medium rounded transition-colors`}
                         >
                           YES
                         </button>
                         <button 
                           onClick={() => handleMarkOutOfStock(item)} 
-                          className={`px-2 py-1 ${selectedStockStatus[item.id] === 'no' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'} text-xs font-medium rounded transition-colors`}
+                          className={`px-2 py-1 ${selectedStockStatus[item.sku as any] === 'no' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'} text-xs font-medium rounded transition-colors`}
                         >
                           NO
-                        </button>
+                        </button> */}
                       </div>
+
+                        
                     </div>
                     <div className='flex items-center gap-x-2'>
                     {item.url ? (
@@ -515,24 +523,15 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                     <div className="flex flex-col items-center">
                       <span className="text-xs text-gray-500 mb-1">Dispatch From</span>
                       <div className="flex gap-1">
-                        <button   
-                          onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: 'B' }))} 
-                          className={`px-2 py-1 ${selectedDispatchFrom[item.id] === 'B' ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
-                        >
-                          B
-                        </button>
-                        <button 
-                          onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: 'M' }))} 
-                          className={`px-2 py-1 ${selectedDispatchFrom[item.id] === 'M' ? 'bg-purple-500 text-white' : 'bg-purple-100 hover:bg-purple-200 text-purple-800'} text-xs font-medium rounded transition-colors`}
-                        >
-                          M
-                        </button>
-                        <button 
-                          onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: 'T' }))} 
-                          className={`px-2 py-1 ${selectedDispatchFrom[item.id] === 'T' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'} text-xs font-medium rounded transition-colors`}
-                        >
-                          T
-                        </button>
+                        {warehouses.map((warehouse) => (
+                          <button
+                            key={warehouse.code}
+                            onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: warehouse.code[0] }))}
+                            className={`px-2 py-1 ${selectedDispatchFrom[item.id] === warehouse.code[0] ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
+                          >
+                            {warehouse.code[0]}
+                          </button>
+                        ))}
                       </div>
                     </div>
                 </div>
