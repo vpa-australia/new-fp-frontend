@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { BoxIcon } from 'lucide-react';
 
-// Define the Shipment interface again or import it if defined globally
 interface LineItem {
   id: number;
   title: string;
@@ -51,17 +50,7 @@ interface Shipment {
   line_items: LineItem[];
 }
 
-// Define an interface for the warehouse data
-interface Warehouse {
-  code: string; // Assuming the API returns 'code'
-  name: string; // Assuming the API returns 'name'
-}
 
-// Define an interface for the carrier data
-interface Carrier {
-  code: string; // Assuming the API returns 'code'
-  name: string; // Assuming the API returns 'name'
-}
 
 interface ShipmentDetailViewProps {
   shipment: any;
@@ -70,9 +59,6 @@ interface ShipmentDetailViewProps {
 
 export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewProps) {
   const { toast } = useToast();
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(true);
-  const [warehouseError, setWarehouseError] = useState<string | null>(null);
   const [selectedStockStatus, setSelectedStockStatus] = useState<Record<number, 'yes' | 'no'>>(() => {
     const initialStockStatus: Record<number, 'yes' | 'no'> = {};
     shipment?.shipment?.orderLines?.forEach((item: any) => {
@@ -84,33 +70,23 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     });
     return initialStockStatus;
   });
-  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, 'B' | 'M'>>(() => {
-    const initialDispatch: Record<number, 'B' | 'M'> = {};
+
+  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, 'B' | 'M' | 'T'>>(() => {
+    const initialDispatch: Record<number, 'B' | 'M' | 'T'> = {};
     shipment?.shipment?.orderLines?.forEach((item: LineItem) => {
       initialDispatch[item.id] = shipment.shipment.warehouseCode === 'Brisbane' ? 'B' : 'M';
     });
     return initialDispatch;
   });
 
-  // State for carriers, loading, and error handling
-  const [carriers, setCarriers] = useState<Carrier[]>([]);
-  const [isLoadingCarriers, setIsLoadingCarriers] = useState(true);
-  const [carrierError, setCarrierError] = useState<string | null>(null);
-  const [selectedQuote, setSelectedQuote] = useState<number | null>(null); // State for selected quote
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [isLoadingLineItems, setIsLoadingLineItems] = useState(false);
-  const [lineItemsError, setLineItemsError] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState(''); // State for the comment text
-  const [comments, setComments] = useState<any[]>(shipment?.shipment?.comments || []); // State for comments to allow dynamic updates
+  const [selectedQuote, setSelectedQuote] = useState<number | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [comments, setComments] = useState<any[]>(shipment?.shipment?.comments || []);
 
   // Fetch warehouses on component mount
 
-  console.log("shipment detail: ", shipment);
-
   useEffect(() => {
     const fetchWarehouses = async () => {
-      setIsLoadingWarehouses(true);
-      setWarehouseError(null);
       try {
         const token = localStorage.getItem('authToken');
         console.log('Token:', token);
@@ -141,7 +117,6 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             code: wh.code,
             name: wh.name,
           }));
-          setWarehouses(formattedWarehouses);
         } else {
           // Handle unexpected response structure
           console.error('Unexpected API response structure for warehouses:', data);
@@ -150,10 +125,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
       } catch (error) {
         console.error('Error fetching warehouses:', error);
-        setWarehouseError('Failed to load warehouses. Please try again.');
-        setWarehouses([]); // Clear warehouses on error
       } finally {
-        setIsLoadingWarehouses(false);
       }
     };
 
@@ -163,13 +135,10 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   // Fetch carriers on component mount
   useEffect(() => {
     const fetchCarriers = async () => {
-      setIsLoadingCarriers(true);
-      setCarrierError(null);
       try {
 
         const token = localStorage.getItem('authToken');
         console.log('Token:', token);
-
         if (!token) {
           throw new Error('Authentication token not found. Please log in.');
         }
@@ -195,7 +164,6 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             code: c.code,
             name: c.name,
           }));
-          setCarriers(formattedCarriers);
         } else {
           // Handle unexpected response structure
           console.error('Unexpected API response structure for carriers:', data);
@@ -204,10 +172,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
       } catch (error) {
         console.error('Error fetching carriers:', error);
-        setCarrierError('Failed to load carriers. Please try again.');
-        setCarriers([]); // Clear carriers on error
       } finally {
-        setIsLoadingCarriers(false);
       }
     };
 
@@ -218,9 +183,12 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
   const handleQuoteSelection = async () => {
 
-    console.log("selected quote: ", selectedQuote);
     if (!selectedQuote) {
-      console.error('No quote selected');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please select a quote first'
+      });
       return;
     }
 
@@ -243,7 +211,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       }
 
       const result = await response.json();
-      console.log('Quote updated successfully:', result);
+
       toast({
         variant: 'success',
         title: 'Success',
@@ -253,7 +221,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       setAction(prev => prev + 1);
 
     } catch (error) {
-      console.error('Error updating quote:', error);
+
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -430,7 +398,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         <Card className="col-span-1 mb-5">
           <CardHeader className="">
             <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Shipping Quotes</CardTitle>
-          </CardHeader>
+          </CardHeader>;
           <CardContent>
             {/* <p className='mb-4 -mt-3'>Desired Carrier Code: {shipment.shipment.carrierCodeDesired}</p>
             <p className='mb-5 -mt-3'>Selected Carrier Code: {shipment.shipment.carrierCode}</p> */}
@@ -547,7 +515,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                     <div className="flex flex-col items-center">
                       <span className="text-xs text-gray-500 mb-1">Dispatch From</span>
                       <div className="flex gap-1">
-                        <button 
+                        <button   
                           onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: 'B' }))} 
                           className={`px-2 py-1 ${selectedDispatchFrom[item.id] === 'B' ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
                         >
@@ -558,6 +526,12 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                           className={`px-2 py-1 ${selectedDispatchFrom[item.id] === 'M' ? 'bg-purple-500 text-white' : 'bg-purple-100 hover:bg-purple-200 text-purple-800'} text-xs font-medium rounded transition-colors`}
                         >
                           M
+                        </button>
+                        <button 
+                          onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: 'T' }))} 
+                          className={`px-2 py-1 ${selectedDispatchFrom[item.id] === 'T' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'} text-xs font-medium rounded transition-colors`}
+                        >
+                          T
                         </button>
                       </div>
                     </div>

@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, MapPin, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, UserIcon, Lock, Unlock } from 'lucide-react';
+import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, MapPin, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, UserIcon, Lock, Unlock, Loader } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; 
 import { ShipmentDetailView } from './ShipmentDetailView'; 
@@ -75,6 +75,7 @@ type ShipmentsTableProps = {
   setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
   setItemsPerPage: React.Dispatch<React.SetStateAction<number>>;
   selectedWarehouse: string | null;
+  shipmentsAreLoading: boolean;
 };
 
 const formatRelativeTime = (timestamp: number) => {
@@ -105,7 +106,8 @@ export function ShipmentsTable({
   setCurrentPage,
   setItemsPerPage,
   lastPage,
-  selectedWarehouse
+  selectedWarehouse,
+  shipmentsAreLoading
 }: ShipmentsTableProps) {
   const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(null); 
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
@@ -655,11 +657,11 @@ export function ShipmentsTable({
       return;
     }
 
-    const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/${shipmentId}`;
+    const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/archive/${shipmentId}`;
 
     try {
       const response = await fetch(apiUrl, {
-        method: 'DELETE',
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -891,6 +893,12 @@ export function ShipmentsTable({
     }
   };
 
+  if(shipmentsAreLoading) {
+    return <div className='flex flex-1 justify-center items-center h-[90vh] w-full'>
+      <Loader className='animate-spin'/>
+    </div>
+  }
+
   return (
     <>
      <PdfViewer
@@ -1099,7 +1107,7 @@ export function ShipmentsTable({
                   onCheckedChange={(checked) => handleSelectRow(shipment.id, Boolean(checked))}
                   aria-labelledby={`select-row-${shipment.id}`}
                 />
-                {shipment.shopifyOrderNumber}
+                <p className='w-16'>{shipment.shopifyOrderNumber}</p>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <a target='_blank' href={`https://admin.shopify.com/store/vpa-australia/orders/${shipment.shopifyId}`}>

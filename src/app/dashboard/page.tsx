@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from 'react'; 
 import { useRouter } from 'next/navigation'; 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -15,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ArrowUpIcon, BoxIcon, CheckCircleIcon, DollarSignIcon, SearchIcon, TruckIcon, UserIcon, LogOutIcon, Loader2, CogIcon } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
+import { UserIcon, LogOutIcon, Loader2, CogIcon } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
 import { ShipmentsTable } from '@/components/ShipmentsTable';
 import Image from 'next/image';
 
@@ -65,35 +63,18 @@ interface Shipment {
   lastApiUpdate: number; // Added last API update time
 }
 
-const getStatusClass = (status: string | null) => {
-  if (!status) return 'bg-gray-100 text-gray-800';
-  switch (status.toLowerCase()) {
-    case 'manifested': return 'bg-green-100 text-green-800';
-    case 'label_printed': return 'bg-blue-100 text-blue-800';
-    case 'on_hold': return 'bg-yellow-100 text-yellow-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
-};
-
-
-
 export default function DashboardPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loadingWarehouses, setLoadingWarehouses] = useState(true);
   const [warehouseError, setWarehouseError] = useState<string | null>(null);
   const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [searchParams, setSearchParams] = useState<any>(null);
-  const [loadingSearchParams, setLoadingSearchParams] = useState(false);
-  const [searchParamsError, setSearchParamsError] = useState<string | null>(null);
-  const [shipmentError, setShipmentError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalItems, setTotalItems] = useState(0);
-  const [loadingShipments, setLoadingShipments] = useState(true);
   const [selectedWarehouse, setSelectedWarehouse] = useState("All");
-  const [selectedShipmentIds, setSelectedShipmentIds] = useState<number[]>([]);
   const [lastPage, setLastPage] = useState(1); 
   const [action, setAction] = useState(0);
+  const [shipmentsAreLoading, setShipmentsAreLoading] = useState(false);
   const router = useRouter();
 
   const [userEmail, setUserEmail] = useState('');
@@ -121,8 +102,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchSearchParams = async () => {
-      setLoadingSearchParams(true);
-      setSearchParamsError(null);
       try {
         const token = localStorage.getItem('authToken');
         if (!token) {
@@ -143,12 +122,9 @@ export default function DashboardPage() {
 
         const data = await response.json();
         console.log('Search Parameters:', data); // Log the fetched search parameters for verificatio
-        setSearchParams(data);
       } catch (err: any) {
         console.error('Error fetching search parameters:', err);
-        setSearchParamsError(err.message || 'An unexpected error occurred.');
       } finally {
-        setLoadingSearchParams(false);
       }
     };
 
@@ -191,11 +167,14 @@ export default function DashboardPage() {
     fetchSearchParams();
   }, [itemsPerPage, currentPage, action]);
 
+  const [isArchived, setIsArchived] = useState(false);
+
   useEffect(() => {
     (async () => {
-        setLoadingShipments(true);
-        setShipmentError(null);
         try {
+
+            setShipmentsAreLoading(true);
+
             const token = localStorage.getItem('authToken');
             if (!token) {
             throw new Error('Authentication token not found. Please log in.');
@@ -203,7 +182,7 @@ export default function DashboardPage() {
     
             let url = 'https://ship-orders.vpa.com.au/api/shipments';
             url += `/warehouse/${selectedWarehouse}`;
-            url += `?perPage=${itemsPerPage}&page=${currentPage}`;
+            url += `?perPage=${itemsPerPage}&page=${currentPage}&archive=${isArchived ? 1 : 0}`;
             
             // Add search parameters if available
             // if (searchParams?.searchParameters) {
@@ -235,12 +214,11 @@ export default function DashboardPage() {
             setLastPage(data.lastPage || 1);
         } catch (err: any) {
             console.error('Error fetching shipments:', err);
-            setShipmentError(err.message || 'An unexpected error occurred.');
         } finally {
-            setLoadingShipments(false);
+          setShipmentsAreLoading(false);
         }
     })();
-  }, [itemsPerPage, currentPage, selectedWarehouse, action]);
+  }, [itemsPerPage, currentPage, selectedWarehouse, action, isArchived]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 p-6">
@@ -255,7 +233,7 @@ export default function DashboardPage() {
           <DropdownMenuTrigger asChild>
             <Avatar className="cursor-pointer">
               <AvatarImage src="" alt={userEmail} />
-              <AvatarFallback className='font-bold bg-gray-3  00'>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
+              <AvatarFallback className='font-bold bg-gray-300'>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -281,63 +259,16 @@ export default function DashboardPage() {
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
-
-      {/* Stats Cards */}
-      {/* ... existing stats cards code ... */}
-      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-            <BoxIcon className="h-5 w-5 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <ArrowUpIcon className="h-3 w-3 text-green-500 mr-1" /> +12% from last week
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ready for Dispatch</CardTitle>
-            <TruckIcon className="h-5 w-5 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">18</div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <ArrowUpIcon className="h-3 w-3 text-green-500 mr-1" /> +5% from last week
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Today</CardTitle>
-            <CheckCircleIcon className="h-5 w-5 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">42</div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <ArrowUpIcon className="h-3 w-3 text-green-500 mr-1" /> +18% from last week
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <DollarSignIcon className="h-5 w-5 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$5,842</div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <ArrowUpIcon className="h-3 w-3 text-green-500 mr-1" /> +8% from last week
-            </p>
-          </CardContent>
-        </Card>
-      </div> */}
-
-
       {/* Tabs and Table */} 
-      <Tabs defaultValue="all" className="w-full" onValueChange={(value) => setSelectedWarehouse(value)}>
+      <Tabs defaultValue="all" className="w-full" onValueChange={(value) => {
+        if (value === 'archived') {
+          setIsArchived(true);
+          setSelectedWarehouse('All');
+        } else {
+          setIsArchived(false);
+          setSelectedWarehouse(value);
+        }
+      }}>
         <div className='flex flex-row justify-between items-center'>
         <TabsList className="bg-white p-1 rounded-lg shadow-sm mb-4 flex flex-wrap"> {/* Added flex-wrap */} 
           <TabsTrigger value="all" className="text-sm px-4 py-1.5">All Locations</TabsTrigger>
@@ -377,6 +308,7 @@ export default function DashboardPage() {
                 totalItems={totalItems}
                 setItemsPerPage={setItemsPerPage}
                 setCurrentPage={setCurrentPage}
+                shipmentsAreLoading={shipmentsAreLoading}
                 />
             </CardContent>
           </Card>
@@ -396,12 +328,32 @@ export default function DashboardPage() {
                 totalItems={totalItems}
                 setItemsPerPage={setItemsPerPage} // Add this line to pass the setItemsPerPage function to ShipmentsTable as a prop
                 setCurrentPage={setCurrentPage}
+                shipmentsAreLoading={shipmentsAreLoading}
                 />
             </CardContent>
 
           </Card>
           </TabsContent>
         ))}
+
+        <TabsContent value="archived">
+          <Card className="shadow-sm w-full">
+            <CardContent className="p-0">
+              <ShipmentsTable 
+                selectedWarehouse={selectedWarehouse}
+                setAction={setAction}
+                lastPage={lastPage}
+                shipments={shipments}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                totalItems={totalItems}
+                setItemsPerPage={setItemsPerPage}
+                setCurrentPage={setCurrentPage}
+                shipmentsAreLoading={shipmentsAreLoading}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
     </div>
