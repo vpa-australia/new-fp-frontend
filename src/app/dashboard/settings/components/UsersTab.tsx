@@ -5,6 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UsersIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
 
 interface UserRole {
   roles: string[];
@@ -35,12 +40,22 @@ export default function UsersTab() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    password: '',
+    roles: [] as string[]
+  });
+  const [availableRoles, setAvailableRoles] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+  const token = localStorage.getItem('authToken');
 
   useEffect(() => {
     const fetchUsers = async () => {
-
       try {
-        const token = localStorage.getItem('authToken');
+       
         const response = await fetch('https://ship-orders.vpa.com.au/api/users', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -53,6 +68,11 @@ export default function UsersTab() {
 
         const data: UsersResponse = await response.json();
         setUsers(data.users);
+        
+        // Extract available roles from the first user's availableRoles
+        if (data.users.length > 0 && data.users[0].availableRoles) {
+          setAvailableRoles(data.users[0].availableRoles.roles);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -63,6 +83,84 @@ export default function UsersTab() {
     fetchUsers();
   }, []);
 
+  const handleRoleChange = (role: string, checked: boolean) => {
+    if (checked) {
+      setNewUser(prev => ({
+        ...prev,
+        roles: [...prev.roles, role]
+      }));
+    } else {
+      setNewUser(prev => ({
+        ...prev,
+        roles: prev.roles.filter(r => r !== role)
+      }));
+    }
+  };
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newUser.name,
+          email: newUser.email,
+          password: newUser.password,
+          roles: newUser.roles.filter(role => role !== '') // Filter out any empty roles
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create user');
+      }
+
+      // Refresh the user list
+      const updatedResponse = await fetch('https://ship-orders.vpa.com.au/api/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!updatedResponse.ok) {
+        throw new Error('Failed to refresh user list');
+      }
+
+      const updatedData: UsersResponse = await updatedResponse.json();
+      setUsers(updatedData.users);
+      
+      // Reset form and close dialog
+      setNewUser({
+        name: '',
+        email: '',
+        password: '',
+        roles: []
+      });
+      setIsAddUserDialogOpen(false);
+      
+      toast({
+        title: 'Success',
+        description: 'User created successfully',
+      });
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to create user',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -70,10 +168,97 @@ export default function UsersTab() {
       </CardHeader>
       <CardContent>
         <div className="flex justify-end mb-4">
-          <Button>
-            <UsersIcon className="mr-2 h-4 w-4" />
-            Add New User
-          </Button>
+          <Dialog open={isAddUserDialogOpen} onOpenChange={setIsAddUserDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <UsersIcon className="mr-2 h-4 w-4" />
+                Add New User
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Add New User</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAddUser}>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                      Name
+                    </Label>
+                    <Input
+                      id="name"
+                      value={newUser.name}
+                      onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="email" className="text-right">
+                      Email
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="password" className="text-right">
+                      Password
+                    </Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-start gap-4">
+                    <Label className="text-right pt-2">
+                      Roles
+                    </Label>
+                    <div className="col-span-3 space-y-2">
+                      {availableRoles.length > 0 ? (
+                        availableRoles.map((role) => (
+                          <div key={role} className="flex items-center space-x-2">
+                            <Checkbox 
+                              id={`role-${role}`} 
+                              checked={newUser.roles.includes(role)}
+                              onCheckedChange={(checked) => handleRoleChange(role, checked === true)}
+                            />
+                            <Label htmlFor={`role-${role}`}>{role}</Label>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">No roles available</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <svg className="w-4 h-4 mr-2 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Creating...
+                      </>
+                    ) : (
+                      'Create User'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
         <Table>
           <TableHeader>
@@ -102,7 +287,6 @@ export default function UsersTab() {
                 <TableCell>{user.data.name}</TableCell>
                 <TableCell>{user.data.email}</TableCell>
                 <TableCell>{user.roles.roles.join(', ') || 'No roles assigned'}</TableCell>
-                {/* <TableCell>{user.data.email_verified_at ? 'Verified' : 'Pending'}</TableCell> */}
                 <TableCell>
                   <Button variant="ghost" size="sm">Edit</Button>
                   <Button variant="ghost" size="sm" className="text-red-600">Delete</Button>

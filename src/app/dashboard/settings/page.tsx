@@ -8,6 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserIcon, UsersIcon, ArrowLeftIcon, HouseIcon, ActivityIcon, Package2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import UsersTab from './components/UsersTab';
+import WarehousesTab from './components/WarehousesTab';
+import CarriersTab from './components/CarriersTab';
+import ActionsTab from './components/ActionsTab';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -27,12 +30,8 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-bold">Settings</h1>
       </div>
       
-      <Tabs defaultValue="account" className="w-full">
+      <Tabs defaultValue="users" className="w-full">
         <TabsList className="mb-8">
-          <TabsTrigger value="account" className="flex items-center">
-            <UserIcon className="mr-2 h-4 w-4" />
-            Account
-          </TabsTrigger>
           <TabsTrigger value="users" className="flex items-center">
             <UsersIcon className="mr-2 h-4 w-4" />
             Users
@@ -50,29 +49,15 @@ export default function SettingsPage() {
             Carriers
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="account">
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" placeholder="Your name" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input disabled id="email" type="email" placeholder="your.email@example.com" />
-              </div>
-              <Button>Save Changes</Button>
-            </CardContent>
-          </Card>
+        <TabsContent value="warehouses">
+          <WarehousesTab />
         </TabsContent>
-        
-        <TabsContent value="warehouses"></TabsContent>
-        <TabsContent value="actions"></TabsContent>
-        <TabsContent value="carriers"></TabsContent>
+        <TabsContent value="actions">
+          <ActionsTab />
+        </TabsContent>
+        <TabsContent value="carriers">
+          <CarriersTab />
+        </TabsContent>
 
         <TabsContent value="users">
           <UsersTab />
