@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react'; 
+import { useCallback, useEffect, useState } from 'react'; 
 import { useRouter } from 'next/navigation'; 
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -92,13 +92,13 @@ export default function DashboardPage() {
 
 
   // Logout handler function
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     // Remove the authentication token and user email from localStorage
     localStorage.removeItem('authToken');
     localStorage.removeItem('userEmail');
     // Redirect to the login page
     router.push('/login');
-  };
+  }, [router]);
 
   useEffect(() => {
     const fetchSearchParams = async () => {
@@ -165,7 +165,7 @@ export default function DashboardPage() {
 
     fetchWarehouses();
     fetchSearchParams();
-  }, [itemsPerPage, currentPage, action]);
+  }, [action]); // Removed itemsPerPage and currentPage as they are not used in these fetches
 
   const [isArchived, setIsArchived] = useState(false);
 
@@ -226,9 +226,7 @@ export default function DashboardPage() {
         <div className='flex gap-x-3 items-center'> {/* Wrapped existing header content */} 
           <Image src="/vpa-full-logo_410x.avif" alt='VPA Logo' width={80} height={20} />
           <h1 className="text-3xl font-bold text-gray-900">Fulfillments</h1>
-          {/* <p className="text-gray-600">Manage and process customer orders</p> */}
         </div>
-        {/* Added User Avatar Dropdown */} 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Avatar className="cursor-pointer">
@@ -263,7 +261,7 @@ export default function DashboardPage() {
       <Tabs defaultValue="all" className="w-full" onValueChange={(value) => {
         if (value === 'archived') {
           setIsArchived(true);
-          setSelectedWarehouse('All');
+          setSelectedWarehouse('Archived');
         } else {
           setIsArchived(false);
           setSelectedWarehouse(value);
