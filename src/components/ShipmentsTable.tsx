@@ -621,7 +621,8 @@ export function ShipmentsTable({
       }
 
       const result = await response.json();
-      if (result.success) {
+
+      if (result.shipments && result.shipments.length > 0) {
         toast({
           variant: 'success',
           title: 'Success',
@@ -933,9 +934,49 @@ export function ShipmentsTable({
   }, [toast, setAction]);
 
 
-  const handleRestoreShipment = (shipmentId: number) => {
+  const handleRestoreShipment = useCallback(async (shipmentId: number) => {
+    try {
 
-  }
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        toast({
+          variant: "destructive",
+          title: "Authentication Error",
+          description: "Please log in to continue."
+        });
+        return;
+      }
+      
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/unarchive/${shipmentId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to restore shipment: ${response.statusText}`);
+      }
+
+      toast({
+        variant: "success",
+        title: "Shipment Restored",
+        description: `Shipment ${shipmentId} has been restored successfully.`
+      });
+      setAction(prev => prev + 1); // Refresh data
+
+    } catch (error: any) {
+      console.error('Error restoring shipment:', error);
+      toast({
+        variant: "destructive",
+        title: "Restore Failed",
+        description: error.message || "Failed to restore shipment."
+      });
+    }
+  }, [toast, setAction]);
 
   if (shipmentsAreLoading) {
     return <div className='flex flex-1 justify-center items-center h-[90vh] w-full'>
