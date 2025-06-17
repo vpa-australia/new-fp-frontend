@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { UserIcon, LogOutIcon, Loader2, CogIcon } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
+import { UserIcon, LogOutIcon, Loader2, CogIcon, GripVertical, MapPin, Globe } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
 import { ShipmentsTable } from '@/components/ShipmentsTable';
 import Image from 'next/image';
 
@@ -225,7 +225,7 @@ export default function DashboardPage() {
       <header className="mb-6 flex justify-between items-center"> {/* Added flex layout */} 
         <div className='flex gap-x-3 items-center'> {/* Wrapped existing header content */} 
           <Image src="/vpa-full-logo_410x.avif" alt='VPA Logo' width={80} height={20} />
-          <h1 className="text-3xl font-bold text-gray-900">Fulfillments</h1>
+          <h1 className="text-3xl font-bold text-gray-900 italic">Fulfillments</h1>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -267,31 +267,39 @@ export default function DashboardPage() {
           setSelectedWarehouse(value);
         }
       }}>
-        <div className='flex flex-row justify-between items-center'>
-        <TabsList className="bg-white p-1 rounded-lg shadow-sm mb-4 flex flex-wrap"> {/* Added flex-wrap */} 
-          <TabsTrigger value="all" className="text-sm px-4 py-1.5">All Locations</TabsTrigger>
-          {loadingWarehouses && (
-            <div className="flex items-center px-4 py-1.5 text-sm text-gray-500">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading Locations...
-            </div>
-          )}
-          {warehouseError && (
-            <div className="px-4 py-1.5 text-sm text-red-600">
-              Error: {warehouseError}
-            </div>
-          )}
-          {!loadingWarehouses && !warehouseError && warehouses.map((warehouse) => (
-            <TabsTrigger
-              key={warehouse.id}
-              value={warehouse.name} // Use a unique value, e.g., lowercase name or ID
-              className="text-sm px-4 py-1.5"
-            >
-              {warehouse.name}
-            </TabsTrigger>
-          ))}
-          <TabsTrigger value="archived" className="text-sm px-4 py-1.5">Archived</TabsTrigger>
-        </TabsList>
+        <div className='flex flex-row justify-between items-center mt-7'>
+                <TabsList className="mb-5 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit">
+                  <TabsTrigger 
+                    value="All" 
+                    onClick={() => setSelectedWarehouse("All")}
+                    className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
+                  >
+                    <GripVertical className="h-5 w-5 mb-0.5" />
+                    <span className="text-xs font-medium">All</span>
+                  </TabsTrigger>
+                  {warehouses.filter(wh => !wh.international).map((warehouse) => (
+                    <TabsTrigger
+                      key={warehouse.id}
+                      value={warehouse.code}
+                      onClick={() => setSelectedWarehouse(warehouse.code)}
+                      className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
+                    >
+                      <MapPin className="h-5 w-5 mb-0.5" />
+                      <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
+                    </TabsTrigger>
+                  ))}
+                  {warehouses.filter(wh => wh.international).map((warehouse) => (
+                    <TabsTrigger
+                      key={warehouse.id}
+                      value={warehouse.code} // Or a generic 'INT' value if preferred for all international
+                      onClick={() => setSelectedWarehouse(warehouse.code)} // Or handle international selection differently
+                      className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
+                    >
+                      <Globe className="h-5 w-5 mb-0.5" />
+                      <span className="text-xs font-medium">INT</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
         </div>
         <TabsContent value="all">
           <Card className="shadow-sm w-full">

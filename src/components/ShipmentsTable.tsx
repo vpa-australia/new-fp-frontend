@@ -5,17 +5,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, Lock, Unlock, Loader } from 'lucide-react';
+import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, Lock, Unlock, Loader, Settings } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ShipmentDetailView } from './ShipmentDetailView';
 import { useToast } from '@/hooks/use-toast';
 import { AiFillFile, AiFillTag, AiFillHdd } from "react-icons/ai";
 import { PiCubeFocusBold } from "react-icons/pi";
-import { FaCheck, FaLink, FaTimes, FaTrashRestore, FaTruck, FaUser } from "react-icons/fa";
+import { FaCheck, FaLink, FaTimes, FaTrashRestore, FaTruck, FaUser, FaCalendarDay } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
-import { FaCalendarDay } from "react-icons/fa6";
 import { Input } from './ui/input';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';  
 import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
 import { PdfViewer } from "./ui/pdf-viewer";
@@ -115,7 +116,7 @@ export function ShipmentsTable({
     if (seconds < 31536000) return `${Math.floor(seconds / 2592000)}mo`;
     return `${Math.floor(seconds / 31536000)}y`;
   }, []);
-  
+
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
@@ -855,7 +856,7 @@ export function ShipmentsTable({
         title: "Quick Print Ready",
         description: "Labels are ready for printing."
       });
-      setAction(prev => prev + 1); 
+      setAction(prev => prev + 1);
 
     } catch (error: any) {
       console.error('Error during quick print:', error);
@@ -949,7 +950,7 @@ export function ShipmentsTable({
         });
         return;
       }
-      
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/unarchive/${shipmentId}`,
         {
           method: 'PATCH',
@@ -984,7 +985,7 @@ export function ShipmentsTable({
   const handleDeleteLabel = useCallback(async (shipmentId: number) => {
     try {
       const token = localStorage.getItem('authToken');
-      
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/labels?shipment_ids=${shipmentId}`,
         {
           method: 'DELETE',
@@ -1058,7 +1059,7 @@ export function ShipmentsTable({
       });
     }
   }, [toast, setAction]);
-  
+
   if (shipmentsAreLoading) {
     return <div className='flex flex-1 justify-center items-center h-[90vh] w-full'>
       <Loader className='animate-spin' />
@@ -1201,48 +1202,133 @@ export function ShipmentsTable({
       <Table className=''>
         <TableHeader>
           <TableRow className="">
-            <TableHead className="flex justify-between items-center gap-x-5 mb-3">
-              <div className='flex gap-x-5 items-center'>
+            <TableHead className="mb-3">
+              <div className='flex items-center space-x-10 pb-3 px-3'>
                 <Checkbox
                   checked={isAllSelected}
                   onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
                   aria-label="Select all rows"
+                  className="h-8 w-8 rounded-full data-[state=checked]:bg-[#3D753A] data-[state=checked]:text-primary-foreground border-gray-300 focus-visible:ring-sky-500"
                 />
-                <div className="flex gap-x-2">
-                  <div className="flex items-center gap-x-1">
-                    <div className="w-4 h-4 rounded-sm bg-[#F46E6B]"></div>
-                    <span>AusPost</span>
-                  </div>
-                  <div className="flex items-center gap-x-1">
-                    <div className="w-4 h-4 rounded-sm bg-[#9370db]"></div>
-                    <span>Aramex</span>
-                  </div>
-                </div>
-              </div>
-              <div className="relative w-[300px] mr-2">
-                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  type="search"
-                  placeholder="Search orders..."
-                  className="pl-10 pr-24 py-2 border rounded-md text-sm"
-                  disabled={loadingSearchParams}
-                />
-                {searchParams?.searchParameters && (
-                  <select
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-white border-l pl-2 text-sm w-20"
-                    onChange={(e) => {
-                      const [param, value] = e.target.value.split(':');
-                      console.log('Search param selected:', param, value);
-                    }}
-                  >
-                    <option value="">Filter</option>
-                    {Object.entries(searchParams.searchParameters).map(([key, param]: [string, any]) => (
-                      <option key={key} value={`${key}:${param.column}`}>
-                        {param.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="icon" className="rounded-full h-10 w-10 bg-[#3D753A] text-white hover:text-white hover:bg-black">
+                      <SearchIcon className="h-5 w-5 hover:text-white" />
+                      <span className="sr-only">Search Shipments</span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Search Shipments</DialogTitle>
+                      {/* <DialogDescription>
+                        Enter your search criteria below.
+                      </DialogDescription> */}
+                    </DialogHeader>
+                    <div className="mt-2">
+                      <Button variant="outline">CLEAR</Button>
+                    </div>
+                    <div className="grid gap-4 py-4 pt-0">
+                      <div className="grid grid-cols-1 items-center gap-2">
+                        <Label htmlFor="shopifyOrderNumber">Shopify Order Number</Label>
+                        <Input id="shopifyOrderNumber" placeholder="" />
+                      </div>
+                      <div className="grid grid-cols-1 items-center gap-2">
+                        <Label htmlFor="customer">Customer</Label>
+                        <Input id="customer" placeholder="" />
+                      </div>
+                      <div className="grid grid-cols-1 items-center gap-2">
+                        <Label htmlFor="address">Address</Label>
+                        <Input id="address" placeholder="" />
+                      </div>
+                      <div className="grid grid-cols-1 items-center gap-2">
+                        <Label htmlFor="date">Date</Label>
+                        <Input id="date" placeholder="" type="date" />
+                      </div>
+                      <div className="grid grid-cols-1 items-center gap-2">
+                        <Label htmlFor="trackingNumber">Tracking Number</Label>
+                        <Input id="trackingNumber" placeholder="" />
+                      </div>
+                      <div className="grid grid-cols-1 items-center gap-2">
+                        <Label htmlFor="manifestShipmentCode">Manifest Shipment Code</Label>
+                        <Input id="manifestShipmentCode" placeholder="" />
+                      </div>
+                    </div>
+                    <DialogFooter className="justify-end space-x-2">
+                      <DialogClose asChild>
+                        <Button variant="outline">CLOSE</Button>
+                      </DialogClose>
+                      <Button type="submit" className="bg-[#3D753A] hover:bg-black text-white">SEARCH</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Select value={String(itemsPerPage)} onValueChange={(value) => setItemsPerPage(Number(value))}>
+                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
+                    <SelectValue className='text-white' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select>
+                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
+                    <div className='text-white flex items-center'>
+                    <FaCalendarDay className="h-5 w-5 mr-2 text-white" /> Order Date
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Add SelectItem options for Order Date here */}
+                  </SelectContent>
+                </Select>
+                <Select>
+                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
+                  <div className='text-white flex items-center'>
+                    <GrStatusGood className="h-5 w-5 mr-2 text-white" /> All Status
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Add SelectItem options for Status here */}                   
+                  </SelectContent>
+                </Select>
+                <Select>
+                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
+                    <div className='text-white flex items-center'>
+                      <Truck className="h-5 w-5 mr-2 text-white" /> All Shipping
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Add SelectItem options for Shipping here */}
+                  </SelectContent>
+                </Select>
+                <Select>
+                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
+                    <div className='text-white flex items-center'>
+                      <AiFillHdd className="h-5 w-5 mr-2 text-white" /> All Manifest
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Add SelectItem options for Manifest here */}
+                  </SelectContent>
+                </Select>
+                <Select>
+                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
+                    <div className='text-white flex items-center'>
+                      <Settings className='text-white' />
+                      All States
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Add SelectItem options for States here */}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="icon" className="rounded-full h-10 w-10 bg-white text-gray-700 hover:bg-gray-50">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+                  </svg>
+                  <span className="sr-only">Help</span>
+                </Button>
               </div>
             </TableHead>
           </TableRow>
@@ -1454,24 +1540,12 @@ export function ShipmentsTable({
           ))}
         </TableBody>
       </Table>
-      <div className="flex items-center justify-between p-4 border-t mb-10">
+      <div className="flex items-center justify-between pt-3 px-4 border-t">
         <div className="text-sm text-gray-600">
           {/* Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}-{Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} shipments */}
         </div>
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">Items per page:</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(Number(e.target.value))}
-              className="text-sm border rounded-md px-2 py-1"
-            >
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-            </select>
-          </div>
+
           <div className="flex space-x-2">
             <Button
               variant="outline"
