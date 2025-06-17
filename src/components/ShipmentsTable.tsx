@@ -354,7 +354,7 @@ export function ShipmentsTable({
         description: error.message || "Failed to update shipment status."
       });
     }
-  }, [toast, setAction]);
+  }, [toast, setAction, selectedRows]);
 
   const handleBulkStatusChange = useCallback(async (newStatusId: string) => {
     const selectedIds = Object.entries(selectedRows)
@@ -639,7 +639,7 @@ export function ShipmentsTable({
         description: 'Failed to update UNL status'
       });
     }
-  }, [toast, setAction]);
+  }, [toast, setAction, selectedRows]);
 
   const handleLockUnlockShipment = useCallback(async (shipment: Shipment) => {
     try {
@@ -683,7 +683,7 @@ export function ShipmentsTable({
         description: `Failed to ${shipment.locked ? 'unlock' : 'lock'} shipment`
       });
     }
-  }, [toast, setAction]);
+  }, [toast, setAction, selectedRows]);
 
   const handleDeleteShipment = useCallback(async (shipmentId: number) => {
     console.log(`Deleting shipment ${shipmentId}`);
@@ -746,9 +746,12 @@ export function ShipmentsTable({
         description: error.message || "Failed to delete shipment."
       });
     }
-  }, [toast, setAction]);
+  }, [toast, setAction, selectedRows]);
 
   const handleGenerateLabels = useCallback(async () => {
+
+    console.log("Selected Rows: ", selectedRows);
+
     const selectedIds = Object.entries(selectedRows)
       .filter(([_, isChecked]) => isChecked)
       .map(([id]) => id);
@@ -852,7 +855,7 @@ export function ShipmentsTable({
         title: "Quick Print Ready",
         description: "Labels are ready for printing."
       });
-      setAction(prev => prev + 1);
+      setAction(prev => prev + 1); 
 
     } catch (error: any) {
       console.error('Error during quick print:', error);
@@ -865,6 +868,7 @@ export function ShipmentsTable({
   }, [selectedRows, toast, setPdfUrl, setIsPdfOpen, setPdfTitle, setAction]);
 
   const handleInvoicePrint = useCallback(async () => {
+    console.log("Selected Rows: ", selectedRows)
     const selectedIds = Object.entries(selectedRows)
       .filter(([_, isChecked]) => isChecked)
       .map(([id]) => id);
@@ -923,7 +927,7 @@ export function ShipmentsTable({
         description: error.message || "Failed to generate invoice PDF."
       });
     }
-  }, [toast, setAction]);
+  }, [toast, setAction, selectedRows]);
 
   const handlePdfClose = useCallback(() => {
     setIsPdfOpen(false);
@@ -977,6 +981,84 @@ export function ShipmentsTable({
     }
   }, [toast, setAction]);
 
+  const handleDeleteLabel = useCallback(async (shipmentId: number) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/labels?shipment_ids=${shipmentId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `$Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to delete label: ${response.statusText}`);
+      }
+
+      toast({
+        variant: "success",
+        title: "Label Deleted",
+        description: `Label for shipment ${shipmentId} has been deleted successfully.`
+      });
+      setAction(prev => prev + 1); // Refresh data
+
+    } catch (error: any) {
+      console.error('Error deleting label:', error);
+      toast({
+        variant: "destructive",
+        title: "Delete Failed",
+        description: error.message || "Failed to delete label."
+      });
+    }
+  }, [toast, setAction]);
+
+  const handlePrintLabel = useCallback(async (shipmentId: number) => {
+
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "Please log in to continue."
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels?shipment_ids=${shipmentId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/pdf',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to generate labels: ${response.statusText}`);
+      }
+
+      toast({
+        variant: "success",
+        title: "Labels Generated",
+        description: "Labels have been generated successfully."
+      });
+      setAction(prev => prev + 1);
+
+    } catch (error: any) {
+      console.error('Error generating labels:', error);
+      toast({
+        variant: "destructive",
+        title: "Generation Failed",
+        description: error.message || "Failed to generate labels."
+      });
+    }
+  }, [toast, setAction]);
+  
   if (shipmentsAreLoading) {
     return <div className='flex flex-1 justify-center items-center h-[90vh] w-full'>
       <Loader className='animate-spin' />
@@ -1200,7 +1282,7 @@ export function ShipmentsTable({
 
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div>
+                        <div className='cursor-pointer' onClick={() => shipment.labelPrinted ? handleDeleteLabel(shipment.id) : handlePrintLabel(shipment.id)}>
                           {shipment.labelPrinted ? <AiFillTag className="w-5 h-5 text-green-500" /> : <AiFillTag className="w-5 h-5 text-gray-700" />}
                         </div>
                       </TooltipTrigger>
