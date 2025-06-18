@@ -105,6 +105,7 @@ export function ShipmentsTable({
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
   const [searchParams, setSearchParams] = useState<Record<string, string>>({});
+  const [detailAction, setDetailAction] = useState(0);
 
   const formatRelativeTime = useCallback((timestamp: number) => {
     const seconds = Math.floor(Date.now() / 1000 - timestamp);
@@ -550,6 +551,46 @@ export function ShipmentsTable({
     }
   }, [selectedRows, toast, setAction, setSelectedRows]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          toast({
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "Please log in to continue."
+          });
+          throw new Error('Authentication token not found');
+        }
+
+        const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/${selectedShipmentId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch shipment details');
+        }
+
+        const data = await response.json();
+        setDetailedShipment(data);
+      } catch (error: any) {
+        console.error('Error fetching shipment details:', error);
+        setDetailedShipment(null);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error.message || "Failed to fetch shipment details."
+        });
+      } finally {
+        setIsLoadingDetail(false);
+      }
+    })();
+  }, [detailAction]);
+  
   const handleShipmentDetailClick = useCallback(async (e: React.MouseEvent, shipmentId: number) => {
     e.stopPropagation();
     const newSelectedId = selectedShipmentId === shipmentId ? null : shipmentId;
@@ -1531,7 +1572,7 @@ export function ShipmentsTable({
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                       </div>
                     ) : (
-                      <MemoizedShipmentDetailView setAction={setAction} shipment={detailedShipment as any} />
+                      <MemoizedShipmentDetailView setAction={setDetailAction} shipment={detailedShipment as any} />
                     )}
                   </TableCell>
                 </TableRow>

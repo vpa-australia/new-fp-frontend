@@ -18,6 +18,11 @@ interface LineItem {
   price: string;
   url: string | null;
   variantId: string;
+  oosWarehouses: Array<{
+    id: number;
+    variantId: string;
+    warehouseCode: string;
+  }>;
 }
 
 interface Shipment {
@@ -62,8 +67,8 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const [selectedStockStatus, setSelectedStockStatus] = useState<Record<number, 'yes' | 'no'>>(() => {
     const initialStockStatus: Record<number, 'yes' | 'no'> = {};
     shipment?.shipment?.orderLines?.forEach((item: any) => {
-      const isOutOfStock = item.oosWarehouses?.some((wh: any) => 
-        wh.warehouseCode === shipment.shipment.warehouseCode && 
+      const isOutOfStock = item.oosWarehouses?.some((wh: any) =>
+        wh.warehouseCode === shipment.shipment.warehouseCode &&
         wh.variantId === item.variantId
       );
       initialStockStatus[item.id] = isOutOfStock ? 'no' : 'yes';
@@ -79,13 +84,22 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     return initialDispatch;
   });
 
+  const [selectedDispatchFromInstock, setSelectedDispatchFromInstock] = useState<Record<number, string>>(() => {
+
+    const initialDispatch: Record<number, string> = {};
+    shipment?.shipment?.orderLines?.forEach((item: LineItem) => {
+      initialDispatch[item.id] = shipment.shipment.warehouseCode?.[0] || '';
+    });
+    return initialDispatch;
+  });
+
   const [selectedQuote, setSelectedQuote] = useState<number | null>(null);
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState<any[]>(shipment?.shipment?.comments || []);
 
   // Fetch warehouses on component mount
 
-  const [warehouses, setWarehouses] = useState<Array<{code: string; name: string}>>([]);
+  const [warehouses, setWarehouses] = useState<Array<{ code: string; name: string }>>([]);
 
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -140,10 +154,10 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
           throw new Error('Authentication token not found. Please log in.');
         }
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/carriers', {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-            },
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
         });
         if (!response.ok) {
           throw new Error('Failed to fetch carriers');
@@ -227,7 +241,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     }
   };
 
-  const handleMarkInStock = async (item: LineItem) => {
+  const handleMarkInStock = async (item: LineItem, code: string) => {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
@@ -239,7 +253,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         return;
       }
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?variant_id=${item.sku}&warehouse_code=${shipment.shipment.warehouseCode}`, {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?sku=${item.sku}&warehouse_code=${code}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -253,6 +267,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
       const result = await response.json();
       if (result.success) {
+        setAction(prev => prev + 1);
         setSelectedStockStatus(prev => ({ ...prev, [item.id]: 'yes' }));
         toast({
           variant: 'success',
@@ -270,7 +285,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     }
   };
 
-  const handleMarkOutOfStock = async (item: LineItem) => {
+  const handleMarkOutOfStock = async (item: LineItem, code: string) => {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
@@ -282,7 +297,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         return;
       }
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?variant_id=${item.sku}&warehouse_code=${shipment.shipment.warehouseCode}`, {
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/product/oos?sku=${item.sku}&warehouse_code=${code}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -296,6 +311,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
       const result = await response.json();
       if (result.success) {
+        setAction(prev => prev + 1);
         setSelectedStockStatus(prev => ({ ...prev, [item.id]: 'no' }));
         toast({
           variant: 'success',
@@ -325,7 +341,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
     const token = localStorage.getItem('authToken');
     const userDataStr = localStorage.getItem('userData');
-    
+
     if (!token || !userDataStr) {
       toast({
         variant: 'destructive',
@@ -360,7 +376,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       }
 
       const newComment = await response.json();
-      
+
       // Add the new comment to the local state with current timestamp
       const commentToAdd = {
         id: Date.now(), // Temporary ID for new comments
@@ -369,10 +385,10 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         title: userRole,
         time: Math.floor(Date.now() / 1000), // Current timestamp in seconds
       };
-      
+
       setComments(prevComments => [...prevComments, commentToAdd]);
       setCommentText(''); // Clear the textarea
-      
+
       toast({
         variant: 'success',
         title: 'Success',
@@ -388,6 +404,81 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     }
   };
 
+  const handleMoveShipment = async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      toast({
+        title: "Authentication Error",
+        description: "Authentication token not found. Please log in again.",
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Group items by warehouse code's first letter
+    const itemsByWarehouseCode: { [key: string]: string[] } = {};
+
+    Object.entries(selectedDispatchFrom).forEach(([itemId, warehouseCode]) => {
+      if (warehouseCode) {
+        const firstLetter = warehouseCode.charAt(0).toUpperCase();
+        if (!itemsByWarehouseCode[firstLetter]) {
+          itemsByWarehouseCode[firstLetter] = [];
+        }
+        itemsByWarehouseCode[firstLetter].push(itemId);
+      }
+    });
+
+    if (Object.keys(itemsByWarehouseCode).length === 0) {
+      toast({
+        title: "No Items Selected",
+        description: "Please select at least one item to move.",
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Map warehouse codes to full names dynamically
+    const warehouseCodeToName = warehouses.reduce((acc: { [key: string]: string }, warehouse) => {
+      const firstLetter = warehouse.code.charAt(0).toUpperCase();
+      acc[firstLetter] = warehouse.name;
+      return acc;
+    }, {});
+
+    const params = Object.entries(itemsByWarehouseCode)
+      .map(([code, itemIds]) => `${warehouseCodeToName[code]}=${itemIds.join(',')}`);
+
+    const url = `https://ship-orders.vpa.com.au/api/shipments/move/${shipment.shipment.id}?${params.join('&')}`;
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to move items');
+      }
+      const result = await response.json();
+      if (result.success) {
+        setAction(prev => prev + 1);
+        toast({
+          title: "Move Successful",
+          description: "Selected items have been moved.",
+          variant: 'success'
+        });
+      } else {
+        throw new Error(result.message || 'Failed to move items');
+      }
+    } catch (error: any) {
+      toast({
+        title: "Move Failed",
+        description: error.message || 'Failed to move items.',
+        variant: 'destructive'
+      });
+    }
+  }
+
   return (
     <div className="grid grid-cols-3 gap-4 p-4">
       <div>
@@ -399,7 +490,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
           <CardContent>
             {/* <p className='mb-4 -mt-3'>Desired Carrier Code: {shipment.shipment.carrierCodeDesired}</p>
             <p className='mb-5 -mt-3'>Selected Carrier Code: {shipment.shipment.carrierCode}</p> */}
-            <RadioGroup 
+            <RadioGroup
               className=''
               defaultValue={`${shipment.id}`}
               onValueChange={(value) => {
@@ -410,7 +501,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                 <div key={quote.id} className="flex items-center space-x-2 mb-2">
                   <RadioGroupItem value={`${quote.id}-${quote.carrierCode}-${quote.serviceCode}`} id={`quote-${quote.id}`} />
                   <Label htmlFor={`quote-${quote.id}`} className="flex-grow text-sm">
-                    {quote.carrier.manual !== true ? `$${(quote.costIncludingTax.toString().split('.')[0] + '.' + (quote.costIncludingTax.toString().split('.')[1] || '00').substring(0,2))} ` : ''}{quote.carrier.name} {quote.isExpress ? "(Express)": ""}
+                    {quote.carrier.manual !== true ? `$${(quote.costIncludingTax.toString().split('.')[0] + '.' + (quote.costIncludingTax.toString().split('.')[1] || '00').substring(0, 2))} ` : ''}{quote.carrier.name} {quote.isExpress ? "(Express)" : ""}
                   </Label>
                 </div>
               ))}
@@ -422,7 +513,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
           </CardContent>
         </Card>
       </div>
-      
+
       {/* Second Column - NOTES Section */}
       <Card className="col-span-1">
         <CardHeader className="pb-2">
@@ -434,20 +525,20 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
               <p className="text-sm text-gray-500">No notes added yet.</p>
             ) :
               comments.map((comment: any) => (
-                <div key={comment.id || comment.time} className="mb-4 p-4 bg-gray-50 rounded-lg"> {/* Use comment.time as fallback key if id is not present immediately after adding */} 
+                <div key={comment.id || comment.time} className="mb-4 p-4 bg-gray-50 rounded-lg"> {/* Use comment.time as fallback key if id is not present immediately after adding */}
                   <div className="flex items-center gap-2 mb-2">
                     <div className="font-medium text-gray-900">{comment.name}</div>
                     <div className="text-sm text-gray-500">{comment.title}</div>
                   </div>
                   <p className="text-gray-700 mb-2">{comment.comment}</p>
                   <div className="text-xs text-gray-500">
-                    {new Date((comment.time || Date.now() / 1000) * 1000).toLocaleString()} {/* Use current time as fallback */} 
+                    {new Date((comment.time || Date.now() / 1000) * 1000).toLocaleString()} {/* Use current time as fallback */}
                   </div>
                 </div>
               ))
             }
           </div>
-          <Textarea 
+          <Textarea
             placeholder="Add your notes here..."
             className="w-full h-24 text-sm mt-2"
             value={commentText}
@@ -460,7 +551,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
           </div>
         </CardContent>
       </Card>
-      
+
       {/* Third Column - Line Items Section */}
       <Card className="col-span-1">
         <CardHeader className="pb-2">
@@ -471,134 +562,65 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             {shipment?.shipment?.orderLines?.map((item: LineItem) => (
               <div key={item.id} className="bg-white border rounded-lg p-3">
                 <div className="flex w-full items-center justify-between mb-2">
-                 
-                      <div className="flex flex-col items-center">
-                      <span className="text-xs text-gray-500 mb-1">In Stock</span>
-                      <div className="flex gap-1">
-                      {warehouses.map((warehouse) => (
-                          <button
-                            key={warehouse.code}
-                            onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: warehouse.code[0] }))}
-                            className={`px-2 py-1 ${selectedDispatchFrom[item.id] === warehouse.code[0] ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
-                          >
-                            {warehouse.code[0]}
-                          </button>
-                        ))}  
-                        {/* <button 
-                          onClick={() => handleMarkInStock(item)} 
-                          className={`px-2 py-1 ${selectedStockStatus[item.sku as any] === 'yes' ? 'bg-green-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'} text-xs font-medium rounded transition-colors`}
-                        >
-                          YES
-                        </button>
-                        <button 
-                          onClick={() => handleMarkOutOfStock(item)} 
-                          className={`px-2 py-1 ${selectedStockStatus[item.sku as any] === 'no' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'} text-xs font-medium rounded transition-colors`}
-                        >
-                          NO
-                        </button> */}
-                      </div>
 
-                        
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500 mb-1">In Stock</span>
+                    <div className="flex gap-1">
+                      {warehouses.map((warehouse) => (
+                        <button
+                          key={warehouse.code}
+                          onClick={() => item?.oosWarehouses?.find((w: any) => w.warehouseCode[0] === warehouse.code[0])?.id ? handleMarkInStock(item, warehouse.code) : handleMarkOutOfStock(item, warehouse.code)}
+                          className={`px-2 py-1 ${item?.oosWarehouses?.find((w: any) => w.warehouseCode[0] === warehouse.code[0])?.id ? 'bg-red-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'} text-xs font-medium rounded transition-colors`}
+                        >
+                          {warehouse.code[0]}
+                        </button>
+                      ))}
                     </div>
-                    <div className='flex items-center gap-x-2'>
+
+
+                  </div>
+                  <div className='flex items-center gap-x-2'>
                     {item.url ? (
-                        <img src={item.url} alt={item.title} className="w-12 h-12 rounded-lg object-cover" />
-                      ) : (
-                        <div className="w-12 h-12 flex items-center justify-center bg-gray-50">
-                          <BoxIcon className="w-6 h-6 text-gray-400" />
-                        </div>
+                      <img src={item.url} alt={item.title} className="w-12 h-12 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 flex items-center justify-center bg-gray-50">
+                        <BoxIcon className="w-6 h-6 text-gray-400" />
+                      </div>
+                    )}
+                    <div className='flex flex-col'>
+                      <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                      {item.variant_title && (
+                        <p className="text-xs text-gray-500">{item.variant_title}</p>
                       )}
-                      <div className='flex flex-col'>
-                        <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                        {item.variant_title && (
-                          <p className="text-xs text-gray-500">{item.variant_title}</p>
-                        )}
-                        <span className="text-gray-600">SKU: {item.sku}</span>
-                        <div className="flex items-center gap-4">
-                          <span className="text-gray-900">Qty: {item.quantity}</span>
-                          <span className="text-gray-900 font-medium">${parseFloat(item.price).toFixed(2)}</span>
-                        </div>
+                      <span className="text-gray-600">SKU: {item.sku}</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-gray-900">Qty: {item.quantity}</span>
+                        <span className="text-gray-900 font-medium">${parseFloat(item.price).toFixed(2)}</span>
                       </div>
                     </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-xs text-gray-500 mb-1">Dispatch From</span>
-                      <div className="flex gap-1">
-                        {warehouses.map((warehouse) => (
-                          <button
-                            key={warehouse.code}
-                            onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: warehouse.code[0] }))}
-                            className={`px-2 py-1 ${selectedDispatchFrom[item.id] === warehouse.code[0] ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
-                          >
-                            {warehouse.code[0]}
-                          </button>
-                        ))}
-                      </div>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500 mb-1">Dispatch From</span>
+                    <div className="flex gap-1">
+                      {warehouses.map((warehouse) => (
+                        <button
+                          key={warehouse.code}
+                          onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: warehouse.code[0] }))}
+                          className={`px-2 py-1 ${selectedDispatchFrom[item.id] === warehouse.code[0] ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
+                        >
+                          {warehouse.code[0]}
+                        </button>
+                      ))}
                     </div>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
           <div className="mt-4 flex justify-end">
-            <Button 
-              className="bg-blue-500 hover:bg-blue-600 text-white" 
-              onClick={async () => {
-                const token = localStorage.getItem('authToken');
-                if (!token) {
-                  toast({
-                    title: "Authentication Error",
-                    description: "Authentication token not found. Please log in again.",
-                    variant: 'destructive'
-                  });
-                  return;
-                }
-                // Group line items by selected dispatch warehouse
-                const brisbaneIds = Object.entries(selectedDispatchFrom)
-                  .filter(([_, v]) => v === 'B')
-                  .map(([k]) => k);
-                const melbourneIds = Object.entries(selectedDispatchFrom)
-                  .filter(([_, v]) => v === 'M')
-                  .map(([k]) => k);
-                if (brisbaneIds.length === 0 && melbourneIds.length === 0) {
-                  toast({
-                    title: "No Items Selected",
-                    description: "Please select at least one item to move.",
-                    variant: 'destructive'
-                  });
-                  return;
-                }
-                const params = [];
-                if (brisbaneIds.length > 0) params.push(`Brisbane=${brisbaneIds.join(',')}`);
-                if (melbourneIds.length > 0) params.push(`Melbourne=${melbourneIds.join(',')}`);
-                const url = `https://ship-orders.vpa.com.au/api/shipments/move/${shipment.shipment.id}?${params.join('&')}`;
-                try {
-                  const response = await fetch(url, {
-                    method: 'PATCH',
-                    headers: {
-                      'Authorization': `Bearer ${token}`,
-                      'Accept': 'application/json'
-                    }
-                  });
-                  if (!response.ok) {
-                    throw new Error('Failed to move items');
-                  }
-                  const result = await response.json();
-                  if (result.success) {
-                    toast({
-                      title: "Move Successful",
-                      description: "Selected items have been moved.",
-                      variant: 'success'
-                    });
-                  } else {
-                    throw new Error(result.message || 'Failed to move items');
-                  }
-                } catch (error: any) {
-                  toast({
-                    title: "Move Failed",
-                    description: error.message || 'Failed to move items.',
-                    variant: 'destructive'
-                  });
-                }
-              }}
+            <Button
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+              onClick={handleMoveShipment}
             >
               MOVE
             </Button>
