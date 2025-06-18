@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { BoxIcon } from 'lucide-react';
+import { AlertCircleIcon, BoxIcon } from 'lucide-react';
+import { AlertDialog } from './ui/alert-dialog';
 
 interface LineItem {
   id: number;
@@ -479,17 +480,19 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     }
   }
 
+  const showShipmentErrors = async (shipmentId: any) => {
+    
+  }
+
   return (
     <div className="grid grid-cols-3 gap-4 p-4">
       <div>
         {/* Shipping Quotes Section */}
-        <Card className="col-span-1 mb-5">
+        <Card className="col-span-1">
           <CardHeader className="">
             <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Shipping Quotes</CardTitle>
           </CardHeader>;
-          <CardContent>
-            {/* <p className='mb-4 -mt-3'>Desired Carrier Code: {shipment.shipment.carrierCodeDesired}</p>
-            <p className='mb-5 -mt-3'>Selected Carrier Code: {shipment.shipment.carrierCode}</p> */}
+          <CardContent className='-mt-12'>
             <RadioGroup
               className=''
               defaultValue={`${shipment.id}`}
@@ -511,6 +514,15 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
               Change Quote
             </Button>
           </CardContent>
+        </Card>
+        <Card className='mt-4 p-10'>
+          <AlertDialog>
+            <div className='flex gap-x-3'>
+            <AlertCircleIcon />
+            To view errors you need to click the button below
+            </div>
+          </AlertDialog>
+          <Button onClick={() => showShipmentErrors(shipment.shipment.id)}>Show Errors</Button>
         </Card>
       </div>
 

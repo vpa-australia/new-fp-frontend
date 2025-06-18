@@ -98,6 +98,63 @@ export function ShipmentsTable({
   const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [pdfUrl, setPdfUrl] = useState<string>("");
+  const { toast } = useToast();
+
+  const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>, shipmentId: number, tracking_code: string, carrier_code: string, name: string, title: string): Promise<void> => {
+    return new Promise(async (resolve, reject) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        reject(new Error('No file selected'));
+        return;
+      }
+
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        toast({
+          title: "Authentication Error",
+          description: "Authentication token not found. Please log in again.",
+          variant: 'destructive'
+        });
+        reject(new Error('Authentication token not found'));
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', name || file.name);
+      formData.append('title', title || 'Uploaded PDF');
+      formData.append('tracking_code', tracking_code || '');
+      formData.append('manual_carrier_code', carrier_code || '');
+
+      try {
+        const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/pdf/${shipmentId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to upload PDF');
+        }
+
+        toast({
+          title: "Upload Successful",
+          description: "PDF has been uploaded successfully.",
+          variant: 'success'
+        });
+        resolve();
+      } catch (error: any) {
+        toast({
+          title: "Upload Failed",
+          description: error.message || 'Failed to upload PDF.',
+          variant: 'destructive'
+        });
+        reject(error);
+      }
+    });
+  };
   const [isPdfOpen, setIsPdfOpen] = useState(false);
   const [pdfTitle, setPdfTitle] = useState<string>("");
   const [detailedShipment, setDetailedShipment] = useState<Shipment | null>(null);
@@ -107,6 +164,7 @@ export function ShipmentsTable({
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
   const [searchParams, setSearchParams] = useState<Record<string, string>>({});
   const [detailAction, setDetailAction] = useState(0);
+  const [stillInProgress, setStillInProgress] = useState(false);
 
   const formatRelativeTime = useCallback((timestamp: number) => {
     const seconds = Math.floor(Date.now() / 1000 - timestamp);
@@ -304,8 +362,6 @@ export function ShipmentsTable({
     }
     setSelectedRows(newSelectedRows);
   }, [shipments, setSelectedRows]);
-
-  const { toast } = useToast();
 
   const handleStatusChange = useCallback(async (shipmentId: number | number[], newStatusId: string) => {
     console.log(`Shipment(s) ${Array.isArray(shipmentId) ? shipmentId.join(', ') : shipmentId} status changed to ${newStatusId}`);
@@ -819,6 +875,7 @@ export function ShipmentsTable({
     }
 
     try {
+      setStillInProgress(true);
       const response = await fetch(`https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels?shipment_ids=${selectedIds.join(',')}`, {
         method: 'PUT',
         headers: {
@@ -838,6 +895,8 @@ export function ShipmentsTable({
         description: "Labels have been generated successfully."
       });
       setAction(prev => prev + 1);
+      setStillInProgress(false);
+      setSelectedRows({});
 
     } catch (error: any) {
       console.error('Error generating labels:', error);
@@ -1102,9 +1161,20 @@ export function ShipmentsTable({
     }
   }, [toast, setAction]);
 
+  const handleUploadPDFShipment = useCallback(async (shipmentId: number) => {
+
+  }, [toast, setAction]);
+
   if (shipmentsAreLoading) {
     return <div className='flex flex-1 justify-center items-center h-[90vh] w-full'>
       <Loader className='animate-spin' />
+    </div>
+  }
+
+  if (stillInProgress) {
+    return <div className='flex flex-1 justify-center items-center h-[90vh] w-full'>
+      <p><Loader className='animate-spin' /></p>
+      <p>Still in progress...</p>
     </div>
   }
 
@@ -1480,11 +1550,177 @@ export function ShipmentsTable({
                       <TooltipTrigger asChild>
                         <div>
                           {(statusOptions.filter(option => option.value == shipment.status))[0]?.greenTick == true ?
-                            <FaCheck className="w-5 h-5 text-green-500" /> :
-                            <FaCheck className="w-5 h-5 text-black" />}
+                            <Image alt='sent' width={22} height={22} src={"/sent-green.avif"} /> :
+                            <Image alt='sent' width={22} height={22} src={"/sent.avif"} />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>Status Check</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <div className='cursor-pointer'>
+                              {(statusOptions.filter(option => option.value == shipment.status))[0]?.greenTick == true ?
+                                <Image alt='upload pdf' width={22} height={22} src={"/upload-green.avif"} /> :
+                                <Image alt='upload pdf' width={22} height={22} src={"/upload.avif"} />}
+                            </div>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Upload PDF for Shipment</DialogTitle>
+                            </DialogHeader>
+                            <form onSubmit={async (e) => {
+                              e.preventDefault();
+                              const fileInput = document.getElementById(`pdf-upload-${shipment.id}`) as HTMLInputElement;
+                              const nameInput = document.getElementById(`pdf-name-${shipment.id}`) as HTMLInputElement;
+                              const titleInput = document.getElementById(`pdf-title-${shipment.id}`) as HTMLInputElement;
+                              const trackingInput = document.getElementById(`pdf-tracking-${shipment.id}`) as HTMLInputElement;
+                              const carrierInput = document.getElementById(`pdf-carrier-${shipment.id}`) as HTMLInputElement;
+                              const submitButton = document.getElementById(`pdf-submit-${shipment.id}`) as HTMLButtonElement;
+                              
+                              if (!fileInput.files?.length) {
+                                toast({
+                                  title: "Error",
+                                  description: "Please select a PDF file",
+                                  variant: 'destructive'
+                                });
+                                return;
+                              }
+                              
+                              // Show loading state
+                              if (submitButton) {
+                                submitButton.disabled = true;
+                                submitButton.innerHTML = '<span class="spinner"></span> Uploading...';
+                              }
+                              
+                              try {
+                                await handlePdfUpload(
+                                  { target: { files: fileInput.files } } as React.ChangeEvent<HTMLInputElement>,
+                                  shipment.id,
+                                  trackingInput?.value || '',
+                                  carrierInput?.value || '',
+                                  nameInput?.value || '',
+                                  titleInput?.value || ''
+                                );
+                                
+                                // Close dialog on success
+                                const closeButton = document.querySelector(`[data-dialog-close="pdf-dialog-${shipment.id}"]`) as HTMLButtonElement;
+                                if (closeButton) {
+                                  closeButton.click();
+                                }
+                              } catch (error) {
+                                // Error is already handled in handlePdfUpload
+                              } finally {
+                                // Reset button state
+                                if (submitButton) {
+                                  submitButton.disabled = false;
+                                  submitButton.innerHTML = 'Upload PDF';
+                                }
+                              }
+                            }} className="space-y-4">
+                              <div className="grid gap-4 py-4">
+                                <div className="space-y-4">
+                                  <div>
+                                    <Label>Document Name</Label>
+                                    <Input
+                                      placeholder="Enter document name"
+                                      className="mt-1"
+                                      id={`pdf-name-${shipment.id}`}
+                                      required
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Document Title</Label>
+                                    <Input
+                                      placeholder="Enter document title"
+                                      className="mt-1"
+                                      id={`pdf-title-${shipment.id}`}
+                                      required
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Tracking Code</Label>
+                                    <Input
+                                      placeholder="Enter tracking code"
+                                      className="mt-1"
+                                      defaultValue={shipment.tracking_code || ''}
+                                      id={`pdf-tracking-${shipment.id}`}
+                                      required
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Carrier Code</Label>
+                                    <Input
+                                      placeholder="Enter carrier code"
+                                      className="mt-1"
+                                      defaultValue={shipment.carrierCode || ''}
+                                      id={`pdf-carrier-${shipment.id}`}
+                                      required
+                                    />
+                                  </div>
+                                  <div className="relative space-y-2">
+                                     <input
+                                       type="file"
+                                       accept=".pdf"
+                                       className="hidden"
+                                       id={`pdf-upload-${shipment.id}`}
+                                       required
+                                       onChange={(e) => {
+                                         const fileInput = e.target as HTMLInputElement;
+                                         const fileNameDisplay = document.getElementById(`pdf-filename-${shipment.id}`);
+                                         const chooseButton = document.getElementById(`pdf-choose-button-${shipment.id}`);
+                                         
+                                         if (fileNameDisplay) {
+                                           if (fileInput.files && fileInput.files.length > 0) {
+                                             const fileName = fileInput.files[0].name;
+                                             fileNameDisplay.textContent = `Selected: ${fileName}`;
+                                             fileNameDisplay.className = "text-sm text-green-600 font-medium mt-1";
+                                             
+                                             // Update the button text to show the selected file
+                                             if (chooseButton) {
+                                               chooseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M18 18v-7h-7"></path><path d="M18 18H6a2 2 0 0 1-2-2V4"></path></svg> ${fileName.length > 20 ? fileName.substring(0, 17) + '...' : fileName}`;
+                                             }
+                                           } else {
+                                             fileNameDisplay.textContent = "No file selected";
+                                             fileNameDisplay.className = "text-sm text-muted-foreground mt-1";
+                                             
+                                             // Reset the button text
+                                             if (chooseButton) {
+                                               chooseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M18 18v-7h-7"></path><path d="M18 18H6a2 2 0 0 1-2-2V4"></path></svg> Choose PDF File`;
+                                             }
+                                           }
+                                         }
+                                         console.log("File selected:", fileInput.files?.[0]?.name);
+                                       }}
+                                     />
+                                     <Button
+                                       type="button"
+                                       variant="outline"
+                                       className="flex items-center gap-2 w-full justify-center"
+                                       onClick={() => document.getElementById(`pdf-upload-${shipment.id}`)?.click()}
+                                       id={`pdf-choose-button-${shipment.id}`}
+                                     >
+                                       <FileText className="h-4 w-4" />
+                                       Choose PDF File
+                                     </Button>
+                                     <div id={`pdf-filename-${shipment.id}`} className="text-sm text-muted-foreground mt-1">
+                                       No file selected
+                                     </div>
+                                   </div>
+                                </div>
+                              </div>
+                              <DialogFooter>
+                                <Button type="submit" className="w-full" id={`pdf-submit-${shipment.id}`}>
+                                  Upload PDF
+                                </Button>
+                              </DialogFooter>
+                            </form>
+                          </DialogContent>
+                        </Dialog>
+                      </TooltipTrigger>
+                      <TooltipContent>Upload PDF for Shipment</TooltipContent>
                     </Tooltip>
 
                     <div className='ml-5 w-56 flex items-center gap-x-1'> 
