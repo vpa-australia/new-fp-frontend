@@ -258,7 +258,7 @@ export default function DashboardPage() {
         </DropdownMenu>
       </header>
       {/* Tabs and Table */} 
-      <Tabs defaultValue="all" className="w-full" onValueChange={(value) => {
+      <Tabs defaultValue="All" className="w-full" onValueChange={(value) => {
         if (value === 'archived') {
           setIsArchived(true);
           setSelectedWarehouse('Archived');
@@ -296,12 +296,12 @@ export default function DashboardPage() {
                       className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
                     >
                       <Globe className="h-5 w-5 mb-0.5" />
-                      <span className="text-xs font-medium">INT</span>
+                      <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
                     </TabsTrigger>
                   ))}
                 </TabsList>
         </div>
-        <TabsContent value="all">
+        <TabsContent value="All">
           <Card className="shadow-sm w-full">
             <CardContent className="p-0">
               <ShipmentsTable 
