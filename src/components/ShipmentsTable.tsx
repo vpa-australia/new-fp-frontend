@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
 import { PdfViewer } from "./ui/pdf-viewer";
+import Image from 'next/image';
 
 interface Shipment {
   id: number;
@@ -1401,7 +1402,9 @@ export function ShipmentsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div>
-                          {shipment.invoicePrinted ? <AiFillFile className="w-5 h-5 text-green-500" /> : <AiFillFile className="w-5 h-5 text-gray-700" />}
+                          {shipment.invoicePrinted ? 
+                          <Image alt='invoice print' width={21} height={21} src={"/invoice-green.avif"} />
+                          : <Image alt='invoice print' width={21} height={21} src={"/invoice.avif"} />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>Invoice {shipment.invoicePrinted ? 'Printed' : 'Not Printed'}</TooltipContent>
@@ -1410,7 +1413,9 @@ export function ShipmentsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className='cursor-pointer' onClick={() => shipment.labelPrinted ? handleDeleteLabel(shipment.id) : handlePrintLabel(shipment.id)}>
-                          {shipment.labelPrinted ? <AiFillTag className="w-5 h-5 text-green-500" /> : <AiFillTag className="w-5 h-5 text-gray-700" />}
+                          {shipment.labelPrinted ? 
+                          <Image alt='label print' width={20} height={20} src={"/label-green.avif"} />
+                          : <Image alt='label' width={20} height={20} src={"/label.avif"} />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>Label {shipment.labelPrinted ? 'Printed' : 'Not Printed'}</TooltipContent>
@@ -1419,7 +1424,9 @@ export function ShipmentsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div>
-                          {shipment.manifested ? <AiFillHdd className="w-5 h-5 text-green-500" /> : <AiFillHdd className="w-5 h-5 text-gray-700" />}
+                          {shipment.manifested ? 
+                          <Image alt='manifest icon' width={21} height={21} src={"/manifest-green.avif"} />
+                          : <Image alt='maniffest icon' width={21} height={21} src={"/manifest.avif"} />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>{shipment.manifested ? 'Manifested' : 'Not Manifested'}</TooltipContent>
@@ -1428,7 +1435,10 @@ export function ShipmentsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div>
-                          {shipment.sent ? <FaTruck className="w-5 h-5 text-green-500" /> : <FaTruck className="w-5 h-5 text-gray-700" />}
+                          {shipment.sent ? 
+                          // <FaTruck className="w-5 h-5 text-green-500" /> 
+                          <Image alt='truck' width={21} height={21} src={"/truck-green.avif"} />
+                          : <Image alt='truck' width={21} height={21} src={"/truck.avif"} />} 
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>{shipment.sent ? 'Sent' : 'Not Sent'}</TooltipContent>
@@ -1471,34 +1481,36 @@ export function ShipmentsTable({
                         <div>
                           {(statusOptions.filter(option => option.value == shipment.status))[0]?.greenTick == true ?
                             <FaCheck className="w-5 h-5 text-green-500" /> :
-                            <FaCheck className="w-5 h-5 text-gray-700" />}
+                            <FaCheck className="w-5 h-5 text-black" />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>Status Check</TooltipContent>
                     </Tooltip>
 
-                    <div className='ml-5 w-52 flex items-center gap-x-1'>
+                    <div className='ml-5 w-56 flex items-center gap-x-1'> 
                       <FaUser className='w-4 h-4' />
-                      {shipment.orderName.length > 45 ? `${shipment.orderName.substring(0, 45)}...` : shipment.orderName.substring(0, 45)}
+                      <span className='font-medium'>{shipment.orderName.length > 45 ? `${shipment.orderName.substring(0, 45)}...` : shipment.orderName.substring(0, 45)}</span>
                     </div>
                     <div className="w-88 flex">
-                      <FaLocationDot className='w-4 h-4' /> {(shipment.address1 + ", " + shipment.suburb).length > 45 ? `${(shipment.address1 + ", " + shipment.suburb).substring(0, 45)}...` : (shipment.address1 + ", " + shipment.suburb).substring(0, 45)}
+                      <FaLocationDot className='w-4 h-4' /> 
+                      <span className='font-medium'>{(shipment.address1 + ", " + shipment.suburb).length > 45 ? `${(shipment.address1 + ", " + shipment.suburb).substring(0, 45)}...` : (shipment.address1 + ", " + shipment.suburb).substring(0, 45)}</span>
                     </div>
                     {/* <div className="text-xs">{shipment.suburb}, {shipment.region} {shipment.postCode} {shipment.country}</div> */}
                     <div className='w-48 flex gap-x-2'>
-                      <FaCalendarDay className='w-4 h-4' /> {new Date(shipment.orderDate * 1000).toLocaleString()}
+                      <FaCalendarDay className='w-4 h-4' /> 
+                      <span className='font-medium'>{new Date(shipment.orderDate * 1000).toLocaleString()}</span>
                     </div>
                     <div className='w-28 flex items-center'>
                       <DollarSign className='w-4 h-4' />
-                      {parseFloat(shipment.totalPrice).toFixed(2)}
+                      <span className='font-medium'>{parseFloat(shipment.totalPrice).toFixed(2)}</span>
                     </div>
-                    <div className='flex gap-x-2 items-center w-28'>
+                    {/* <div className='flex gap-x-2 items-center w-28'>
                       <Truck className='w-4 h-4' />
                       {shipment.carrierCode ? shipment.carrierCode?.charAt(0).toUpperCase() + shipment.carrierCode?.slice(1) : shipment.carrierCodeDesired?.charAt(0).toUpperCase() + shipment.carrierCodeDesired?.slice(1)}
-                    </div>
+                    </div> */}
                     <div className='flex gap-x-1 items-center w-16'>
                       <Clock className='w-4 h-4' />
-                      {formatRelativeTime(shipment.lastApiUpdate)}
+                      <span className='font-medium'>{formatRelativeTime(shipment.lastApiUpdate)}</span>
                     </div>
                     {
                       selectedWarehouse !== 'Archived' ?
