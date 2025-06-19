@@ -163,6 +163,9 @@ export function ShipmentsTable({
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
   const [searchParams, setSearchParams] = useState<Record<string, string>>({});
+  const [searchFields, setSearchFields] = useState<Record<string, { name: string, column: string, type: string, weight: number }>>({});
+  const [searchValues, setSearchValues] = useState<Record<string, string>>({});
+  const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
   const [detailAction, setDetailAction] = useState(0);
   const [stillInProgress, setStillInProgress] = useState(false);
   const [dialogOpen, setDialogOpen] = useState<Record<string, boolean>>({});
@@ -184,7 +187,125 @@ export function ShipmentsTable({
   const [edge, setEdge] = useState<EdgePosition>("bottom")
   const toolbarRef = useRef<HTMLDivElement>(null)
 
+  // Function to fetch shipments with search parameters
+  const fetchShipments = useCallback(async () => {
+    try {
+      // Notify parent component that an action is being performed
+      setAction(prev => prev + 1);
+    } catch (error) {
+      console.error('Error in fetchShipments:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to fetch shipments."
+      });
+    }
+  }, [setAction, toast]);
+
   useEffect(() => {
+    const fetchSearchParameters = async () => {
+      setLoadingSearchParams(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          toast({
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "Please log in to continue."
+          });
+          return;
+        }
+
+        const response = await fetch('https://ship-orders.vpa.com.au/api/shipments/search/parameters', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch search parameters');
+        }
+
+        const data = await response.json();
+        if (data && data.success && data.searchParameters) {
+          setSearchFields(data.searchParameters);
+          
+          // Initialize visible fields and search values
+          let initialVisibleFields: Record<string, boolean> = {};
+          const initialSearchValues: Record<string, string> = {};
+          
+          // Try to load saved visible fields from localStorage
+          const savedVisibleFields = localStorage.getItem('searchVisibleFields');
+          
+          if (savedVisibleFields) {
+            try {
+              // Parse saved fields and validate they still exist in the API response
+              const parsedFields = JSON.parse(savedVisibleFields);
+              // Filter out any fields that no longer exist in the API response
+              initialVisibleFields = Object.keys(data.searchParameters).reduce((acc, key) => {
+                acc[key] = parsedFields[key] === true;
+                return acc;
+              }, {} as Record<string, boolean>);
+              
+              // If no fields are visible (all false), show default top fields
+              if (!Object.values(initialVisibleFields).some(value => value === true)) {
+                // Fall back to default top fields
+                const topFields = Object.entries(data.searchParameters)
+                  .sort((a : any, b : any) => b[1].weight - a[1].weight)
+                  .slice(0, 5)
+                  .map(([key]) => key);
+                
+                Object.keys(data.searchParameters).forEach(key => {
+                  initialVisibleFields[key] = topFields.includes(key);
+                });
+              }
+            } catch (e) {
+              console.error('Error parsing saved search fields:', e);
+              // Fall back to default top fields
+              const topFields = Object.entries(data.searchParameters)
+                .sort((a : any, b : any) => b[1].weight - a[1].weight)
+                .slice(0, 5)
+                .map(([key]) => key);
+              
+              Object.keys(data.searchParameters).forEach(key => {
+                initialVisibleFields[key] = topFields.includes(key); // Only top fields visible by default
+              });
+            }
+          } else {
+            // No saved fields, use default top fields
+            const topFields = Object.entries(data.searchParameters)
+              .sort((a : any, b : any) => b[1].weight - a[1].weight)
+              .slice(0, 5)
+              .map(([key]) => key);
+            
+            Object.keys(data.searchParameters).forEach(key => {
+              initialVisibleFields[key] = topFields.includes(key); // Only top fields visible by default
+            });
+          }
+          
+          // Initialize all search values as empty
+          Object.keys(data.searchParameters).forEach(key => {
+            initialSearchValues[key] = ''; // Empty values by default
+          });
+          
+          setVisibleFields(initialVisibleFields);
+          setSearchValues(initialSearchValues);
+        }
+      } catch (error) {
+        console.error('Error fetching search parameters:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to fetch search parameters."
+        });
+      } finally {
+        setLoadingSearchParams(false);
+      }
+    };
+
+    fetchSearchParameters();
+
     const fetchStatusOptions = async () => {
       setIsLoadingStatuses(true);
       try {
@@ -1341,36 +1462,150 @@ export function ShipmentsTable({
                       <Button variant="outline">CLEAR</Button>
                     </div>
                     <div className="grid gap-4 py-4 pt-0">
-                      <div className="grid grid-cols-1 items-center gap-2">
-                        <Label htmlFor="shopifyOrderNumber">Shopify Order Number</Label>
-                        <Input id="shopifyOrderNumber" placeholder="" />
-                      </div>
-                      <div className="grid grid-cols-1 items-center gap-2">
-                        <Label htmlFor="customer">Customer</Label>
-                        <Input id="customer" placeholder="" />
-                      </div>
-                      <div className="grid grid-cols-1 items-center gap-2">
-                        <Label htmlFor="address">Address</Label>
-                        <Input id="address" placeholder="" />
-                      </div>
-                      <div className="grid grid-cols-1 items-center gap-2">
-                        <Label htmlFor="date">Date</Label>
-                        <Input id="date" placeholder="" type="date" />
-                      </div>
-                      <div className="grid grid-cols-1 items-center gap-2">
-                        <Label htmlFor="trackingNumber">Tracking Number</Label>
-                        <Input id="trackingNumber" placeholder="" />
-                      </div>
-                      <div className="grid grid-cols-1 items-center gap-2">
-                        <Label htmlFor="manifestShipmentCode">Manifest Shipment Code</Label>
-                        <Input id="manifestShipmentCode" placeholder="" />
-                      </div>
+                      {loadingSearchParams ? (
+                        <div className="flex justify-center items-center py-4">
+                          <Loader className="h-6 w-6 animate-spin mr-2" />
+                          <span>Loading search fields...</span>
+                        </div>
+                      ) : (
+                        Object.entries(searchFields)
+                          .sort((a, b) => b[1].weight - a[1].weight) // Sort by weight (highest first)
+                          .filter(([key]) => visibleFields[key])
+                          .map(([key, field]) => (
+                            <div key={key} className="grid grid-cols-1 items-center gap-2">
+                              <div className="flex justify-between items-center">
+                                <Label htmlFor={key}>{field.name}</Label>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    const updatedFields = {
+                                      ...visibleFields,
+                                      [key]: false
+                                    };
+                                    setVisibleFields(updatedFields);
+                                    // Save to localStorage
+                                    localStorage.setItem('searchVisibleFields', JSON.stringify(updatedFields));
+                                  }}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              {field.type === 'date' ? (
+                                <Input 
+                                  id={key} 
+                                  type="date" 
+                                  value={searchValues[key] || ''}
+                                  onChange={(e) => {
+                                    setSearchValues(prev => ({
+                                      ...prev,
+                                      [key]: e.target.value
+                                    }));
+                                  }}
+                                />
+                              ) : (
+                                <Input 
+                                  id={key} 
+                                  placeholder="" 
+                                  value={searchValues[key] || ''}
+                                  onChange={(e) => {
+                                    setSearchValues(prev => ({
+                                      ...prev,
+                                      [key]: e.target.value
+                                    }));
+                                  }}
+                                />
+                              )}
+                            </div>
+                          ))
+                      )}
+                      
+                      {/* Field selector dropdown */}
+                      {!loadingSearchParams && Object.keys(searchFields).some(key => !visibleFields[key]) && (
+                        <div className="mt-2">
+                          <Select 
+                            onValueChange={(value) => {
+                              const updatedFields = {
+                                ...visibleFields,
+                                [value]: true
+                              };
+                              setVisibleFields(updatedFields);
+                              // Save to localStorage
+                              localStorage.setItem('searchVisibleFields', JSON.stringify(updatedFields));
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Add search field" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(searchFields)
+                                .filter(([key]) => !visibleFields[key])
+                                .map(([key, field]) => (
+                                  <SelectItem key={key} value={key}>
+                                    {field.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                     <DialogFooter className="justify-end space-x-2">
                       <DialogClose asChild>
                         <Button variant="outline">CLOSE</Button>
                       </DialogClose>
-                      <Button type="submit" className="bg-[#3D753A] hover:bg-black text-white">SEARCH</Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          setSearchValues({});
+                          // Reset all fields to their initial visibility state
+                          if (searchFields) {
+                            const initialVisibility = Object.keys(searchFields).reduce((acc, key) => {
+                              // Show top 5 fields by weight by default
+                              const topFields = Object.entries(searchFields)
+                                .sort((a, b) => b[1].weight - a[1].weight)
+                                .slice(0, 5)
+                                .map(([k]) => k);
+                              acc[key] = topFields.includes(key);
+                              return acc;
+                            }, {} as Record<string, boolean>);
+                            setVisibleFields(initialVisibility);
+                            // Save reset fields to localStorage
+                            localStorage.setItem('searchVisibleFields', JSON.stringify(initialVisibility));
+                          }
+                        }}
+                      >
+                        CLEAR
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        className="bg-[#3D753A] hover:bg-black text-white"
+                        onClick={() => {
+                          // Filter out empty values
+                          const filters = Object.entries(searchValues)
+                            .filter(([_, value]) => value && value.trim() !== '')
+                            .reduce((acc, [key, value]) => {
+                              // Use the column name from searchFields for the API
+                              if (searchFields[key]) {
+                                acc[searchFields[key].column] = value;
+                              }
+                              return acc;
+                            }, {} as Record<string, string>);
+                          
+                          // Update searchParams with the new filters
+                          setSearchParams(prev => ({
+                            ...prev,
+                            ...filters
+                          }));
+                          
+                          // Close the dialog and trigger search
+                          setDialogOpen(false as any);
+                          fetchShipments();
+                        }}
+                      >
+                        SEARCH
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>

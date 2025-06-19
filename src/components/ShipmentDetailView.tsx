@@ -532,7 +532,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         variant: 'destructive',
       });
       setShipmentErrors([]);
-    } finally {
+    } finally { 
       setIsLoadingErrors(false);
     }
   }
