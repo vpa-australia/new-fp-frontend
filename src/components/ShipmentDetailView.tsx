@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircleIcon, BoxIcon } from 'lucide-react';
+import { AlertCircleIcon, BoxIcon, Loader } from 'lucide-react';
 import { AlertDialog } from './ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 
 interface LineItem {
   id: number;
@@ -65,6 +66,9 @@ interface ShipmentDetailViewProps {
 
 export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewProps) {
   const { toast } = useToast();
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+  const [shipmentErrors, setShipmentErrors] = useState<Array<{message: string, shipmentId: number}>>([]);
+  const [isLoadingErrors, setIsLoadingErrors] = useState(false);
   const [selectedStockStatus, setSelectedStockStatus] = useState<Record<number, 'yes' | 'no'>>(() => {
     const initialStockStatus: Record<number, 'yes' | 'no'> = {};
     shipment?.shipment?.orderLines?.forEach((item: any) => {
@@ -481,11 +485,98 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   }
 
   const showShipmentErrors = async (shipmentId: any) => {
+    setIsLoadingErrors(true);
+    setErrorDialogOpen(true);
     
+    try {
+      // Get the token from localStorage
+      const token = localStorage.getItem('authToken');
+      
+      if (!token) {
+        toast({
+          title: 'Authentication Error',
+          description: 'You are not authenticated. Please log in again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/errors/${shipmentId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching shipment errors: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.errors) {
+        setShipmentErrors(data.errors);
+      } else {
+        setShipmentErrors([]);
+        toast({
+          title: 'No errors found',
+          description: 'No errors were found for this shipment.',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching shipment errors:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to fetch shipment errors',
+        variant: 'destructive',
+      });
+      setShipmentErrors([]);
+    } finally {
+      setIsLoadingErrors(false);
+    }
   }
 
   return (
     <div className="grid grid-cols-3 gap-4 p-4">
+      {/* Error Dialog */}
+      <Dialog open={errorDialogOpen} onOpenChange={setErrorDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircleIcon className="h-5 w-5 text-red-500" />
+              Shipment Errors
+            </DialogTitle>
+          </DialogHeader>
+          
+          {isLoadingErrors ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader className="h-8 w-8 animate-spin text-gray-500" />
+              <span className="ml-2">Loading errors...</span>
+            </div>
+          ) : shipmentErrors.length > 0 ? (
+            <div className="max-h-[60vh] overflow-y-auto">
+              {shipmentErrors.map((error, index) => (
+                <div key={index} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-800 whitespace-pre-wrap">{error.message}</p>
+                  <p className="text-xs text-gray-500 mt-1">Shipment ID: {error.shipmentId}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-6 text-center text-gray-500">
+              No errors found for this shipment.
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button onClick={() => setErrorDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       <div>
         {/* Shipping Quotes Section */}
         <Card className="col-span-1">
