@@ -128,7 +128,7 @@ export function ShipmentsTable({
 
       try {
         const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/pdf/${shipmentId}`, {
-          method: 'PUT',
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -165,6 +165,7 @@ export function ShipmentsTable({
   const [searchParams, setSearchParams] = useState<Record<string, string>>({});
   const [detailAction, setDetailAction] = useState(0);
   const [stillInProgress, setStillInProgress] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState<Record<string, boolean>>({});
 
   const formatRelativeTime = useCallback((timestamp: number) => {
     const seconds = Math.floor(Date.now() / 1000 - timestamp);
@@ -1559,9 +1560,12 @@ export function ShipmentsTable({
 
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Dialog>
+                        <Dialog open={dialogOpen[`pdf-dialog-${shipment.id}`]} onOpenChange={(open) => setDialogOpen(prev => ({ ...prev, [`pdf-dialog-${shipment.id}`]: open }))}>
                           <DialogTrigger asChild>
-                            <div className='cursor-pointer'>
+                            <div 
+                              className='cursor-pointer'
+                              onClick={() => setDialogOpen(prev => ({ ...prev, [`pdf-dialog-${shipment.id}`]: true }))}
+                            >
                               {(statusOptions.filter(option => option.value == shipment.status))[0]?.greenTick == true ?
                                 <Image alt='upload pdf' width={22} height={22} src={"/upload-green.avif"} /> :
                                 <Image alt='upload pdf' width={22} height={22} src={"/upload.avif"} />}
@@ -1605,10 +1609,28 @@ export function ShipmentsTable({
                                   titleInput?.value || ''
                                 );
                                 
-                                // Close dialog on success
-                                const closeButton = document.querySelector(`[data-dialog-close="pdf-dialog-${shipment.id}"]`) as HTMLButtonElement;
-                                if (closeButton) {
-                                  closeButton.click();
+                                // Close dialog on success by updating the dialogOpen state
+                                setDialogOpen(prev => ({
+                                  ...prev,
+                                  [`pdf-dialog-${shipment.id}`]: false
+                                }));
+                                
+                                // Reset form fields
+                                if (fileInput) fileInput.value = '';
+                                if (nameInput) nameInput.value = '';
+                                if (titleInput) titleInput.value = '';
+                                
+                                // Update the file name display
+                                const fileNameDisplay = document.getElementById(`pdf-filename-${shipment.id}`);
+                                if (fileNameDisplay) {
+                                  fileNameDisplay.textContent = "No file selected";
+                                  fileNameDisplay.className = "text-sm text-muted-foreground mt-1";
+                                }
+                                
+                                // Reset the choose button text
+                                const chooseButton = document.getElementById(`pdf-choose-button-${shipment.id}`);
+                                if (chooseButton) {
+                                  chooseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M18 18v-7h-7"></path><path d="M18 18H6a2 2 0 0 1-2-2V4"></path></svg> Choose PDF File`;
                                 }
                               } catch (error) {
                                 // Error is already handled in handlePdfUpload
@@ -1671,12 +1693,19 @@ export function ShipmentsTable({
                                          const fileInput = e.target as HTMLInputElement;
                                          const fileNameDisplay = document.getElementById(`pdf-filename-${shipment.id}`);
                                          const chooseButton = document.getElementById(`pdf-choose-button-${shipment.id}`);
+                                         const nameInput = document.getElementById(`pdf-name-${shipment.id}`) as HTMLInputElement;
                                          
                                          if (fileNameDisplay) {
                                            if (fileInput.files && fileInput.files.length > 0) {
                                              const fileName = fileInput.files[0].name;
                                              fileNameDisplay.textContent = `Selected: ${fileName}`;
                                              fileNameDisplay.className = "text-sm text-green-600 font-medium mt-1";
+                                             
+                                             // Set the document name field to the file name (without extension)
+                                             if (nameInput) {
+                                               const fileNameWithoutExtension = fileName.replace(/\.[^/.]+$/, "");
+                                               nameInput.value = fileNameWithoutExtension;
+                                             }
                                              
                                              // Update the button text to show the selected file
                                              if (chooseButton) {
@@ -1685,6 +1714,11 @@ export function ShipmentsTable({
                                            } else {
                                              fileNameDisplay.textContent = "No file selected";
                                              fileNameDisplay.className = "text-sm text-muted-foreground mt-1";
+                                             
+                                             // Clear the document name field
+                                             if (nameInput) {
+                                               nameInput.value = "";
+                                             }
                                              
                                              // Reset the button text
                                              if (chooseButton) {
@@ -1804,7 +1838,7 @@ export function ShipmentsTable({
                     <Button
                       size={"icon"}
                       variant="link"
-                      className="-p-3 ml-10"
+                      className="-p-3 ml-10 cursor-pointer"
                       onClick={(e) => handleShipmentDetailClick(e, shipment.id)}
                     >
                       {selectedShipmentId === shipment.id ? <ChevronDownIcon className="h-7 w-7 text-white rounded" /> : <ChevronRightIcon className="h-7 w-7 text-white rounded" />}
