@@ -9,6 +9,8 @@ A modern Next.js frontend application for managing shipments, warehouses, and or
 - **Order Processing**: Handle order fulfillment and tracking
 - **User Management**: Manage user roles and permissions
 - **Real-time Updates**: Live status updates for shipments and stock
+- **Dynamic Search Fields**: Customizable search interface with field selection
+- **Persistent User Preferences**: Search field selections saved to local storage
 
 ## 🛠️ Tech Stack
 
@@ -73,6 +75,8 @@ src/
 - Lists all shipments with filtering and sorting
 - Provides quick actions for shipment management
 - Integrates with warehouse and carrier systems
+- Features dynamic search fields with customizable visibility
+- Persists user search preferences across sessions
 
 ## 🔒 Authentication
 
@@ -113,6 +117,7 @@ The application uses React's built-in state management solutions:
 - useState for local component state
 - useEffect for side effects and data fetching
 - Custom hooks for reusable state logic
+- localStorage for persisting user preferences
 
 ## 🎯 Future Improvements
 
