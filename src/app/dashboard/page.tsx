@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { UserIcon, LogOutIcon, Loader2, CogIcon, GripVertical, MapPin, Globe } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
+import { UserIcon, LogOutIcon, Loader2, CogIcon, GripVertical, MapPin, Globe, ArchiveIcon, DeleteIcon } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
 import { ShipmentsTable } from '@/components/ShipmentsTable';
 import Image from 'next/image';
 
@@ -72,6 +72,7 @@ export default function DashboardPage() {
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalItems, setTotalItems] = useState(0);
   const [selectedWarehouse, setSelectedWarehouse] = useState("All");
+  const [selectedWarehouseCategory, setSelectedWarehouseCategory] = useState("All");
   const [lastPage, setLastPage] = useState(1);
   const [action, setAction] = useState(0);
   const [shipmentsAreLoading, setShipmentsAreLoading] = useState(false);
@@ -263,8 +264,8 @@ export default function DashboardPage() {
           setSelectedWarehouse(value);
         }
       }}>
-        <div className='flex flex-row justify-between items-center mt-7'>
-          <TabsList className="mb-5 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit">
+        <div>
+        <TabsList className={`${selectedWarehouseCategory === "Local" ? 'mb-5' : ''} flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit`}>
             <TabsTrigger
               value="All"
               onClick={() => setSelectedWarehouse("All")}
@@ -273,7 +274,36 @@ export default function DashboardPage() {
               <GripVertical className="h-5 w-5 mb-0.5" />
               <span className="text-xs font-medium">All</span>
             </TabsTrigger>
-            {warehouses.filter(wh => !wh.international).map((warehouse) => (
+            
+            <TabsTrigger
+              value="Local"
+              onClick={() => setSelectedWarehouseCategory("Local")}
+              className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
+            >
+              <MapPin className="h-5 w-5 mb-0.5" />
+              <span className="text-xs font-medium">Local</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="International"
+              onClick={() => setSelectedWarehouseCategory("International")}
+              className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
+            >
+              <Globe className="h-5 w-5 mb-0.5" />
+              <span className="text-xs font-medium">International</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="Archive"
+              onClick={() => setSelectedWarehouse('archived')}
+              className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
+            >
+              <DeleteIcon className="h-5 w-5 mb-0.5" />
+              <span className="text-xs font-medium">Archived</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
+        <div className='flex flex-row justify-between items-center mt-3 mb-3  '>
+          <TabsList className="mb-1 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit">
+            {selectedWarehouseCategory === "Local" ? warehouses.filter(wh => !wh.international).map((warehouse) => (
               <TabsTrigger
                 key={warehouse.id}
                 value={warehouse.code}
@@ -283,8 +313,7 @@ export default function DashboardPage() {
                 <MapPin className="h-5 w-5 mb-0.5" />
                 <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
               </TabsTrigger>
-            ))}
-            {warehouses.filter(wh => wh.international).map((warehouse) => (
+            )) : warehouses.filter(wh => wh.international).map((warehouse) => (
               <TabsTrigger
                 key={warehouse.id}
                 value={warehouse.code} // Or a generic 'INT' value if preferred for all international
