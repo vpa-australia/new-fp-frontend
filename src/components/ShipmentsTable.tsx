@@ -10,13 +10,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ShipmentDetailView } from './ShipmentDetailView';
 import { useToast } from '@/hooks/use-toast';
-import { AiFillFile, AiFillTag, AiFillHdd } from "react-icons/ai";
+import { AiFillHdd } from "react-icons/ai";
 import { PiCubeFocusBold } from "react-icons/pi";
-import { FaCheck, FaLink, FaTimes, FaTrashRestore, FaTruck, FaUser, FaCalendarDay } from "react-icons/fa";
+import { FaLink, FaTimes, FaTrashRestore, FaUser, FaCalendarDay } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
 import { Input } from './ui/input';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';  
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
 import { PdfViewer } from "./ui/pdf-viewer";
@@ -230,14 +230,14 @@ export function ShipmentsTable({
         const data = await response.json();
         if (data && data.success && data.searchParameters) {
           setSearchFields(data.searchParameters);
-          
+
           // Initialize visible fields and search values
           let initialVisibleFields: Record<string, boolean> = {};
           const initialSearchValues: Record<string, string> = {};
-          
+
           // Try to load saved visible fields from localStorage
           const savedVisibleFields = localStorage.getItem('searchVisibleFields');
-          
+
           if (savedVisibleFields) {
             try {
               // Parse saved fields and validate they still exist in the API response
@@ -247,15 +247,15 @@ export function ShipmentsTable({
                 acc[key] = parsedFields[key] === true;
                 return acc;
               }, {} as Record<string, boolean>);
-              
+
               // If no fields are visible (all false), show default top fields
               if (!Object.values(initialVisibleFields).some(value => value === true)) {
                 // Fall back to default top fields
                 const topFields = Object.entries(data.searchParameters)
-                  .sort((a : any, b : any) => b[1].weight - a[1].weight)
+                  .sort((a: any, b: any) => b[1].weight - a[1].weight)
                   .slice(0, 5)
                   .map(([key]) => key);
-                
+
                 Object.keys(data.searchParameters).forEach(key => {
                   initialVisibleFields[key] = topFields.includes(key);
                 });
@@ -264,10 +264,10 @@ export function ShipmentsTable({
               console.error('Error parsing saved search fields:', e);
               // Fall back to default top fields
               const topFields = Object.entries(data.searchParameters)
-                .sort((a : any, b : any) => b[1].weight - a[1].weight)
+                .sort((a: any, b: any) => b[1].weight - a[1].weight)
                 .slice(0, 5)
                 .map(([key]) => key);
-              
+
               Object.keys(data.searchParameters).forEach(key => {
                 initialVisibleFields[key] = topFields.includes(key); // Only top fields visible by default
               });
@@ -275,20 +275,20 @@ export function ShipmentsTable({
           } else {
             // No saved fields, use default top fields
             const topFields = Object.entries(data.searchParameters)
-              .sort((a : any, b : any) => b[1].weight - a[1].weight)
+              .sort((a: any, b: any) => b[1].weight - a[1].weight)
               .slice(0, 5)
               .map(([key]) => key);
-            
+
             Object.keys(data.searchParameters).forEach(key => {
               initialVisibleFields[key] = topFields.includes(key); // Only top fields visible by default
             });
           }
-          
+
           // Initialize all search values as empty
           Object.keys(data.searchParameters).forEach(key => {
             initialSearchValues[key] = ''; // Empty values by default
           });
-          
+
           setVisibleFields(initialVisibleFields);
           setSearchValues(initialSearchValues);
         }
@@ -769,7 +769,7 @@ export function ShipmentsTable({
       }
     })();
   }, [detailAction]);
-  
+
   const handleShipmentDetailClick = useCallback(async (e: React.MouseEvent, shipmentId: number) => {
     e.stopPropagation();
     const newSelectedId = selectedShipmentId === shipmentId ? null : shipmentId;
@@ -1475,9 +1475,9 @@ export function ShipmentsTable({
                             <div key={key} className="grid grid-cols-1 items-center gap-2">
                               <div className="flex justify-between items-center">
                                 <Label htmlFor={key}>{field.name}</Label>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => {
                                     const updatedFields = {
                                       ...visibleFields,
@@ -1493,9 +1493,9 @@ export function ShipmentsTable({
                                 </Button>
                               </div>
                               {field.type === 'date' ? (
-                                <Input 
-                                  id={key} 
-                                  type="date" 
+                                <Input
+                                  id={key}
+                                  type="date"
                                   value={searchValues[key] || ''}
                                   onChange={(e) => {
                                     setSearchValues(prev => ({
@@ -1505,9 +1505,9 @@ export function ShipmentsTable({
                                   }}
                                 />
                               ) : (
-                                <Input 
-                                  id={key} 
-                                  placeholder="" 
+                                <Input
+                                  id={key}
+                                  placeholder=""
                                   value={searchValues[key] || ''}
                                   onChange={(e) => {
                                     setSearchValues(prev => ({
@@ -1520,11 +1520,11 @@ export function ShipmentsTable({
                             </div>
                           ))
                       )}
-                      
+
                       {/* Field selector dropdown */}
                       {!loadingSearchParams && Object.keys(searchFields).some(key => !visibleFields[key]) && (
                         <div className="mt-2">
-                          <Select 
+                          <Select
                             onValueChange={(value) => {
                               const updatedFields = {
                                 ...visibleFields,
@@ -1555,8 +1555,8 @@ export function ShipmentsTable({
                       <DialogClose asChild>
                         <Button variant="outline">CLOSE</Button>
                       </DialogClose>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         onClick={() => {
                           setSearchValues({});
                           // Reset all fields to their initial visibility state
@@ -1578,8 +1578,8 @@ export function ShipmentsTable({
                       >
                         CLEAR
                       </Button>
-                      <Button 
-                        type="submit" 
+                      <Button
+                        type="submit"
                         className="bg-[#3D753A] hover:bg-black text-white"
                         onClick={() => {
                           // Filter out empty values
@@ -1592,13 +1592,13 @@ export function ShipmentsTable({
                               }
                               return acc;
                             }, {} as Record<string, string>);
-                          
+
                           // Update searchParams with the new filters
                           setSearchParams(prev => ({
                             ...prev,
                             ...filters
                           }));
-                          
+
                           // Close the dialog and trigger search
                           setDialogOpen(false as any);
                           fetchShipments();
@@ -1623,7 +1623,7 @@ export function ShipmentsTable({
                 <Select>
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
                     <div className='text-white flex items-center'>
-                    <FaCalendarDay className="h-5 w-5 mr-2 text-white" /> Order Date
+                      <FaCalendarDay className="h-5 w-5 mr-2 text-white" /> Order Date
                     </div>
                   </SelectTrigger>
                   <SelectContent>
@@ -1632,12 +1632,12 @@ export function ShipmentsTable({
                 </Select>
                 <Select>
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                  <div className='text-white flex items-center'>
-                    <GrStatusGood className="h-5 w-5 mr-2 text-white" /> All Status
+                    <div className='text-white flex items-center'>
+                      <GrStatusGood className="h-5 w-5 mr-2 text-white" /> All Status
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {/* Add SelectItem options for Status here */}                   
+                    {/* Add SelectItem options for Status here */}
                   </SelectContent>
                 </Select>
                 <Select>
@@ -1708,9 +1708,9 @@ export function ShipmentsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div>
-                          {shipment.invoicePrinted ? 
-                          <Image alt='invoice print' width={21} height={21} src={"/invoice-green.avif"} />
-                          : <Image alt='invoice print' width={21} height={21} src={"/invoice.avif"} />}
+                          {shipment.invoicePrinted ?
+                            <Image alt='invoice print' width={21} height={21} src={"/invoice-green.avif"} />
+                            : <Image alt='invoice print' width={21} height={21} src={"/invoice.avif"} />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>Invoice {shipment.invoicePrinted ? 'Printed' : 'Not Printed'}</TooltipContent>
@@ -1719,9 +1719,9 @@ export function ShipmentsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className='cursor-pointer' onClick={() => shipment.labelPrinted ? handleDeleteLabel(shipment.id) : handlePrintLabel(shipment.id)}>
-                          {shipment.labelPrinted ? 
-                          <Image alt='label print' width={20} height={20} src={"/label-green.avif"} />
-                          : <Image alt='label' width={20} height={20} src={"/label.avif"} />}
+                          {shipment.labelPrinted ?
+                            <Image alt='label print' width={20} height={20} src={"/label-green.avif"} />
+                            : <Image alt='label' width={20} height={20} src={"/label.avif"} />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>Label {shipment.labelPrinted ? 'Printed' : 'Not Printed'}</TooltipContent>
@@ -1730,9 +1730,9 @@ export function ShipmentsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div>
-                          {shipment.manifested ? 
-                          <Image alt='manifest icon' width={21} height={21} src={"/manifest-green.avif"} />
-                          : <Image alt='maniffest icon' width={21} height={21} src={"/manifest.avif"} />}
+                          {shipment.manifested ?
+                            <Image alt='manifest icon' width={21} height={21} src={"/manifest-green.avif"} />
+                            : <Image alt='maniffest icon' width={21} height={21} src={"/manifest.avif"} />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>{shipment.manifested ? 'Manifested' : 'Not Manifested'}</TooltipContent>
@@ -1741,10 +1741,10 @@ export function ShipmentsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div>
-                          {shipment.sent ? 
-                          // <FaTruck className="w-5 h-5 text-green-500" /> 
-                          <Image alt='truck' width={21} height={21} src={"/truck-green.avif"} />
-                          : <Image alt='truck' width={21} height={21} src={"/truck.avif"} />} 
+                          {shipment.sent ?
+                            // <FaTruck className="w-5 h-5 text-green-500" /> 
+                            <Image alt='truck' width={21} height={21} src={"/truck-green.avif"} />
+                            : <Image alt='truck' width={21} height={21} src={"/truck.avif"} />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>{shipment.sent ? 'Sent' : 'Not Sent'}</TooltipContent>
@@ -1797,7 +1797,7 @@ export function ShipmentsTable({
                       <TooltipTrigger asChild>
                         <Dialog open={dialogOpen[`pdf-dialog-${shipment.id}`]} onOpenChange={(open) => setDialogOpen(prev => ({ ...prev, [`pdf-dialog-${shipment.id}`]: open }))}>
                           <DialogTrigger asChild>
-                            <div 
+                            <div
                               className='cursor-pointer'
                               onClick={() => setDialogOpen(prev => ({ ...prev, [`pdf-dialog-${shipment.id}`]: true }))}
                             >
@@ -1818,7 +1818,7 @@ export function ShipmentsTable({
                               const trackingInput = document.getElementById(`pdf-tracking-${shipment.id}`) as HTMLInputElement;
                               const carrierInput = document.getElementById(`pdf-carrier-${shipment.id}`) as HTMLInputElement;
                               const submitButton = document.getElementById(`pdf-submit-${shipment.id}`) as HTMLButtonElement;
-                              
+
                               if (!fileInput.files?.length) {
                                 toast({
                                   title: "Error",
@@ -1827,13 +1827,13 @@ export function ShipmentsTable({
                                 });
                                 return;
                               }
-                              
+
                               // Show loading state
                               if (submitButton) {
                                 submitButton.disabled = true;
                                 submitButton.innerHTML = '<span class="spinner"></span> Uploading...';
                               }
-                              
+
                               try {
                                 await handlePdfUpload(
                                   { target: { files: fileInput.files } } as React.ChangeEvent<HTMLInputElement>,
@@ -1843,25 +1843,25 @@ export function ShipmentsTable({
                                   nameInput?.value || '',
                                   titleInput?.value || ''
                                 );
-                                
+
                                 // Close dialog on success by updating the dialogOpen state
                                 setDialogOpen(prev => ({
                                   ...prev,
                                   [`pdf-dialog-${shipment.id}`]: false
                                 }));
-                                
+
                                 // Reset form fields
                                 if (fileInput) fileInput.value = '';
                                 if (nameInput) nameInput.value = '';
                                 if (titleInput) titleInput.value = '';
-                                
+
                                 // Update the file name display
                                 const fileNameDisplay = document.getElementById(`pdf-filename-${shipment.id}`);
                                 if (fileNameDisplay) {
                                   fileNameDisplay.textContent = "No file selected";
                                   fileNameDisplay.className = "text-sm text-muted-foreground mt-1";
                                 }
-                                
+
                                 // Reset the choose button text
                                 const chooseButton = document.getElementById(`pdf-choose-button-${shipment.id}`);
                                 if (chooseButton) {
@@ -1918,66 +1918,66 @@ export function ShipmentsTable({
                                     />
                                   </div>
                                   <div className="relative space-y-2">
-                                     <input
-                                       type="file"
-                                       accept=".pdf"
-                                       className="hidden"
-                                       id={`pdf-upload-${shipment.id}`}
-                                       required
-                                       onChange={(e) => {
-                                         const fileInput = e.target as HTMLInputElement;
-                                         const fileNameDisplay = document.getElementById(`pdf-filename-${shipment.id}`);
-                                         const chooseButton = document.getElementById(`pdf-choose-button-${shipment.id}`);
-                                         const nameInput = document.getElementById(`pdf-name-${shipment.id}`) as HTMLInputElement;
-                                         
-                                         if (fileNameDisplay) {
-                                           if (fileInput.files && fileInput.files.length > 0) {
-                                             const fileName = fileInput.files[0].name;
-                                             fileNameDisplay.textContent = `Selected: ${fileName}`;
-                                             fileNameDisplay.className = "text-sm text-green-600 font-medium mt-1";
-                                             
-                                             // Set the document name field to the file name (without extension)
-                                             if (nameInput) {
-                                               const fileNameWithoutExtension = fileName.replace(/\.[^/.]+$/, "");
-                                               nameInput.value = fileNameWithoutExtension;
-                                             }
-                                             
-                                             // Update the button text to show the selected file
-                                             if (chooseButton) {
-                                               chooseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M18 18v-7h-7"></path><path d="M18 18H6a2 2 0 0 1-2-2V4"></path></svg> ${fileName.length > 20 ? fileName.substring(0, 17) + '...' : fileName}`;
-                                             }
-                                           } else {
-                                             fileNameDisplay.textContent = "No file selected";
-                                             fileNameDisplay.className = "text-sm text-muted-foreground mt-1";
-                                             
-                                             // Clear the document name field
-                                             if (nameInput) {
-                                               nameInput.value = "";
-                                             }
-                                             
-                                             // Reset the button text
-                                             if (chooseButton) {
-                                               chooseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M18 18v-7h-7"></path><path d="M18 18H6a2 2 0 0 1-2-2V4"></path></svg> Choose PDF File`;
-                                             }
-                                           }
-                                         }
-                                         console.log("File selected:", fileInput.files?.[0]?.name);
-                                       }}
-                                     />
-                                     <Button
-                                       type="button"
-                                       variant="outline"
-                                       className="flex items-center gap-2 w-full justify-center"
-                                       onClick={() => document.getElementById(`pdf-upload-${shipment.id}`)?.click()}
-                                       id={`pdf-choose-button-${shipment.id}`}
-                                     >
-                                       <FileText className="h-4 w-4" />
-                                       Choose PDF File
-                                     </Button>
-                                     <div id={`pdf-filename-${shipment.id}`} className="text-sm text-muted-foreground mt-1">
-                                       No file selected
-                                     </div>
-                                   </div>
+                                    <input
+                                      type="file"
+                                      accept=".pdf"
+                                      className="hidden"
+                                      id={`pdf-upload-${shipment.id}`}
+                                      required
+                                      onChange={(e) => {
+                                        const fileInput = e.target as HTMLInputElement;
+                                        const fileNameDisplay = document.getElementById(`pdf-filename-${shipment.id}`);
+                                        const chooseButton = document.getElementById(`pdf-choose-button-${shipment.id}`);
+                                        const nameInput = document.getElementById(`pdf-name-${shipment.id}`) as HTMLInputElement;
+
+                                        if (fileNameDisplay) {
+                                          if (fileInput.files && fileInput.files.length > 0) {
+                                            const fileName = fileInput.files[0].name;
+                                            fileNameDisplay.textContent = `Selected: ${fileName}`;
+                                            fileNameDisplay.className = "text-sm text-green-600 font-medium mt-1";
+
+                                            // Set the document name field to the file name (without extension)
+                                            if (nameInput) {
+                                              const fileNameWithoutExtension = fileName.replace(/\.[^/.]+$/, "");
+                                              nameInput.value = fileNameWithoutExtension;
+                                            }
+
+                                            // Update the button text to show the selected file
+                                            if (chooseButton) {
+                                              chooseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M18 18v-7h-7"></path><path d="M18 18H6a2 2 0 0 1-2-2V4"></path></svg> ${fileName.length > 20 ? fileName.substring(0, 17) + '...' : fileName}`;
+                                            }
+                                          } else {
+                                            fileNameDisplay.textContent = "No file selected";
+                                            fileNameDisplay.className = "text-sm text-muted-foreground mt-1";
+
+                                            // Clear the document name field
+                                            if (nameInput) {
+                                              nameInput.value = "";
+                                            }
+
+                                            // Reset the button text
+                                            if (chooseButton) {
+                                              chooseButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M18 18v-7h-7"></path><path d="M18 18H6a2 2 0 0 1-2-2V4"></path></svg> Choose PDF File`;
+                                            }
+                                          }
+                                        }
+                                        console.log("File selected:", fileInput.files?.[0]?.name);
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="flex items-center gap-2 w-full justify-center"
+                                      onClick={() => document.getElementById(`pdf-upload-${shipment.id}`)?.click()}
+                                      id={`pdf-choose-button-${shipment.id}`}
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                      Choose PDF File
+                                    </Button>
+                                    <div id={`pdf-filename-${shipment.id}`} className="text-sm text-muted-foreground mt-1">
+                                      No file selected
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                               <DialogFooter>
@@ -1992,17 +1992,17 @@ export function ShipmentsTable({
                       <TooltipContent>Upload PDF for Shipment</TooltipContent>
                     </Tooltip>
 
-                    <div className='ml-5 w-56 flex items-center gap-x-1'> 
+                    <div className='ml-5 w-56 flex items-center gap-x-1'>
                       <FaUser className='w-4 h-4' />
                       <span className='font-medium'>{shipment.orderName.length > 45 ? `${shipment.orderName.substring(0, 45)}...` : shipment.orderName.substring(0, 45)}</span>
                     </div>
                     <div className="w-88 flex">
-                      <FaLocationDot className='w-4 h-4' /> 
+                      <FaLocationDot className='w-4 h-4' />
                       <span className='font-medium'>{(shipment.address1 + ", " + shipment.suburb).length > 45 ? `${(shipment.address1 + ", " + shipment.suburb).substring(0, 45)}...` : (shipment.address1 + ", " + shipment.suburb).substring(0, 45)}</span>
                     </div>
                     {/* <div className="text-xs">{shipment.suburb}, {shipment.region} {shipment.postCode} {shipment.country}</div> */}
                     <div className='w-48 flex gap-x-2'>
-                      <FaCalendarDay className='w-4 h-4' /> 
+                      <FaCalendarDay className='w-4 h-4' />
                       <span className='font-medium'>{new Date(shipment.orderDate * 1000).toLocaleString()}</span>
                     </div>
                     <div className='w-28 flex items-center'>

@@ -58,13 +58,13 @@ export default function WarehousesTab() {
             'Authorization': `Bearer ${token}`,
           },
         });
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch warehouses');
         }
 
         const data: WarehousesResponse = await response.json();
-        
+
         if (!data.success) {
           throw new Error('API returned unsuccessful response');
         }
@@ -99,12 +99,12 @@ export default function WarehousesTab() {
 
   const handleSubmitUpdate = async () => {
     if (!selectedWarehouse) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       const token = localStorage.getItem('authToken');
-      
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/platform/warehouses/address_only`, {
         method: 'PATCH',
         headers: {
@@ -113,22 +113,22 @@ export default function WarehousesTab() {
         },
         body: JSON.stringify(editWarehouseData)
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to update warehouse');
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.message || 'Failed to update warehouse');
       }
-      
+
       toast({
         title: 'Success',
         description: 'Warehouse updated successfully',
       });
-      
+
       // Refresh warehouses list
       const updatedWarehouses = warehouses.map(warehouse => {
         if (warehouse.id === selectedWarehouse.id) {
@@ -142,7 +142,7 @@ export default function WarehousesTab() {
         }
         return warehouse;
       });
-      
+
       setWarehouses(updatedWarehouses);
       setIsEditWarehouseOpen(false);
     } catch (err) {

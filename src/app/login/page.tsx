@@ -1,17 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Input } from '@/components/ui/input'; // Import Input
-import { Button } from '@/components/ui/button'; // Import Button
-import Link from 'next/link'; // Import Link for navigation
-import { useRouter } from 'next/navigation'; // Import useRouter for navigation
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -54,7 +53,7 @@ export default function LoginPage() {
       localStorage.setItem('userData', JSON.stringify(userData));
 
       router.push('/dashboard');
- 
+
     } catch (err: any) {
       setError(err.message);
       console.error('Login error:', err);
@@ -98,7 +97,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)} 
+                onChange={(e) => setPassword(e.target.value)}
                 className="block w-full px-3 py-2 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
               />
             </div>

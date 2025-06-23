@@ -1,11 +1,8 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserIcon, UsersIcon, ArrowLeftIcon, HouseIcon, ActivityIcon, Package2 } from 'lucide-react';
+import { UsersIcon, ArrowLeftIcon, HouseIcon, ActivityIcon, Package2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import UsersTab from './components/UsersTab';
 import WarehousesTab from './components/WarehousesTab';
@@ -29,7 +26,7 @@ export default function SettingsPage() {
         </Button>
         <h1 className="text-3xl font-bold">Settings</h1>
       </div>
-      
+
       <Tabs defaultValue="users" className="w-full">
         <TabsList className="mb-8">
           <TabsTrigger value="users" className="flex items-center">

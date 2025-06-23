@@ -69,14 +69,14 @@ export default function UsersTab() {
             'Authorization': `Bearer ${token}`,
           },
         });
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch users');
         }
 
         const data: UsersResponse = await response.json();
         setUsers(data.users);
-        
+
         // Extract available roles from the first user's availableRoles
         if (data.users.length > 0 && data.users[0].availableRoles) {
           setAvailableRoles(data.users[0].availableRoles.roles);
@@ -85,7 +85,7 @@ export default function UsersTab() {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setLoading(false);
-      } 
+      }
     };
 
     // Only run on the client side
@@ -118,12 +118,12 @@ export default function UsersTab() {
 
   const handleSubmitUpdate = async () => {
     if (!selectedUser) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       const token = localStorage.getItem('authToken');
-      
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/users/${selectedUser.data.id}`, {
         method: 'PUT',
         headers: {
@@ -132,22 +132,22 @@ export default function UsersTab() {
         },
         body: JSON.stringify(editUserData)
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to update user');
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.message || 'Failed to update user');
       }
-      
+
       toast({
         title: 'Success',
         description: 'User updated successfully',
       });
-      
+
       // Update the user in the local state
       const updatedUsers = users.map(user => {
         if (user.data.id === selectedUser.data.id) {
@@ -161,7 +161,7 @@ export default function UsersTab() {
         }
         return user;
       });
-      
+
       setUsers(updatedUsers);
       setIsEditUserDialogOpen(false);
     } catch (err) {
@@ -178,7 +178,7 @@ export default function UsersTab() {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/register', {
@@ -206,14 +206,14 @@ export default function UsersTab() {
           'Authorization': `Bearer ${token}`,
         },
       });
-      
+
       if (!updatedResponse.ok) {
         throw new Error('Failed to refresh user list');
       }
 
       const updatedData: UsersResponse = await updatedResponse.json();
       setUsers(updatedData.users);
-      
+
       // Reset form and close dialog
       setNewUser({
         name: '',
@@ -222,7 +222,7 @@ export default function UsersTab() {
         roles: []
       });
       setIsAddUserDialogOpen(false);
-      
+
       toast({
         title: 'Success',
         description: 'User created successfully',
@@ -265,7 +265,7 @@ export default function UsersTab() {
                     <Input
                       id="name"
                       value={newUser.name}
-                      onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                       className="col-span-3"
                       required
                     />
@@ -278,7 +278,7 @@ export default function UsersTab() {
                       id="email"
                       type="email"
                       value={newUser.email}
-                      onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                       className="col-span-3"
                       required
                     />
@@ -291,7 +291,7 @@ export default function UsersTab() {
                       id="password"
                       type="password"
                       value={newUser.password}
-                      onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                       className="col-span-3"
                       required
                     />
@@ -304,8 +304,8 @@ export default function UsersTab() {
                       {availableRoles.length > 0 ? (
                         availableRoles.map((role) => (
                           <div key={role} className="flex items-center space-x-2">
-                            <Checkbox 
-                              id={`role-${role}`} 
+                            <Checkbox
+                              id={`role-${role}`}
                               checked={newUser.roles.includes(role)}
                               onCheckedChange={(checked) => handleRoleChange(role, checked === true)}
                             />

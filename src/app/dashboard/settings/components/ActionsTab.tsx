@@ -27,7 +27,6 @@ export default function ActionsTab() {
   const [error, setError] = useState<string | null>(null);
   const [isStatusDetailsOpen, setIsStatusDetailsOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Status | null>(null);
-  const { toast } = useToast();
 
   useEffect(() => {
     const fetchStatuses = async () => {
@@ -38,13 +37,13 @@ export default function ActionsTab() {
             'Authorization': `Bearer ${token}`,
           },
         });
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch statuses');
         }
 
         const data: StatusesResponse = await response.json();
-        
+
         if (!data.success) {
           throw new Error('API returned unsuccessful response');
         }
@@ -57,7 +56,6 @@ export default function ActionsTab() {
       }
     };
 
-    // Only run on the client side
     if (typeof window !== 'undefined') {
       fetchStatuses();
     }
@@ -74,12 +72,6 @@ export default function ActionsTab() {
         <CardTitle>Status Management</CardTitle>
       </CardHeader>
       <CardContent>
-        {/* <div className="flex justify-end mb-4">
-          <Button>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Add New Status
-          </Button>
-        </div> */}
         <Table>
           <TableHeader>
             <TableRow>

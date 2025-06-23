@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Package2, PlusIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -61,13 +60,13 @@ export default function CarriersTab() {
             'Authorization': `Bearer ${token}`,
           },
         });
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch carriers');
         }
 
         const data: CarriersResponse = await response.json();
-        
+
         if (!data.success) {
           throw new Error('API returned unsuccessful response');
         }
@@ -106,12 +105,12 @@ export default function CarriersTab() {
 
   const handleSubmitUpdate = async () => {
     if (!selectedCarrier) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       const token = localStorage.getItem('authToken');
-      
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/platform/carriers/address_only`, {
         method: 'PATCH',
         headers: {
@@ -120,22 +119,22 @@ export default function CarriersTab() {
         },
         body: JSON.stringify(editCarrierData)
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to update carrier');
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.message || 'Failed to update carrier');
       }
-      
+
       toast({
         title: 'Success',
         description: 'Carrier updated successfully',
       });
-      
+
       // Refresh carriers list
       const updatedCarriers = carriers.map(carrier => {
         if (carrier.id === selectedCarrier.id) {
@@ -148,7 +147,7 @@ export default function CarriersTab() {
         }
         return carrier;
       });
-      
+
       setCarriers(updatedCarriers);
       setIsEditCarrierOpen(false);
     } catch (err) {
@@ -270,8 +269,8 @@ export default function CarriersTab() {
                       {selectedCarrier.color && (
                         <div>
                           <span className="font-medium">Color:</span>
-                          <span 
-                            className="ml-2 inline-block w-4 h-4 rounded-full" 
+                          <span
+                            className="ml-2 inline-block w-4 h-4 rounded-full"
                             style={{ backgroundColor: selectedCarrier.color }}
                           ></span>
                         </div>

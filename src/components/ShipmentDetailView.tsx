@@ -67,7 +67,7 @@ interface ShipmentDetailViewProps {
 export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewProps) {
   const { toast } = useToast();
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
-  const [shipmentErrors, setShipmentErrors] = useState<Array<{message: string, shipmentId: number}>>([]);
+  const [shipmentErrors, setShipmentErrors] = useState<Array<{ message: string, shipmentId: number }>>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(false);
   const [selectedStockStatus, setSelectedStockStatus] = useState<Record<number, 'yes' | 'no'>>(() => {
     const initialStockStatus: Record<number, 'yes' | 'no'> = {};
@@ -487,11 +487,11 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const showShipmentErrors = async (shipmentId: any) => {
     setIsLoadingErrors(true);
     setErrorDialogOpen(true);
-    
+
     try {
       // Get the token from localStorage
       const token = localStorage.getItem('authToken');
-      
+
       if (!token) {
         toast({
           title: 'Authentication Error',
@@ -500,7 +500,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         });
         return;
       }
-      
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/errors/${shipmentId}`, {
         method: 'GET',
         headers: {
@@ -508,13 +508,13 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (!response.ok) {
         throw new Error(`Error fetching shipment errors: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success && data.errors) {
         setShipmentErrors(data.errors);
       } else {
@@ -532,7 +532,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         variant: 'destructive',
       });
       setShipmentErrors([]);
-    } finally { 
+    } finally {
       setIsLoadingErrors(false);
     }
   }
@@ -548,7 +548,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
               Shipment Errors
             </DialogTitle>
           </DialogHeader>
-          
+
           {isLoadingErrors ? (
             <div className="flex justify-center items-center py-8">
               <Loader className="h-8 w-8 animate-spin text-gray-500" />
@@ -568,7 +568,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
               No errors found for this shipment.
             </div>
           )}
-          
+
           <DialogFooter>
             <Button onClick={() => setErrorDialogOpen(false)}>
               Close
@@ -576,7 +576,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       <div>
         {/* Shipping Quotes Section */}
         <Card className="col-span-1">
@@ -609,8 +609,8 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         <Card className='mt-4 p-10'>
           <AlertDialog>
             <div className='flex gap-x-3'>
-            <AlertCircleIcon />
-            To view errors you need to click the button below
+              <AlertCircleIcon />
+              To view errors you need to click the button below
             </div>
           </AlertDialog>
           <Button onClick={() => showShipmentErrors(shipment.shipment.id)}>Show Errors</Button>

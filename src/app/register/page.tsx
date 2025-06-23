@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Input } from '@/components/ui/input'; // Import Input
-import { Button } from '@/components/ui/button'; // Import Button
-import Link from 'next/link'; // Import Link for navigation
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -19,13 +19,12 @@ export default function RegisterPage() {
     setError(null);
     setSuccess(null);
 
-    // Basic client-side validation
     if (password.length < 8) {
       setError('Password must be at least 8 characters long.');
       setLoading(false);
       return;
     }
-    
+
     try {
       const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/register', {
         method: 'POST',
