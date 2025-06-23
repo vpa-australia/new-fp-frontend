@@ -76,6 +76,7 @@ export default function DashboardPage() {
   const [action, setAction] = useState(0);
   const [shipmentsAreLoading, setShipmentsAreLoading] = useState(false);
   const router = useRouter();
+  const [searchParams, setSearchParams] = useState("");
 
   const [userEmail, setUserEmail] = useState('');
 
@@ -183,6 +184,9 @@ export default function DashboardPage() {
         let url = 'https://ship-orders.vpa.com.au/api/shipments';
         url += `/warehouse/${selectedWarehouse}`;
         url += `?perPage=${itemsPerPage}&page=${currentPage}&archive=${isArchived ? 1 : 0}`;
+        if (searchParams) {
+          url += `&${searchParams}`;
+        }
 
         const response = await fetch(url, {
           headers: {
@@ -210,7 +214,7 @@ export default function DashboardPage() {
         setShipmentsAreLoading(false);
       }
     })();
-  }, [itemsPerPage, currentPage, selectedWarehouse, action, isArchived]);
+  }, [itemsPerPage, currentPage, selectedWarehouse, action, isArchived, searchParams]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 p-6">
@@ -297,6 +301,7 @@ export default function DashboardPage() {
           <Card className="shadow-sm w-full">
             <CardContent className="p-0">
               <ShipmentsTable
+                setSearchParams={setSearchParams}
                 selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
                 lastPage={lastPage}
@@ -327,6 +332,7 @@ export default function DashboardPage() {
                   setItemsPerPage={setItemsPerPage} // Add this line to pass the setItemsPerPage function to ShipmentsTable as a prop
                   setCurrentPage={setCurrentPage}
                   shipmentsAreLoading={shipmentsAreLoading}
+                  setSearchParams={setSearchParams}
                 />
               </CardContent>
 
@@ -348,6 +354,7 @@ export default function DashboardPage() {
                 setItemsPerPage={setItemsPerPage}
                 setCurrentPage={setCurrentPage}
                 shipmentsAreLoading={shipmentsAreLoading}
+                setSearchParams={setSearchParams}
               />
             </CardContent>
           </Card>

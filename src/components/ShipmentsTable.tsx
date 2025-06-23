@@ -78,6 +78,7 @@ type ShipmentsTableProps = {
   setItemsPerPage: React.Dispatch<React.SetStateAction<number>>;
   selectedWarehouse: string | null;
   shipmentsAreLoading: boolean;
+  setSearchParams: React.Dispatch<React.SetStateAction<string>>;
 };
 
 type EdgePosition = "top" | "bottom" | "left" | "right"
@@ -85,6 +86,7 @@ type EdgePosition = "top" | "bottom" | "left" | "right"
 const MemoizedShipmentDetailView = React.memo(ShipmentDetailView);
 
 export function ShipmentsTable({
+  setSearchParams,
   setAction,
   shipments,
   currentPage,
@@ -162,7 +164,6 @@ export function ShipmentsTable({
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>(defaultStatusOptions);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
-  const [searchParams, setSearchParams] = useState<Record<string, string>>({});
   const [searchFields, setSearchFields] = useState<Record<string, { name: string, column: string, type: string, weight: number }>>({});
   const [searchValues, setSearchValues] = useState<Record<string, string>>({});
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
@@ -1446,7 +1447,7 @@ export function ShipmentsTable({
                 />
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="icon" className="rounded-full h-10 w-10 bg-[#3D753A] text-white hover:text-white hover:bg-black">
+                    <Button variant="outline" size="icon" className="cursor-pointer rounded-full h-10 w-10 bg-[#3D753A] text-white hover:text-white hover:bg-black">
                       <SearchIcon className="h-5 w-5 hover:text-white" />
                       <span className="sr-only">Search Shipments</span>
                     </Button>
@@ -1504,6 +1505,24 @@ export function ShipmentsTable({
                                     }));
                                   }}
                                 />
+                              ) : field.type === 'boolean' ? (
+                                <Select
+                                  value={searchValues[key] || ''}
+                                  onValueChange={(value) => {
+                                    setSearchValues(prev => ({
+                                      ...prev,
+                                      [key]: value
+                                    }));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="true">Yes</SelectItem>
+                                    <SelectItem value="false">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               ) : (
                                 <Input
                                   id={key}
@@ -1582,9 +1601,12 @@ export function ShipmentsTable({
                         type="submit"
                         className="bg-[#3D753A] hover:bg-black text-white"
                         onClick={() => {
-                          // Filter out empty values
+                          // Filter out empty values and fields that are not visible
                           const filters = Object.entries(searchValues)
-                            .filter(([_, value]) => value && value.trim() !== '')
+                            .filter(([key, value]) => {
+                              // Only include values that are non-empty AND the field is visible
+                              return value && value.trim() !== '' && visibleFields[key] === true;
+                            })
                             .reduce((acc, [key, value]) => {
                               // Use the column name from searchFields for the API
                               if (searchFields[key]) {
@@ -1593,11 +1615,14 @@ export function ShipmentsTable({
                               return acc;
                             }, {} as Record<string, string>);
 
-                          // Update searchParams with the new filters
-                          setSearchParams(prev => ({
-                            ...prev,
-                            ...filters
-                          }));
+                            // Convert filters object to URL query string format
+                            const queryString = Object.entries(filters)
+                              .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                              .join('&');
+
+                              console.log("queryString: ", queryString);
+                              // Directly set the query string as the new search params
+                              setSearchParams(queryString);
 
                           // Close the dialog and trigger search
                           setDialogOpen(false as any);
