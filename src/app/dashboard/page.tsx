@@ -268,7 +268,10 @@ export default function DashboardPage() {
         <TabsList className={`${selectedWarehouseCategory === "Local" ? 'mb-5' : ''} flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit`}>
             <TabsTrigger
               value="All"
-              onClick={() => setSelectedWarehouse("All")}
+              onClick={() => {
+                setSelectedWarehouseCategory("");
+                setSelectedWarehouse("All")
+              }}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <GripVertical className="h-5 w-5 mb-0.5" />
@@ -292,8 +295,12 @@ export default function DashboardPage() {
               <span className="text-xs font-medium">International</span>
             </TabsTrigger>
             <TabsTrigger
-              value="Archive"
-              onClick={() => setSelectedWarehouse('archived')}
+              value="archived"
+              onClick={() => {
+                setIsArchived(true);
+                setSelectedWarehouse('Archived');
+                setSelectedWarehouseCategory("");
+              }}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <DeleteIcon className="h-5 w-5 mb-0.5" />
@@ -313,7 +320,7 @@ export default function DashboardPage() {
                 <MapPin className="h-5 w-5 mb-0.5" />
                 <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
               </TabsTrigger>
-            )) : warehouses.filter(wh => wh.international).map((warehouse) => (
+            )) : selectedWarehouseCategory === "International" ? warehouses.filter(wh => wh.international).map((warehouse) => (
               <TabsTrigger
                 key={warehouse.id}
                 value={warehouse.code} // Or a generic 'INT' value if preferred for all international
@@ -323,7 +330,7 @@ export default function DashboardPage() {
                 <Globe className="h-5 w-5 mb-0.5" />
                 <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
               </TabsTrigger>
-            ))}
+            )) : null}
           </TabsList>
         </div>
         <TabsContent value="All">
