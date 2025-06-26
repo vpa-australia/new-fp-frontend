@@ -11,6 +11,9 @@ A modern Next.js frontend application for managing shipments, warehouses, and or
 - **Real-time Updates**: Live status updates for shipments and stock
 - **Dynamic Search Fields**: Customizable search interface with field selection
 - **Persistent User Preferences**: Search field selections saved to local storage
+- **Improved Search Filtering**: Only visible fields are included in search queries
+- **Warehouse Type Filtering**: Toggle between International and Local warehouses
+- **Streamlined Navigation**: All/Local/International buttons at the same level for intuitive filtering
 
 ## 🛠️ Tech Stack
 
@@ -77,6 +80,14 @@ src/
 - Integrates with warehouse and carrier systems
 - Features dynamic search fields with customizable visibility
 - Persists user search preferences across sessions
+- Improved query string generation that only includes visible search fields
+- Efficient search parameter handling for better performance
+
+### Dashboard Page
+- Displays shipments organized by warehouse
+- Features intuitive warehouse filtering with All/Local/International toggle buttons
+- Automatically selects appropriate warehouse when switching between warehouse types
+- Provides clear visual indication of active filters
 
 ## 🔒 Authentication
 
@@ -126,6 +137,11 @@ The application uses React's built-in state management solutions:
 - Enhance accessibility features
 - Add end-to-end testing
 - Implement performance monitoring
+- Add saved search templates for frequently used search combinations
+- Implement drag-and-drop reordering of search fields
+- Add warehouse grouping by region or shipping volume
+- Enhance mobile responsiveness for warehouse filtering UI
+- Implement advanced analytics dashboard for shipment metrics
 
 ## 📄 License
 
