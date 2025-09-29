@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { UserIcon, LogOutIcon, Loader2, CogIcon, GripVertical, MapPin, Globe, ArchiveIcon, DeleteIcon } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
+import { UserIcon, LogOutIcon, CogIcon, GripVertical, MapPin, Globe, DeleteIcon } from 'lucide-react';
 import { ShipmentsTable } from '@/components/ShipmentsTable';
 import Image from 'next/image';
 
@@ -153,33 +153,6 @@ export default function DashboardPage() {
   }, [category, warehouses]);
 
   useEffect(() => {
-    const fetchSearchParams = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-          throw new Error('Authentication token not found. Please log in.');
-        }
-
-        const response = await fetch('https://ship-orders.vpa.com.au/api/shipments/search/parameters', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Failed to fetch search parameters: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-      } catch (err: any) {
-        console.error('Error fetching search parameters:', err);
-      } finally {
-      }
-    };
-
     const fetchWarehouses = async () => {
       setLoadingWarehouses(true);
       setWarehouseError(null);
@@ -192,8 +165,8 @@ export default function DashboardPage() {
 
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
           },
         });
 
@@ -203,20 +176,20 @@ export default function DashboardPage() {
           throw new Error(errorData.message || `Failed to fetch warehouses: ${response.statusText}`);
         }
 
-        const data = await response.json();
-        const warehousesData = Object.values(data.warehouses || {});
-        setWarehouses(warehousesData as Warehouse[]);
+        const data: { warehouses?: Record<string, Warehouse> } = await response.json();
+        const warehousesData = Object.values(data.warehouses ?? {});
+        setWarehouses(warehousesData);
 
-      } catch (err: any) {
-        console.error('Error fetching warehouses:', err);
-        setWarehouseError(err.message || 'An unexpected error occurred.');
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+        const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
+        setWarehouseError(message);
       } finally {
         setLoadingWarehouses(false);
       }
     };
 
     fetchWarehouses();
-    fetchSearchParams();
   }, []);
 
   useEffect(() => {
@@ -264,8 +237,8 @@ export default function DashboardPage() {
 
         const response = await fetch(url, {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
           },
           method: 'GET',
         });
@@ -282,8 +255,8 @@ export default function DashboardPage() {
         setShipments(data.shipments || []);
         setTotalItems(data.total || 0);
         setLastPage(data.lastPage || 1);
-      } catch (err: any) {
-        console.error('Error fetching shipments:', err);
+      } catch (error) {
+        console.error('Error fetching shipments:', error);
       } finally {
         setShipmentsAreLoading(false);
       }
@@ -330,6 +303,12 @@ export default function DashboardPage() {
       {/* Tabs and Table */}
       <Tabs value={category} onValueChange={handleCategoryChange} className="w-full">
         <div>
+          {loadingWarehouses && (
+            <p className="mb-2 text-sm text-muted-foreground">Loading warehouses...</p>
+          )}
+          {warehouseError && (
+            <p className="mb-2 text-sm text-red-600">{warehouseError}</p>
+          )}
           <TabsList className={`${category === 'Local' || category === 'International' ? 'mb-5' : ''} flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit`}>
             <TabsTrigger
               value="All"
