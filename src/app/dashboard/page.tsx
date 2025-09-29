@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -63,6 +63,8 @@ interface Shipment {
   lastApiUpdate: number; // Added last API update time
 }
 
+type CategoryTab = 'All' | 'Local' | 'International' | 'Archived';
+
 export default function DashboardPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loadingWarehouses, setLoadingWarehouses] = useState(true);
@@ -72,7 +74,8 @@ export default function DashboardPage() {
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalItems, setTotalItems] = useState(0);
   const [selectedWarehouse, setSelectedWarehouse] = useState("All");
-  const [selectedWarehouseCategory, setSelectedWarehouseCategory] = useState("All");
+  const [category, setCategory] = useState<CategoryTab>("All");
+  const [isArchived, setIsArchived] = useState(false);
   const [lastPage, setLastPage] = useState(1);
   const [action, setAction] = useState(0);
   const [shipmentsAreLoading, setShipmentsAreLoading] = useState(false);
@@ -102,6 +105,53 @@ export default function DashboardPage() {
     router.push('/login');
   }, [router]);
 
+  const handleCategoryChange = useCallback(
+    (value: string) => {
+      const nextCategory = value as CategoryTab;
+      setCategory(nextCategory);
+
+      if (nextCategory === 'Archived') {
+        setIsArchived(true);
+        setSelectedWarehouse('All');
+        return;
+      }
+
+      setIsArchived(false);
+
+      if (nextCategory === 'All') {
+        setSelectedWarehouse('All');
+        return;
+      }
+
+      const filtered = warehouses.filter((warehouse) =>
+        nextCategory === 'Local' ? !warehouse.international : warehouse.international
+      );
+
+      setSelectedWarehouse((previous) => {
+        if (filtered.length === 0) {
+          return 'All';
+        }
+
+        return filtered.some((warehouse) => warehouse.code === previous)
+          ? previous
+          : filtered[0].code;
+      });
+    },
+    [warehouses]
+  );
+
+  const categoryWarehouses = useMemo(() => {
+    if (category === 'Local') {
+      return warehouses.filter((warehouse) => !warehouse.international);
+    }
+
+    if (category === 'International') {
+      return warehouses.filter((warehouse) => warehouse.international);
+    }
+
+    return warehouses;
+  }, [category, warehouses]);
+
   useEffect(() => {
     const fetchSearchParams = async () => {
       try {
@@ -123,7 +173,7 @@ export default function DashboardPage() {
         }
 
         const data = await response.json();
-        console.log('Search Parameters:', data); // Log the fetched search parameters for verificatio
+
       } catch (err: any) {
         console.error('Error fetching search parameters:', err);
       } finally {
@@ -135,7 +185,7 @@ export default function DashboardPage() {
       setWarehouseError(null);
       try {
         const token = localStorage.getItem('authToken');
-        console.log('Token:', token);
+
         if (!token) {
           throw new Error('Authentication token not found. Please log in.');
         }
@@ -149,7 +199,7 @@ export default function DashboardPage() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.log(await response.text());
+
           throw new Error(errorData.message || `Failed to fetch warehouses: ${response.statusText}`);
         }
 
@@ -167,9 +217,31 @@ export default function DashboardPage() {
 
     fetchWarehouses();
     fetchSearchParams();
-  }, [action]); // Removed itemsPerPage and currentPage as they are not used in these fetches
+  }, []);
 
-  const [isArchived, setIsArchived] = useState(false);
+  useEffect(() => {
+    if (category === 'Local' || category === 'International') {
+      const filtered = categoryWarehouses;
+
+      setSelectedWarehouse((previous) => {
+        if (filtered.length === 0) {
+          return 'All';
+        }
+
+        return filtered.some((warehouse) => warehouse.code === previous)
+          ? previous
+          : filtered[0].code;
+      });
+      return;
+    }
+
+    if (category === 'Archived') {
+      setSelectedWarehouse((previous) => (previous === 'Archived' ? previous : 'Archived'));
+      return;
+    }
+
+    setSelectedWarehouse((previous) => (previous === 'All' ? previous : 'All'));
+  }, [category, categoryWarehouses]);
 
   useEffect(() => {
     (async () => {
@@ -182,8 +254,9 @@ export default function DashboardPage() {
           throw new Error('Authentication token not found. Please log in.');
         }
 
+        const warehouseSegment = selectedWarehouse || 'All';
         let url = 'https://ship-orders.vpa.com.au/api/shipments';
-        url += `/warehouse/${selectedWarehouse}`;
+        url += `/warehouse/${warehouseSegment}`;
         url += `?perPage=${itemsPerPage}&page=${currentPage}&archive=${isArchived ? 1 : 0}`;
         if (searchParams) {
           url += `&${searchParams}`;
@@ -204,7 +277,7 @@ export default function DashboardPage() {
 
         const data = await response.json();
 
-        console.log('API Response:', data);
+
 
         setShipments(data.shipments || []);
         setTotalItems(data.total || 0);
@@ -255,32 +328,18 @@ export default function DashboardPage() {
         </DropdownMenu>
       </header>
       {/* Tabs and Table */}
-      <Tabs defaultValue="All" className="w-full" onValueChange={(value) => {
-        if (value === 'archived') {
-          setIsArchived(true);
-          setSelectedWarehouse('Archived');
-        } else {
-          setIsArchived(false);
-          setSelectedWarehouse(value);
-        }
-      }}>
+      <Tabs value={category} onValueChange={handleCategoryChange} className="w-full">
         <div>
-        <TabsList className={`${selectedWarehouseCategory === "Local" ? 'mb-5' : ''} flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit`}>
+          <TabsList className={`${category === 'Local' || category === 'International' ? 'mb-5' : ''} flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit`}>
             <TabsTrigger
               value="All"
-              onClick={() => {
-                setSelectedWarehouseCategory("");
-                setSelectedWarehouse("All")
-              }}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <GripVertical className="h-5 w-5 mb-0.5" />
               <span className="text-xs font-medium">All</span>
             </TabsTrigger>
-            
             <TabsTrigger
               value="Local"
-              onClick={() => setSelectedWarehouseCategory("Local")}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <MapPin className="h-5 w-5 mb-0.5" />
@@ -288,19 +347,13 @@ export default function DashboardPage() {
             </TabsTrigger>
             <TabsTrigger
               value="International"
-              onClick={() => setSelectedWarehouseCategory("International")}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <Globe className="h-5 w-5 mb-0.5" />
               <span className="text-xs font-medium">International</span>
             </TabsTrigger>
             <TabsTrigger
-              value="archived"
-              onClick={() => {
-                setIsArchived(true);
-                setSelectedWarehouse('Archived');
-                setSelectedWarehouseCategory("");
-              }}
+              value="Archived"
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <DeleteIcon className="h-5 w-5 mb-0.5" />
@@ -308,56 +361,43 @@ export default function DashboardPage() {
             </TabsTrigger>
           </TabsList>
         </div>
-        <div className='flex flex-row justify-between items-center mt-3 mb-3  '>
-          <TabsList className="mb-1 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit">
-            {selectedWarehouseCategory === "Local" ? warehouses.filter(wh => !wh.international).map((warehouse) => (
-              <TabsTrigger
-                key={warehouse.id}
-                value={warehouse.code}
-                onClick={() => setSelectedWarehouse(warehouse.code)}
-                className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
-              >
-                <MapPin className="h-5 w-5 mb-0.5" />
-                <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
-              </TabsTrigger>
-            )) : selectedWarehouseCategory === "International" ? warehouses.filter(wh => wh.international).map((warehouse) => (
-              <TabsTrigger
-                key={warehouse.id}
-                value={warehouse.code} // Or a generic 'INT' value if preferred for all international
-                onClick={() => setSelectedWarehouse(warehouse.code)} // Or handle international selection differently
-                className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
-              >
-                <Globe className="h-5 w-5 mb-0.5" />
-                <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
-              </TabsTrigger>
-            )) : null}
-          </TabsList>
-        </div>
-        <TabsContent value="All">
-          <Card className="shadow-sm w-full">
-            <CardContent className="p-0">
-              <ShipmentsTable
-                setSearchParams={setSearchParams}
-                selectedWarehouse={selectedWarehouse}
-                setAction={setAction}
-                lastPage={lastPage}
-                shipments={shipments}
-                currentPage={currentPage}
-                itemsPerPage={itemsPerPage}
-                totalItems={totalItems}
-                setItemsPerPage={setItemsPerPage}
-                setCurrentPage={setCurrentPage}
-                shipmentsAreLoading={shipmentsAreLoading}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        {/* Add TabsContent for each warehouse dynamically if needed */}
-        {warehouses.map((warehouse) => (
-          <TabsContent key={warehouse.id} value={warehouse.name}>
-            <Card className="shadow-sm">
+        {(category === 'Local' || category === 'International') && (
+          <div className="flex flex-row justify-between items-center mt-3 mb-3">
+            <div className="mb-1 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit">
+              {categoryWarehouses.length === 0 ? (
+                <span className="text-sm text-gray-500">No warehouses available.</span>
+              ) : (
+                categoryWarehouses.map((warehouse) => (
+                  <button
+                    key={warehouse.id}
+                    type="button"
+                    onClick={() => setSelectedWarehouse(warehouse.code)}
+                    className={`flex flex-col items-center justify-center p-2 rounded-md transition-colors w-20 h-16 ${
+                      selectedWarehouse === warehouse.code
+                        ? 'bg-[#44743F] text-white'
+                        : 'text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {category === 'Local' ? (
+                      <MapPin className="h-5 w-5 mb-0.5" />
+                    ) : (
+                      <Globe className="h-5 w-5 mb-0.5" />
+                    )}
+                    <span className="text-xs font-medium">
+                      {warehouse.code.substring(0, 3).toUpperCase()}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+        {(['All', 'Local', 'International', 'Archived'] as CategoryTab[]).map((tab) => (
+          <TabsContent key={tab} value={tab}>
+            <Card className="shadow-sm w-full">
               <CardContent className="p-0">
                 <ShipmentsTable
+                  setSearchParams={setSearchParams}
                   selectedWarehouse={selectedWarehouse}
                   setAction={setAction}
                   lastPage={lastPage}
@@ -365,38 +405,19 @@ export default function DashboardPage() {
                   currentPage={currentPage}
                   itemsPerPage={itemsPerPage}
                   totalItems={totalItems}
-                  setItemsPerPage={setItemsPerPage} // Add this line to pass the setItemsPerPage function to ShipmentsTable as a prop
+                  setItemsPerPage={setItemsPerPage}
                   setCurrentPage={setCurrentPage}
                   shipmentsAreLoading={shipmentsAreLoading}
-                  setSearchParams={setSearchParams}
                 />
               </CardContent>
-
             </Card>
           </TabsContent>
         ))}
-
-        <TabsContent value="archived">
-          <Card className="shadow-sm w-full">
-            <CardContent className="p-0">
-              <ShipmentsTable
-                selectedWarehouse={selectedWarehouse}
-                setAction={setAction}
-                lastPage={lastPage}
-                shipments={shipments}
-                currentPage={currentPage}
-                itemsPerPage={itemsPerPage}
-                totalItems={totalItems}
-                setItemsPerPage={setItemsPerPage}
-                setCurrentPage={setCurrentPage}
-                shipmentsAreLoading={shipmentsAreLoading}
-                setSearchParams={setSearchParams}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
     </div>
   );
 }
+
+
+

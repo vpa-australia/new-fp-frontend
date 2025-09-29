@@ -69,38 +69,37 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [shipmentErrors, setShipmentErrors] = useState<Array<{ message: string, shipmentId: number }>>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(false);
-  const [selectedStockStatus, setSelectedStockStatus] = useState<Record<number, 'yes' | 'no'>>(() => {
-    const initialStockStatus: Record<number, 'yes' | 'no'> = {};
-    shipment?.shipment?.orderLines?.forEach((item: any) => {
-      const isOutOfStock = item.oosWarehouses?.some((wh: any) =>
-        wh.warehouseCode === shipment.shipment.warehouseCode &&
-        wh.variantId === item.variantId
-      );
-      initialStockStatus[item.id] = isOutOfStock ? 'no' : 'yes';
-    });
-    return initialStockStatus;
-  });
-
-  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, string>>(() => {
-    const initialDispatch: Record<number, string> = {};
-    shipment?.shipment?.orderLines?.forEach((item: LineItem) => {
-      initialDispatch[item.id] = shipment.shipment.warehouseCode?.[0] || '';
-    });
-    return initialDispatch;
-  });
-
-  const [selectedDispatchFromInstock, setSelectedDispatchFromInstock] = useState<Record<number, string>>(() => {
-
-    const initialDispatch: Record<number, string> = {};
-    shipment?.shipment?.orderLines?.forEach((item: LineItem) => {
-      initialDispatch[item.id] = shipment.shipment.warehouseCode?.[0] || '';
-    });
-    return initialDispatch;
-  });
-
+  const [selectedStockStatus, setSelectedStockStatus] = useState<Record<number, 'yes' | 'no'>>({});
+  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, string>>({});
   const [selectedQuote, setSelectedQuote] = useState<number | null>(null);
   const [commentText, setCommentText] = useState('');
-  const [comments, setComments] = useState<any[]>(shipment?.shipment?.comments || []);
+  const [comments, setComments] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!shipment?.shipment) {
+      setSelectedStockStatus({});
+      setSelectedDispatchFrom({});
+      setComments([]);
+      return;
+    }
+
+    const currentWarehouseCode = shipment.shipment.warehouseCode || '';
+    const nextStockStatus: Record<number, 'yes' | 'no'> = {};
+    const nextDispatch: Record<number, string> = {};
+
+    shipment.shipment.orderLines?.forEach((item: LineItem) => {
+      const isOutOfStock = item.oosWarehouses?.some(
+        (wh: any) =>
+          wh.warehouseCode === currentWarehouseCode && wh.variantId === item.variantId
+      );
+      nextStockStatus[item.id] = isOutOfStock ? 'no' : 'yes';
+      nextDispatch[item.id] = currentWarehouseCode;
+    });
+
+    setSelectedStockStatus(nextStockStatus);
+    setSelectedDispatchFrom(nextDispatch);
+    setComments(shipment.shipment.comments || []);
+  }, [shipment]);
 
   // Fetch warehouses on component mount
 
@@ -420,17 +419,18 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       return;
     }
 
-    // Group items by warehouse code's first letter
-    const itemsByWarehouseCode: { [key: string]: string[] } = {};
+    const itemsByWarehouseCode: Record<string, string[]> = {};
 
     Object.entries(selectedDispatchFrom).forEach(([itemId, warehouseCode]) => {
-      if (warehouseCode) {
-        const firstLetter = warehouseCode.charAt(0).toUpperCase();
-        if (!itemsByWarehouseCode[firstLetter]) {
-          itemsByWarehouseCode[firstLetter] = [];
-        }
-        itemsByWarehouseCode[firstLetter].push(itemId);
+      if (!warehouseCode) {
+        return;
       }
+
+      if (!itemsByWarehouseCode[warehouseCode]) {
+        itemsByWarehouseCode[warehouseCode] = [];
+      }
+
+      itemsByWarehouseCode[warehouseCode].push(itemId);
     });
 
     if (Object.keys(itemsByWarehouseCode).length === 0) {
@@ -442,17 +442,12 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       return;
     }
 
-    // Map warehouse codes to full names dynamically
-    const warehouseCodeToName = warehouses.reduce((acc: { [key: string]: string }, warehouse) => {
-      const firstLetter = warehouse.code.charAt(0).toUpperCase();
-      acc[firstLetter] = warehouse.name;
-      return acc;
-    }, {});
+    const queryString = Object.entries(itemsByWarehouseCode)
+      .map(([code, itemIds]) => `${encodeURIComponent(code)}=${encodeURIComponent(itemIds.join(','))}`)
+      .join('&');
 
-    const params = Object.entries(itemsByWarehouseCode)
-      .map(([code, itemIds]) => `${warehouseCodeToName[code]}=${itemIds.join(',')}`);
+    const url = `https://ship-orders.vpa.com.au/api/shipments/move/${shipment.shipment.id}?${queryString}`;
 
-    const url = `https://ship-orders.vpa.com.au/api/shipments/move/${shipment.shipment.id}?${params.join('&')}`;
     try {
       const response = await fetch(url, {
         method: 'PATCH',
@@ -466,7 +461,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       }
       const result = await response.json();
       if (result.success) {
-        setAction(prev => prev + 1);
+        setAction((prev) => prev + 1);
         toast({
           title: "Move Successful",
           description: "Selected items have been moved.",
@@ -672,10 +667,10 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                       {warehouses.map((warehouse) => (
                         <button
                           key={warehouse.code}
-                          onClick={() => item?.oosWarehouses?.find((w: any) => w.warehouseCode[0] === warehouse.code[0])?.id ? handleMarkInStock(item, warehouse.code) : handleMarkOutOfStock(item, warehouse.code)}
-                          className={`px-2 py-1 ${item?.oosWarehouses?.find((w: any) => w.warehouseCode[0] === warehouse.code[0])?.id ? 'bg-red-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'} text-xs font-medium rounded transition-colors`}
+                          onClick={() => item?.oosWarehouses?.find((w: any) => w.warehouseCode === warehouse.code)?.id ? handleMarkInStock(item, warehouse.code) : handleMarkOutOfStock(item, warehouse.code)}
+                          className={`px-2 py-1 ${item?.oosWarehouses?.find((w: any) => w.warehouseCode === warehouse.code)?.id ? 'bg-red-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'} text-xs font-medium rounded transition-colors`}
                         >
-                          {warehouse.code[0]}
+                          {warehouse.code.substring(0, 3).toUpperCase()}
                         </button>
                       ))}
                     </div>
@@ -708,10 +703,10 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                       {warehouses.map((warehouse) => (
                         <button
                           key={warehouse.code}
-                          onClick={() => setSelectedDispatchFrom(prev => ({ ...prev, [item.id]: warehouse.code[0] }))}
-                          className={`px-2 py-1 ${selectedDispatchFrom[item.id] === warehouse.code[0] ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
+                          onClick={() => setSelectedDispatchFrom((prev) => ({ ...prev, [item.id]: warehouse.code }))}
+                          className={`px-2 py-1 ${selectedDispatchFrom[item.id] === warehouse.code ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'} text-xs font-medium rounded transition-colors`}
                         >
-                          {warehouse.code[0]}
+                          {warehouse.code.substring(0, 3).toUpperCase()}
                         </button>
                       ))}
                     </div>
@@ -733,3 +728,5 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     </div>
   );
 }
+
+
