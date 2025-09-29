@@ -54,8 +54,12 @@ export default function LoginPage() {
 
       router.push('/dashboard');
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'An unexpected error occurred during login.';
+      setError(message);
       console.error('Login error:', err);
     } finally {
       setLoading(false);
@@ -133,3 +137,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

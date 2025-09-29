@@ -52,8 +52,12 @@ export default function RegisterPage() {
       // Optionally redirect to login page after a delay or upon success message acknowledgement
       // router.push('/login');
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'An unexpected error occurred during registration.';
+      setError(message);
       console.error('Registration error:', err);
     } finally {
       setLoading(false);
