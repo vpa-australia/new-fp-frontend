@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, Lock, Unlock, Loader, Settings } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ShipmentDetailView } from './ShipmentDetailView';
+import { ShipmentDetailView, type ShipmentDetailResponse } from './ShipmentDetailView';
 import { useToast } from '@/hooks/use-toast';
 import { AiFillHdd } from "react-icons/ai";
 import { PiCubeFocusBold } from "react-icons/pi";
@@ -64,6 +64,40 @@ interface StatusOption {
   greenTick: boolean;
 }
 
+type SearchParameter = {
+  name: string;
+  column: string;
+  type: string;
+  weight: number;
+};
+
+type SearchParametersResponse = {
+  success: boolean;
+  searchParameters?: Record<string, SearchParameter>;
+};
+
+type StatusApiStatus = {
+  id: number;
+  name: string;
+  allowShipped: boolean;
+  greenTick: boolean;
+};
+
+type StatusApiResponse = {
+  success: boolean;
+  statuses?: StatusApiStatus[];
+};
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.length > 0) {
+    return error;
+  }
+  return fallback;
+};
+
 const defaultStatusOptions: StatusOption[] = [];
 
 type ShipmentsTableProps = {
@@ -101,7 +135,6 @@ export function ShipmentsTable({
   setCurrentPage,
   setItemsPerPage,
   lastPage,
-  totalItems,
   selectedWarehouse,
   shipmentsAreLoading,
 }: ShipmentsTableProps) {
@@ -162,7 +195,7 @@ export function ShipmentsTable({
         if (errorData?.message) {
           message = errorData.message;
         }
-      } catch (error) {
+      } catch {
         // ignore JSON parsing errors
       }
 
@@ -183,7 +216,7 @@ export function ShipmentsTable({
   }, [toast]);
   const [isPdfOpen, setIsPdfOpen] = useState(false);
   const [pdfTitle, setPdfTitle] = useState<string>("");
-  const [detailedShipment, setDetailedShipment] = useState<Shipment | null>(
+  const [detailedShipment, setDetailedShipment] = useState<ShipmentDetailResponse | null>(
     null
   );
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -191,12 +224,7 @@ export function ShipmentsTable({
     useState<StatusOption[]>(defaultStatusOptions);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
-  const [searchFields, setSearchFields] = useState<
-    Record<
-      string,
-      { name: string; column: string; type: string; weight: number }
-    >
-  >({});
+  const [searchFields, setSearchFields] = useState<Record<string, SearchParameter>>({});
   const [searchValues, setSearchValues] = useState<Record<string, string>>({});
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>(
     {}
@@ -235,7 +263,7 @@ export function ShipmentsTable({
     try {
       // Notify parent component that an action is being performed
       setAction((prev) => prev + 1);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error in fetchShipments:", error);
       toast({
         variant: "destructive",
@@ -273,7 +301,7 @@ export function ShipmentsTable({
           throw new Error("Failed to fetch search parameters");
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as SearchParametersResponse;
         if (data && data.success && data.searchParameters) {
           setSearchFields(data.searchParameters);
 
@@ -307,7 +335,7 @@ export function ShipmentsTable({
               ) {
                 // Fall back to default top fields
                 const topFields = Object.entries(data.searchParameters)
-                  .sort((a: any, b: any) => b[1].weight - a[1].weight)
+                  .sort(([, a], [, b]) => b.weight - a.weight)
                   .slice(0, 5)
                   .map(([key]) => key);
 
@@ -315,11 +343,11 @@ export function ShipmentsTable({
                   initialVisibleFields[key] = topFields.includes(key);
                 });
               }
-            } catch (e) {
-              console.error("Error parsing saved search fields:", e);
+            } catch (error: unknown) {
+              console.error("Error parsing saved search fields:", error);
               // Fall back to default top fields
               const topFields = Object.entries(data.searchParameters)
-                .sort((a: any, b: any) => b[1].weight - a[1].weight)
+                .sort(([, a], [, b]) => b.weight - a.weight)
                 .slice(0, 5)
                 .map(([key]) => key);
 
@@ -330,7 +358,7 @@ export function ShipmentsTable({
           } else {
             // No saved fields, use default top fields
             const topFields = Object.entries(data.searchParameters)
-              .sort((a: any, b: any) => b[1].weight - a[1].weight)
+              .sort(([, a], [, b]) => b.weight - a.weight)
               .slice(0, 5)
               .map(([key]) => key);
 
@@ -347,7 +375,7 @@ export function ShipmentsTable({
           setVisibleFields(initialVisibleFields);
           setSearchValues(initialSearchValues);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching search parameters:", error);
         toast({
           variant: "destructive",
@@ -383,9 +411,9 @@ export function ShipmentsTable({
           throw new Error("Failed to fetch status options");
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as StatusApiResponse;
         if (data && data.success && data.statuses) {
-          const formattedStatuses = data.statuses.map((status: any) => ({
+          const formattedStatuses = data.statuses.map((status) => ({
             value: status.id.toString(),
             label: status.name,
             allowShipped: status.allowShipped,
@@ -394,7 +422,7 @@ export function ShipmentsTable({
 
           setStatusOptions(formattedStatuses);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error fetching status options:", error);
         setStatusOptions([]);
       } finally {
@@ -403,7 +431,7 @@ export function ShipmentsTable({
     };
 
     fetchStatusOptions();
-  }, []);
+  }, [toast]);
 
   // Calculate which edge is closest and snap to it
   const snapToEdge = useCallback(
@@ -501,7 +529,7 @@ export function ShipmentsTable({
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, dragOffset, position]);
+  }, [isDragging, dragOffset, position, snapToEdge]);
 
   // Initialize position on mount
   useEffect(() => {
@@ -598,7 +626,7 @@ export function ShipmentsTable({
           );
         }
 
-        const result = await response.json();
+        await response.json();
         toast({
           variant: "success",
           title: "Status Updated",
@@ -606,23 +634,23 @@ export function ShipmentsTable({
         });
 
         setAction((prev) => prev + 1);
-      } catch (error: any) {
+      } catch (error: unknown) {
         //
         console.error("Error updating shipment status:", error);
         toast({
           variant: "destructive",
           title: "Update Failed",
-          description: error.message || "Failed to update shipment status.",
+          description: getErrorMessage(error, "Failed to update shipment status."),
         });
       }
     },
-    [toast, setAction, selectedRows]
+    [toast, setAction]
   );
 
   const handleBulkStatusChange = useCallback(
     async (newStatusId: string) => {
       const selectedIds = Object.entries(selectedRows)
-        .filter(([_, isChecked]) => isChecked)
+        .filter(([, isChecked]) => isChecked)
         .map(([id]) => parseInt(id, 10));
 
       if (selectedIds.length === 0) {
@@ -669,7 +697,7 @@ export function ShipmentsTable({
           );
         }
 
-        const result = await response.json();
+        await response.json();
         toast({
           variant: "success",
           title: "Shipment Refreshed",
@@ -677,12 +705,12 @@ export function ShipmentsTable({
         });
 
         setAction((prev) => prev + 1);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error refreshing shipment:", error);
         toast({
           variant: "destructive",
           title: "Refresh Failed",
-          description: error.message || "Failed to refresh shipment.",
+          description: getErrorMessage(error, "Failed to refresh shipment."),
         });
       }
     },
@@ -691,7 +719,7 @@ export function ShipmentsTable({
 
   const handleMarkShipmentsAsShipped = useCallback(async () => {
     const checkedIds = Object.entries(selectedRows)
-      .filter(([_, isChecked]) => isChecked)
+      .filter(([, isChecked]) => isChecked)
       .map(([id]) => id.toString());
 
     if (checkedIds.length === 0) {
@@ -735,7 +763,7 @@ export function ShipmentsTable({
         );
       }
 
-      const result = await response.json();
+      await response.json();
       toast({
         variant: "success",
         title: "Success",
@@ -750,19 +778,19 @@ export function ShipmentsTable({
       // if (onStatusUpdateSuccess) {
       //   onStatusUpdateSuccess();
       // }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error marking shipments as shipped:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message || "Failed to mark shipments as shipped.",
+        description: getErrorMessage(error, "Failed to mark shipments as shipped."),
       });
     }
   }, [selectedRows, toast, setAction, setSelectedRows]);
 
   const handleMarkShipmentsAsNotShipped = useCallback(async () => {
     const checkedIds = Object.entries(selectedRows)
-      .filter(([_, isChecked]) => isChecked)
+      .filter(([, isChecked]) => isChecked)
       .map(([id]) => id.toString());
 
     if (checkedIds.length === 0) {
@@ -807,7 +835,7 @@ export function ShipmentsTable({
         );
       }
 
-      const result = await response.json();
+      await response.json();
       toast({
         title: "Success",
         description: "Selected shipments have been marked as not shipped.",
@@ -817,13 +845,13 @@ export function ShipmentsTable({
 
       // Clear selected rows
       setSelectedRows({});
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error marking shipments as not shipped:", error);
       toast({
         variant: "destructive",
         title: "Operation Failed",
         description:
-          error.message || "Failed to mark shipments as not shipped.",
+          getErrorMessage(error, "Failed to mark shipments as not shipped."),
       });
     }
   }, [selectedRows, toast, setAction, setSelectedRows]);
@@ -859,15 +887,15 @@ export function ShipmentsTable({
           throw new Error("Failed to fetch shipment details");
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as ShipmentDetailResponse;
         setDetailedShipment(data);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error fetching shipment details:", error);
         setDetailedShipment(null);
         toast({
           variant: "destructive",
           title: "Error",
-          description: error.message || "Failed to fetch shipment details.",
+          description: getErrorMessage(error, "Failed to fetch shipment details."),
         });
       } finally {
         setIsLoadingDetail(false);
@@ -935,7 +963,7 @@ export function ShipmentsTable({
           });
           setAction((prev) => prev + 1);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error updating UNL status:", error);
         toast({
           variant: "destructive",
@@ -944,7 +972,7 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction, selectedRows]
+    [toast, setAction]
   );
 
   const handleLockUnlockShipment = useCallback(
@@ -987,7 +1015,7 @@ export function ShipmentsTable({
           });
           setAction((prev) => prev + 1);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           `Error ${shipment.locked ? "unlocking" : "locking"} shipment:`,
           error
@@ -1001,7 +1029,7 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction, selectedRows]
+    [toast, setAction]
   );
 
   const handleDeleteShipment = useCallback(
@@ -1033,7 +1061,7 @@ export function ShipmentsTable({
           try {
             const errorData = await response.json();
             errorMessage = errorData.message || errorMessage;
-          } catch (e) {
+          } catch {
             // Ignore if response is not JSON or empty
           }
           throw new Error(errorMessage);
@@ -1052,21 +1080,21 @@ export function ShipmentsTable({
         // if (onStatusUpdateSuccess) {
         //   onStatusUpdateSuccess();
         // }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error deleting shipment:", error);
         toast({
           variant: "destructive",
           title: "Delete Failed",
-          description: error.message || "Failed to delete shipment.",
+          description: getErrorMessage(error, "Failed to delete shipment."),
         });
       }
     },
-    [toast, setAction, selectedRows]
+    [toast, setAction]
   );
 
   const handleGenerateLabels = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
-      .filter(([_, isChecked]) => isChecked)
+      .filter(([, isChecked]) => isChecked)
       .map(([id]) => id);
 
     if (selectedIds.length === 0) {
@@ -1119,19 +1147,19 @@ export function ShipmentsTable({
       setAction((prev) => prev + 1);
       setStillInProgress(false);
       setSelectedRows({});
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error generating labels:", error);
       toast({
         variant: "destructive",
         title: "Generation Failed",
-        description: error.message || "Failed to generate labels.",
+        description: getErrorMessage(error, "Failed to generate labels."),
       });
     }
-  }, [selectedRows, toast, setPdfUrl, setIsPdfOpen, setPdfTitle, setAction]);
+  }, [selectedRows, toast, setAction]);
 
   const handleQuickPrint = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
-      .filter(([_, isChecked]) => isChecked)
+      .filter(([, isChecked]) => isChecked)
       .map(([id]) => id);
 
     if (selectedIds.length === 0) {
@@ -1186,19 +1214,19 @@ export function ShipmentsTable({
         description: "Labels are ready for printing.",
       });
       setAction((prev) => prev + 1);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error during quick print:", error);
       toast({
         variant: "destructive",
         title: "Quick Print Failed",
-        description: error.message || "Failed to quick print labels.",
+        description: getErrorMessage(error, "Failed to quick print labels."),
       });
     }
-  }, [selectedRows, toast, setPdfUrl, setIsPdfOpen, setPdfTitle, setAction]);
+  }, [selectedRows, toast, setAction]);
 
   const handleInvoicePrint = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
-      .filter(([_, isChecked]) => isChecked)
+      .filter(([, isChecked]) => isChecked)
       .map(([id]) => id);
 
     if (selectedIds.length === 0) {
@@ -1254,15 +1282,15 @@ export function ShipmentsTable({
         description: "The invoice PDF has been generated successfully.",
       });
       setAction((prev) => prev + 1);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error during Invoices print:", error);
       toast({
         variant: "destructive",
         title: "Invoice Generation Failed",
-        description: error.message || "Failed to generate invoice PDF.",
+        description: getErrorMessage(error, "Failed to generate invoice PDF."),
       });
     }
-  }, [toast, setAction, selectedRows]);
+  }, [selectedRows, toast, setAction]);
 
   const handlePdfClose = useCallback(() => {
     setIsPdfOpen(false);
@@ -1270,7 +1298,7 @@ export function ShipmentsTable({
       window.URL.revokeObjectURL(pdfUrl);
       setPdfUrl("");
     }
-  }, [toast, setAction]);
+  }, [pdfUrl]);
 
   const handleRestoreShipment = useCallback(
     async (shipmentId: number) => {
@@ -1310,12 +1338,12 @@ export function ShipmentsTable({
           description: `Shipment $${shipmentId} has been restored successfully.`,
         });
         setAction((prev) => prev + 1); // Refresh data
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error restoring shipment:", error);
         toast({
           variant: "destructive",
           title: "Restore Failed",
-          description: error.message || "Failed to restore shipment.",
+          description: getErrorMessage(error, "Failed to restore shipment."),
         });
       }
     },
@@ -1360,11 +1388,11 @@ export function ShipmentsTable({
           description: `Label for shipment $${shipmentId} has been deleted successfully.`,
         });
         setAction((prev) => prev + 1);
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast({
           variant: "destructive",
           title: "Delete Failed",
-          description: error.message || "Failed to delete label.",
+          description: getErrorMessage(error, "Failed to delete label."),
         });
       }
     },
@@ -1409,12 +1437,12 @@ export function ShipmentsTable({
           description: "Labels have been generated successfully.",
         });
         setAction((prev) => prev + 1);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error generating labels:", error);
         toast({
           variant: "destructive",
           title: "Generation Failed",
-          description: error.message || "Failed to generate labels.",
+          description: getErrorMessage(error, "Failed to generate labels."),
         });
       }
     },
@@ -1477,7 +1505,7 @@ export function ShipmentsTable({
                 />
               </div>
             </TooltipTrigger>
-            <TooltipContent side={getTooltipSide() as any}>
+            <TooltipContent side={getTooltipSide()}>
               <p>Drag to move toolbar</p>
             </TooltipContent>
           </Tooltip>
@@ -1523,7 +1551,7 @@ export function ShipmentsTable({
                   <FileText className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={getTooltipSide() as any}>
+              <TooltipContent side={getTooltipSide()}>
                 <p>Print Invoices</p>
               </TooltipContent>
             </Tooltip>
@@ -1539,7 +1567,7 @@ export function ShipmentsTable({
                   <Tag className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={getTooltipSide() as any}>
+              <TooltipContent side={getTooltipSide()}>
                 <p>Generate Labels</p>
               </TooltipContent>
             </Tooltip>
@@ -1555,7 +1583,7 @@ export function ShipmentsTable({
                   <Zap className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={getTooltipSide() as any}>
+              <TooltipContent side={getTooltipSide()}>
                 <p>Quick Print</p>
               </TooltipContent>
             </Tooltip>
@@ -1571,7 +1599,7 @@ export function ShipmentsTable({
                   <Check className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={getTooltipSide() as any}>
+              <TooltipContent side={getTooltipSide()}>
                 <p>Mark Shipped</p>
               </TooltipContent>
             </Tooltip>
@@ -1587,7 +1615,7 @@ export function ShipmentsTable({
                   <X className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={getTooltipSide() as any}>
+              <TooltipContent side={getTooltipSide()}>
                 <p>Mark Not Shipped</p>
               </TooltipContent>
             </Tooltip>
@@ -1598,7 +1626,7 @@ export function ShipmentsTable({
                   <Send className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={getTooltipSide() as any}>
+              <TooltipContent side={getTooltipSide()}>
                 <p>Manifest</p>
               </TooltipContent>
             </Tooltip>
@@ -1608,7 +1636,7 @@ export function ShipmentsTable({
                   <QrCode className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={getTooltipSide() as any}>
+              <TooltipContent side={getTooltipSide()}>
                 <p>Manifest Codes</p>
               </TooltipContent>
             </Tooltip>
@@ -2247,7 +2275,7 @@ export function ShipmentsTable({
                                     carrierCode: shipment.carrierCode || '',
                                   });
                                   setOpenPdfDialogId(null);
-                                } catch (error) {
+                                } catch {
                                   // errors handled in handlePdfUpload
                                 }
                               }}
@@ -2316,9 +2344,9 @@ export function ShipmentsTable({
                                   </div>
                                   <div className="space-y-2">
                                     <input
-                                      ref={(node) =>
-                                        (fileInputRefs.current[shipment.id] = node)
-                                      }
+                                      ref={(node) => {
+                                        fileInputRefs.current[shipment.id] = node;
+                                      }}
                                       type="file"
                                       accept=".pdf"
                                       className="hidden"
@@ -2527,7 +2555,7 @@ export function ShipmentsTable({
                     ) : (
                       <MemoizedShipmentDetailView
                         setAction={setDetailAction}
-                        shipment={detailedShipment as any}
+                        shipment={detailedShipment}
                       />
                     )}
                   </TableCell>
@@ -2563,5 +2591,3 @@ export function ShipmentsTable({
     </>
   );
 }
-
-
