@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -41,6 +42,7 @@ interface UpdateUserData {
 }
 
 export default function UsersTab() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -241,7 +243,12 @@ export default function UsersTab() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>User Management</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>User Management</CardTitle>
+          <Button variant="outline" onClick={() => router.push('/dashboard/user')}>
+            Edit My Profile
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="flex justify-end mb-4">
@@ -406,3 +413,8 @@ export default function UsersTab() {
     </Card>
   );
 }
+
+
+
+
+
