@@ -112,12 +112,22 @@ export default function UsersTab() {
     }
   };
 
+  const handleEditRoleChange = (role: string, checked: boolean) => {
+    setEditUserData((prev) => ({
+      ...prev,
+      roles: checked
+        ? Array.from(new Set([...prev.roles, role]))
+        : prev.roles.filter((r) => r !== role),
+    }));
+  };
+
   const handleUpdateUser = (user: User) => {
     setSelectedUser(user);
     setEditUserData({
       name: user.data.name,
       password: '',
       confirmPassword: '',
+      roles: user.roles.roles || [],
     });
     setIsEditUserDialogOpen(true);
   };
@@ -127,34 +137,43 @@ export default function UsersTab() {
 
     setIsSubmitting(true);
 
-    const payload: { name?: string; password?: string; password_confirmation?: string } = {};
     const trimmedName = editUserData.name.trim();
+    const hasNameChange = Boolean(trimmedName && trimmedName !== selectedUser.data.name);
+    const hasPasswordChange = Boolean(editUserData.password);
 
-    if (trimmedName && trimmedName !== selectedUser.data.name) {
-      payload.name = trimmedName;
+    if (hasPasswordChange && editUserData.password !== editUserData.confirmPassword) {
+      setIsSubmitting(false);
+      toast({
+        title: 'Validation error',
+        description: 'Passwords do not match. Please try again.',
+        variant: 'destructive',
+      });
+      return;
     }
 
-    if (editUserData.password) {
-      if (editUserData.password !== editUserData.confirmPassword) {
-        setIsSubmitting(false);
-        toast({
-          title: 'Validation error',
-          description: 'Passwords do not match. Please try again.',
-          variant: 'destructive'
-        });
-        return;
-      }
+    const existingRoles = selectedUser.roles?.roles ?? [];
+    const sortedExistingRoles = [...existingRoles].sort();
+    const sortedNewRoles = [...editUserData.roles].sort();
+    const rolesChanged =
+      sortedExistingRoles.length !== sortedNewRoles.length ||
+      sortedExistingRoles.some((role, index) => role !== sortedNewRoles[index]);
 
-      payload.password = editUserData.password;
-      payload.password_confirmation = editUserData.confirmPassword;
+    if (rolesChanged && editUserData.roles.length === 0) {
+      setIsSubmitting(false);
+      toast({
+        title: 'Validation error',
+        description: 'Select at least one role before saving.',
+        variant: 'destructive',
+      });
+      return;
     }
 
-    if (Object.keys(payload).length === 0) {
+    if (!hasNameChange && !hasPasswordChange && !rolesChanged) {
       setIsSubmitting(false);
       toast({
         title: 'No changes detected',
-        description: 'Update the name or password before saving.',
-        variant: 'destructive'
+        description: 'Update the name, password, or roles before saving.',
+        variant: 'destructive',
       });
       return;
     }
@@ -162,13 +181,30 @@ export default function UsersTab() {
     try {
       const token = localStorage.getItem('authToken');
 
+      const params = new URLSearchParams();
+
+      if (hasNameChange) {
+        params.append('name', trimmedName);
+      }
+
+      if (hasPasswordChange) {
+        params.append('password', editUserData.password);
+        params.append('password_confirmation', editUserData.confirmPassword);
+      }
+
+      if (rolesChanged) {
+        editUserData.roles.forEach((role, index) => {
+          params.append(`roles[${index}]`, role);
+        });
+      }
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/users/${selectedUser.data.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify(payload)
+        body: params.toString(),
       });
 
       if (!response.ok) {
@@ -186,33 +222,45 @@ export default function UsersTab() {
         description: 'User updated successfully',
       });
 
-      const updatedUsers = users.map(user => {
-        if (user.data.id === selectedUser.data.id && payload.name) {
+      const updatedName = hasNameChange ? trimmedName : selectedUser.data.name;
+      const updatedRoles = rolesChanged ? [...editUserData.roles] : existingRoles;
+
+      const updatedUsers = users.map((user) => {
+        if (user.data.id === selectedUser.data.id) {
           return {
             ...user,
             data: {
               ...user.data,
-              name: payload.name
-            }
+              name: updatedName,
+            },
+            roles: rolesChanged ? { ...user.roles, roles: updatedRoles } : user.roles,
           };
         }
         return user;
       });
 
       setUsers(updatedUsers);
-      const updatedName = payload.name ?? selectedUser.data.name;
-      setSelectedUser(prev => (prev ? { ...prev, data: { ...prev.data, name: updatedName } } : prev));
+      setSelectedUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              data: { ...prev.data, name: updatedName },
+              roles: rolesChanged ? { ...prev.roles, roles: updatedRoles } : prev.roles,
+            }
+          : prev
+      );
       setEditUserData({
         name: updatedName,
         password: '',
-        confirmPassword: ''
+        confirmPassword: '',
+        roles: updatedRoles,
       });
       setIsEditUserDialogOpen(false);
     } catch (err) {
       toast({
         title: 'Error',
         description: err instanceof Error ? err.message : 'Failed to update user',
-        variant: 'destructive'
+        variant: 'destructive',
       });
     } finally {
       setIsSubmitting(false);
@@ -459,6 +507,27 @@ export default function UsersTab() {
                   onChange={(e) => setEditUserData({ ...editUserData, confirmPassword: e.target.value })}
                   className="col-span-3"
                 />
+              </div>
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label className="text-right pt-2">Roles</Label>
+                <div className="col-span-3 space-y-2">
+                  {availableRoles.length > 0 ? (
+                    availableRoles.map((role) => (
+                      <div key={`edit-role-${role}`} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`edit-role-${role}`}
+                          checked={editUserData.roles.includes(role)}
+                          onCheckedChange={(checked) =>
+                            handleEditRoleChange(role, checked === true)
+                          }
+                        />
+                        <Label htmlFor={`edit-role-${role}`}>{role}</Label>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500">No roles available</p>
+                  )}
+                </div>
               </div>
             </div>
             <DialogFooter>
