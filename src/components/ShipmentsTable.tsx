@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -257,6 +257,33 @@ export function ShipmentsTable({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [edge, setEdge] = useState<EdgePosition>("bottom");
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const getDefaultToolbarPosition = useCallback(() => {
+    if (!toolbarRef.current) {
+      return null;
+    }
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const toolbarWidth = toolbarRef.current.offsetWidth;
+    const toolbarHeight = toolbarRef.current.offsetHeight;
+
+    return {
+      x: Math.max(20, (viewportWidth - toolbarWidth) / 2),
+      y: viewportHeight - toolbarHeight - 20,
+    };
+  }, []);
+
+  const repositionToolbar = useCallback(() => {
+    const defaultPosition = getDefaultToolbarPosition();
+
+    if (!defaultPosition) {
+      return false;
+    }
+
+    setEdge('bottom');
+    setPosition(defaultPosition);
+    return true;
+  }, [getDefaultToolbarPosition]);
 
   // Function to fetch shipments with search parameters
   const fetchShipments = useCallback(async () => {
@@ -532,19 +559,39 @@ export function ShipmentsTable({
   }, [isDragging, dragOffset, position, snapToEdge]);
 
   // Initialize position on mount
-  useEffect(() => {
-    if (toolbarRef.current) {
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const toolbarWidth = toolbarRef.current.offsetWidth;
-      const toolbarHeight = toolbarRef.current.offsetHeight;
+  useLayoutEffect(() => {
+    const didReposition = repositionToolbar();
 
-      setPosition({
-        x: Math.max(20, (viewportWidth - toolbarWidth) / 2),
-        y: viewportHeight - toolbarHeight - 20,
-      });
+    if (didReposition) {
+      return;
     }
-  }, []);
+
+    const frameId = window.requestAnimationFrame(() => {
+      repositionToolbar();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [repositionToolbar]);
+
+  useLayoutEffect(() => {
+    let frameId = 0;
+
+    const applyPosition = () => {
+      const didReposition = repositionToolbar();
+
+      if (!didReposition) {
+        frameId = window.requestAnimationFrame(applyPosition);
+      }
+    };
+
+    applyPosition();
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [selectedWarehouse, shipments, shipmentsAreLoading, repositionToolbar]);
 
   const isVertical = edge === "left" || edge === "right";
 

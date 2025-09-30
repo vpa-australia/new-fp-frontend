@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -39,10 +38,11 @@ interface UsersResponse {
 
 interface UpdateUserData {
   name: string;
+  password: string;
+  confirmPassword: string;
 }
 
 export default function UsersTab() {
-  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +55,9 @@ export default function UsersTab() {
     roles: [] as string[]
   });
   const [editUserData, setEditUserData] = useState<UpdateUserData>({
-    name: ''
+    name: '',
+    password: '',
+    confirmPassword: '',
   });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
@@ -113,7 +115,9 @@ export default function UsersTab() {
   const handleUpdateUser = (user: User) => {
     setSelectedUser(user);
     setEditUserData({
-      name: user.data.name
+      name: user.data.name,
+      password: '',
+      confirmPassword: '',
     });
     setIsEditUserDialogOpen(true);
   };
@@ -122,6 +126,38 @@ export default function UsersTab() {
     if (!selectedUser) return;
 
     setIsSubmitting(true);
+
+    const payload: { name?: string; password?: string; password_confirmation?: string } = {};
+    const trimmedName = editUserData.name.trim();
+
+    if (trimmedName && trimmedName !== selectedUser.data.name) {
+      payload.name = trimmedName;
+    }
+
+    if (editUserData.password) {
+      if (editUserData.password !== editUserData.confirmPassword) {
+        setIsSubmitting(false);
+        toast({
+          title: 'Validation error',
+          description: 'Passwords do not match. Please try again.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      payload.password = editUserData.password;
+      payload.password_confirmation = editUserData.confirmPassword;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      setIsSubmitting(false);
+      toast({
+        title: 'No changes detected',
+        description: 'Update the name or password before saving.',
+        variant: 'destructive'
+      });
+      return;
+    }
 
     try {
       const token = localStorage.getItem('authToken');
@@ -132,7 +168,7 @@ export default function UsersTab() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(editUserData)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -150,14 +186,13 @@ export default function UsersTab() {
         description: 'User updated successfully',
       });
 
-      // Update the user in the local state
       const updatedUsers = users.map(user => {
-        if (user.data.id === selectedUser.data.id) {
+        if (user.data.id === selectedUser.data.id && payload.name) {
           return {
             ...user,
             data: {
               ...user.data,
-              name: editUserData.name
+              name: payload.name
             }
           };
         }
@@ -165,6 +200,13 @@ export default function UsersTab() {
       });
 
       setUsers(updatedUsers);
+      const updatedName = payload.name ?? selectedUser.data.name;
+      setSelectedUser(prev => (prev ? { ...prev, data: { ...prev.data, name: updatedName } } : prev));
+      setEditUserData({
+        name: updatedName,
+        password: '',
+        confirmPassword: ''
+      });
       setIsEditUserDialogOpen(false);
     } catch (err) {
       toast({
@@ -243,12 +285,7 @@ export default function UsersTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>User Management</CardTitle>
-          <Button variant="outline" onClick={() => router.push('/dashboard/user')}>
-            Edit My Profile
-          </Button>
-        </div>
+        <CardTitle>User Management</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="flex justify-end mb-4">
@@ -395,6 +432,31 @@ export default function UsersTab() {
                   id="edit-name"
                   value={editUserData.name}
                   onChange={(e) => setEditUserData({ ...editUserData, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-password" className="text-right">
+                  New Password
+                </Label>
+                <Input
+                  id="edit-password"
+                  type="password"
+                  value={editUserData.password}
+                  onChange={(e) => setEditUserData({ ...editUserData, password: e.target.value })}
+                  className="col-span-3"
+                  placeholder="Leave blank to keep current password"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-confirm-password" className="text-right">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="edit-confirm-password"
+                  type="password"
+                  value={editUserData.confirmPassword}
+                  onChange={(e) => setEditUserData({ ...editUserData, confirmPassword: e.target.value })}
                   className="col-span-3"
                 />
               </div>
