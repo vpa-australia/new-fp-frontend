@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -88,6 +88,80 @@ type StatusApiResponse = {
   statuses?: StatusApiStatus[];
 };
 
+type OrderDatePresetKey = 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'lastMonth';
+
+type OrderDateRange = {
+  from: string;
+  to: string;
+};
+
+type OrderDateFieldConfig = {
+  from: { key: string; column: string } | null;
+  to: { key: string; column: string } | null;
+  single: { key: string; column: string } | null;
+};
+
+const formatDateForApi = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return [year, month, day].join('-');
+};
+
+const ORDER_DATE_PRESETS: Record<OrderDatePresetKey, { label: string; getRange: () => OrderDateRange }> = {
+  today: {
+    label: 'Today',
+    getRange: () => {
+      const now = new Date();
+      return { from: formatDateForApi(now), to: formatDateForApi(now) };
+    },
+  },
+  yesterday: {
+    label: 'Yesterday',
+    getRange: () => {
+      const now = new Date();
+      now.setDate(now.getDate() - 1);
+      return { from: formatDateForApi(now), to: formatDateForApi(now) };
+    },
+  },
+  last7: {
+    label: 'Last 7 Days',
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() - 6);
+      return { from: formatDateForApi(start), to: formatDateForApi(now) };
+    },
+  },
+  last30: {
+    label: 'Last 30 Days',
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() - 29);
+      return { from: formatDateForApi(start), to: formatDateForApi(now) };
+    },
+  },
+  thisMonth: {
+    label: 'This Month',
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: formatDateForApi(start), to: formatDateForApi(now) };
+    },
+  },
+  lastMonth: {
+    label: 'Last Month',
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { from: formatDateForApi(start), to: formatDateForApi(end) };
+    },
+  },
+};
+
+const ORDER_DATE_PRESET_KEYS = Object.keys(ORDER_DATE_PRESETS) as OrderDatePresetKey[];
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -226,6 +300,15 @@ export function ShipmentsTable({
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
   const [searchFields, setSearchFields] = useState<Record<string, SearchParameter>>({});
   const [searchValues, setSearchValues] = useState<Record<string, string>>({});
+  const [initialSearchValues, setInitialSearchValues] =
+    useState<Record<string, string>>({});
+  const [selectedOrderDateRange, setSelectedOrderDateRange] = useState<
+    'all' | 'custom' | OrderDatePresetKey
+  >('all');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
+  const [selectedCarrierFilter, setSelectedCarrierFilter] = useState('all');
+  const [selectedManifestFilter, setSelectedManifestFilter] = useState('all');
+  const [selectedStateFilter, setSelectedStateFilter] = useState('all');
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>(
     {}
   );
@@ -300,6 +383,524 @@ export function ShipmentsTable({
     }
   }, [setAction, toast]);
 
+  const findSearchField = useCallback(
+    (
+      matchers: string[],
+      options: { matchAll?: boolean } = {}
+    ): { key: string; column: string } | null => {
+      if (!searchFields || Object.keys(searchFields).length === 0) {
+        return null;
+      }
+
+      const lowerMatchers = matchers.map((matcher) => matcher.toLowerCase());
+      const entry = Object.entries(searchFields).find(([key, field]) => {
+        const haystack = `${key} ${field.column} ${field.name}`.toLowerCase();
+        if (options.matchAll) {
+          return lowerMatchers.every((matcher) => haystack.includes(matcher));
+        }
+        return lowerMatchers.some((matcher) => haystack.includes(matcher));
+      });
+
+      return entry ? { key: entry[0], column: entry[1].column } : null;
+    },
+    [searchFields]
+  );
+
+  const orderDateFieldConfig = useMemo<OrderDateFieldConfig>(() => {
+    if (!searchFields || Object.keys(searchFields).length === 0) {
+      return { from: null, to: null, single: null };
+    }
+
+    const orderEntries = Object.entries(searchFields).filter(([key, field]) => {
+      const combined = `${key} ${field.column} ${field.name}`.toLowerCase();
+      return combined.includes('order') && combined.includes('date');
+    });
+
+    if (orderEntries.length === 0) {
+      return { from: null, to: null, single: null };
+    }
+
+    const findEntry = (targets: string[]) =>
+      orderEntries.find(([key, field]) => {
+        const combined = `${key} ${field.column} ${field.name}`.toLowerCase();
+        return targets.some((target) => combined.includes(target));
+      });
+
+    const fromEntry =
+      findEntry(['from', 'start', 'after', '>=']) ??
+      findEntry(['lower', 'min']);
+
+    const toEntry =
+      findEntry(['to', 'end', 'before', '<=']) ?? findEntry(['upper', 'max']);
+
+    if (fromEntry && toEntry) {
+      return {
+        from: { key: fromEntry[0], column: fromEntry[1].column },
+        to: { key: toEntry[0], column: toEntry[1].column },
+        single: null,
+      };
+    }
+
+    if (orderEntries.length === 1) {
+      const [singleKey, singleField] = orderEntries[0];
+      return {
+        from: null,
+        to: null,
+        single: { key: singleKey, column: singleField.column },
+      };
+    }
+
+    if (fromEntry && !toEntry) {
+      const fallback = orderEntries.find(([key]) => key !== fromEntry[0]);
+      if (fallback) {
+        return {
+          from: { key: fromEntry[0], column: fromEntry[1].column },
+          to: { key: fallback[0], column: fallback[1].column },
+          single: null,
+        };
+      }
+    }
+
+    if (!fromEntry && toEntry) {
+      const fallback = orderEntries.find(([key]) => key !== toEntry[0]);
+      if (fallback) {
+        return {
+          from: { key: fallback[0], column: fallback[1].column },
+          to: { key: toEntry[0], column: toEntry[1].column },
+          single: null,
+        };
+      }
+    }
+
+    const [singleKey, singleField] = orderEntries[0];
+    return {
+      from: null,
+      to: null,
+      single: { key: singleKey, column: singleField.column },
+    };
+  }, [searchFields]);
+
+  const statusField = useMemo(
+    () =>
+      findSearchField(['status_id'], { matchAll: true }) ??
+      findSearchField(['status']),
+    [findSearchField]
+  );
+
+  const carrierField = useMemo(
+    () =>
+      findSearchField(['carrier_code'], { matchAll: true }) ??
+      findSearchField(['carrier', 'shipping']),
+    [findSearchField]
+  );
+
+  const manifestField = useMemo(
+    () => findSearchField(['manifest'], { matchAll: false }),
+    [findSearchField]
+  );
+
+  const stateField = useMemo(
+    () =>
+      findSearchField(['state'], { matchAll: true }) ??
+      findSearchField(['region'], { matchAll: true }) ??
+      findSearchField(['state', 'region']),
+    [findSearchField]
+  );
+
+  const carrierOptions = useMemo(() => {
+    if (!shipments || shipments.length === 0) {
+      return [] as string[];
+    }
+
+    const carriers = shipments
+      .map((shipment) => shipment.carrierCode)
+      .filter((code): code is string => Boolean(code && code.trim().length > 0));
+
+    return Array.from(new Set(carriers)).sort((a, b) => a.localeCompare(b));
+  }, [shipments]);
+
+  const stateOptions = useMemo(() => {
+    if (!shipments || shipments.length === 0) {
+      return [] as string[];
+    }
+
+    const states = shipments
+      .map((shipment) => shipment.region)
+      .filter((state): state is string => Boolean(state && state.trim().length > 0));
+
+    return Array.from(new Set(states)).sort((a, b) => a.localeCompare(b));
+  }, [shipments]);
+
+  const statusFilterLabel = useMemo(() => {
+    if (selectedStatusFilter === 'all') {
+      return 'All Status';
+    }
+
+    const match = statusOptions.find(
+      (option) => option.value === selectedStatusFilter
+    );
+
+    return match?.label ?? 'Custom Status';
+  }, [selectedStatusFilter, statusOptions]);
+
+  const carrierFilterLabel = useMemo(() => {
+    if (selectedCarrierFilter === 'all') {
+      return 'All Shipping';
+    }
+    return selectedCarrierFilter.toUpperCase();
+  }, [selectedCarrierFilter]);
+
+  const manifestFilterLabel = useMemo(() => {
+    if (selectedManifestFilter === 'all') {
+      return 'All Manifest';
+    }
+
+    return selectedManifestFilter === 'true' ? 'Manifested' : 'Not Manifested';
+  }, [selectedManifestFilter]);
+
+  const stateFilterLabel = useMemo(() => {
+    if (selectedStateFilter === 'all') {
+      return 'All States';
+    }
+
+    return selectedStateFilter.toUpperCase();
+  }, [selectedStateFilter]);
+
+  const orderDateLabel = useMemo(() => {
+    if (selectedOrderDateRange === 'all') {
+      return 'Order Date';
+    }
+    if (selectedOrderDateRange === 'custom') {
+      return 'Custom Range';
+    }
+    return ORDER_DATE_PRESETS[selectedOrderDateRange].label;
+  }, [selectedOrderDateRange]);
+
+  const executeSearch = useCallback(
+    (values: Record<string, string>) => {
+      if (!searchFields || Object.keys(searchFields).length === 0) {
+        setSearchParams('');
+        setCurrentPage(1);
+        fetchShipments();
+        return;
+      }
+
+      const filters = Object.entries(values)
+        .filter(([key, value]) => {
+          if (!searchFields[key]) {
+            return false;
+          }
+
+          if (value === undefined || value === null) {
+            return false;
+          }
+
+          if (typeof value === 'string') {
+            return value.trim().length > 0;
+          }
+
+          return true;
+        })
+        .reduce((acc, [key, value]) => {
+          const column = searchFields[key]?.column;
+          if (column) {
+            acc[column] = typeof value === 'string' ? value.trim() : value;
+          }
+          return acc;
+        }, {} as Record<string, string>);
+
+      const queryString = Object.entries(filters)
+        .map(
+          ([key, value]) =>
+            `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+        )
+        .join('&');
+
+      setSearchParams(queryString);
+      setCurrentPage(1);
+      fetchShipments();
+    },
+    [fetchShipments, searchFields, setCurrentPage, setSearchParams]
+  );
+
+  const applyAndExecute = useCallback(
+    (updater: (current: Record<string, string>) => Record<string, string>) => {
+      setSearchValues((current) => {
+        const next = updater(current);
+        executeSearch(next);
+        return next;
+      });
+    },
+    [executeSearch]
+  );
+
+  const handleClearFilters = useCallback(() => {
+    const template =
+      Object.keys(initialSearchValues).length > 0
+        ? initialSearchValues
+        : searchValues;
+
+    const clearedValues = Object.keys(template).reduce(
+      (acc, key) => {
+        acc[key] = '';
+        return acc;
+      },
+      {} as Record<string, string>
+    );
+
+    setSelectedOrderDateRange('all');
+    setSelectedStatusFilter('all');
+    setSelectedCarrierFilter('all');
+    setSelectedManifestFilter('all');
+    setSelectedStateFilter('all');
+
+    applyAndExecute(() => ({ ...clearedValues }));
+  }, [
+    applyAndExecute,
+    initialSearchValues,
+    searchValues
+  ]);
+
+  const handleOrderDateFilterChange = useCallback(
+    (value: string) => {
+      if (value === 'custom') {
+        setSelectedOrderDateRange('custom');
+        return;
+      }
+
+      const nextSelected =
+        value === 'all' ? 'all' : (value as OrderDatePresetKey);
+
+      setSelectedOrderDateRange(nextSelected);
+
+      if (
+        !orderDateFieldConfig.from &&
+        !orderDateFieldConfig.to &&
+        !orderDateFieldConfig.single
+      ) {
+        return;
+      }
+
+      applyAndExecute((current) => {
+        const next = { ...current };
+
+        if (orderDateFieldConfig.from) {
+          next[orderDateFieldConfig.from.key] = '';
+        }
+        if (orderDateFieldConfig.to) {
+          next[orderDateFieldConfig.to.key] = '';
+        }
+        if (orderDateFieldConfig.single) {
+          next[orderDateFieldConfig.single.key] = '';
+        }
+
+        if (nextSelected !== 'all') {
+          const range = ORDER_DATE_PRESETS[nextSelected as OrderDatePresetKey].getRange();
+
+          if (range) {
+            if (orderDateFieldConfig.from && orderDateFieldConfig.to) {
+              next[orderDateFieldConfig.from.key] = range.from;
+              next[orderDateFieldConfig.to.key] = range.to;
+            } else if (orderDateFieldConfig.single) {
+              next[orderDateFieldConfig.single.key] = range.from;
+            }
+          }
+        }
+
+        return next;
+      });
+    },
+    [applyAndExecute, orderDateFieldConfig]
+  );
+
+  const handleStatusFilterChange = useCallback(
+    (value: string) => {
+      setSelectedStatusFilter(value);
+      if (!statusField) {
+        return;
+      }
+
+      applyAndExecute((current) => ({
+        ...current,
+        [statusField.key]: value === 'all' ? '' : value,
+      }));
+    },
+    [applyAndExecute, statusField]
+  );
+
+  const handleCarrierFilterChange = useCallback(
+    (value: string) => {
+      setSelectedCarrierFilter(value);
+      if (!carrierField) {
+        return;
+      }
+
+      applyAndExecute((current) => ({
+        ...current,
+        [carrierField.key]: value === 'all' ? '' : value,
+      }));
+    },
+    [applyAndExecute, carrierField]
+  );
+
+  const handleManifestFilterChange = useCallback(
+    (value: string) => {
+      setSelectedManifestFilter(value);
+      if (!manifestField) {
+        return;
+      }
+
+      applyAndExecute((current) => ({
+        ...current,
+        [manifestField.key]: value === 'all' ? '' : value,
+      }));
+    },
+    [applyAndExecute, manifestField]
+  );
+
+  const handleStateFilterChange = useCallback(
+    (value: string) => {
+      setSelectedStateFilter(value);
+      if (!stateField) {
+        return;
+      }
+
+      applyAndExecute((current) => ({
+        ...current,
+        [stateField.key]: value === 'all' ? '' : value,
+      }));
+    },
+    [applyAndExecute, stateField]
+  );
+
+  useEffect(() => {
+    if (!statusField) {
+      return;
+    }
+
+    const value = searchValues[statusField.key] ?? '';
+
+    if (!value && selectedStatusFilter !== 'all') {
+      setSelectedStatusFilter('all');
+      return;
+    }
+
+    if (value && value !== selectedStatusFilter) {
+      setSelectedStatusFilter(value);
+    }
+  }, [searchValues, statusField, selectedStatusFilter]);
+
+  useEffect(() => {
+    if (!carrierField) {
+      return;
+    }
+
+    const value = searchValues[carrierField.key] ?? '';
+
+    if (!value && selectedCarrierFilter !== 'all') {
+      setSelectedCarrierFilter('all');
+      return;
+    }
+
+    if (value && value !== selectedCarrierFilter) {
+      setSelectedCarrierFilter(value);
+    }
+  }, [carrierField, searchValues, selectedCarrierFilter]);
+
+  useEffect(() => {
+    if (!manifestField) {
+      return;
+    }
+
+    const value = searchValues[manifestField.key] ?? '';
+    let normalized = value.trim().toLowerCase();
+    if (normalized === '1') {
+      normalized = 'true';
+    } else if (normalized === '0') {
+      normalized = 'false';
+    }
+
+    if (!normalized && selectedManifestFilter !== 'all') {
+      setSelectedManifestFilter('all');
+      return;
+    }
+
+    if (normalized && normalized !== selectedManifestFilter) {
+      setSelectedManifestFilter(normalized);
+    }
+  }, [manifestField, searchValues, selectedManifestFilter]);
+
+  useEffect(() => {
+    if (!stateField) {
+      return;
+    }
+
+    const value = searchValues[stateField.key] ?? '';
+
+    if (!value && selectedStateFilter !== 'all') {
+      setSelectedStateFilter('all');
+      return;
+    }
+
+    if (value && value !== selectedStateFilter) {
+      setSelectedStateFilter(value);
+    }
+  }, [searchValues, selectedStateFilter, stateField]);
+
+  useEffect(() => {
+    const hasOrderFields =
+      orderDateFieldConfig.from ||
+      orderDateFieldConfig.to ||
+      orderDateFieldConfig.single;
+
+    if (!hasOrderFields) {
+      return;
+    }
+
+    let fromValue = '';
+    let toValue = '';
+
+    if (orderDateFieldConfig.from && orderDateFieldConfig.to) {
+      fromValue = searchValues[orderDateFieldConfig.from.key] ?? '';
+      toValue = searchValues[orderDateFieldConfig.to.key] ?? '';
+    } else if (orderDateFieldConfig.single) {
+      const singleValue = searchValues[orderDateFieldConfig.single.key] ?? '';
+      fromValue = singleValue;
+      toValue = singleValue;
+    }
+
+    if (!fromValue && !toValue) {
+      if (selectedOrderDateRange !== 'all') {
+        setSelectedOrderDateRange('all');
+      }
+      return;
+    }
+
+    const matchedPreset = ORDER_DATE_PRESET_KEYS.find((key) => {
+      const range = ORDER_DATE_PRESETS[key].getRange();
+      return range.from === fromValue && range.to === toValue;
+    });
+
+    if (matchedPreset) {
+      if (selectedOrderDateRange !== matchedPreset) {
+        setSelectedOrderDateRange(matchedPreset);
+      }
+      return;
+    }
+
+    const customValue: typeof selectedOrderDateRange = 'custom';
+    if (selectedOrderDateRange !== customValue) {
+      setSelectedOrderDateRange(customValue);
+    }
+  }, [
+    orderDateFieldConfig,
+    searchValues,
+    selectedOrderDateRange
+  ]);
+
+
+
+
   useEffect(() => {
     const fetchSearchParameters = async () => {
       setLoadingSearchParams(true);
@@ -334,7 +935,7 @@ export function ShipmentsTable({
 
           // Initialize visible fields and search values
           let initialVisibleFields: Record<string, boolean> = {};
-          const initialSearchValues: Record<string, string> = {};
+          const initialSearchValueMap: Record<string, string> = {};
 
           // Try to load saved visible fields from localStorage
           const savedVisibleFields = localStorage.getItem(
@@ -396,11 +997,13 @@ export function ShipmentsTable({
 
           // Initialize all search values as empty
           Object.keys(data.searchParameters).forEach((key) => {
-            initialSearchValues[key] = ""; // Empty values by default
+            initialSearchValueMap[key] = ""; // Empty values by default
           });
 
-          setVisibleFields(initialVisibleFields);
-          setSearchValues(initialSearchValues);
+          setVisibleFields({ ...initialVisibleFields });
+          const blankValues = { ...initialSearchValueMap };
+          setInitialSearchValues(blankValues);
+          setSearchValues(blankValues);
         }
       } catch (error: unknown) {
         console.error("Error fetching search parameters:", error);
@@ -1723,7 +2326,7 @@ export function ShipmentsTable({
                       </DialogDescription> */}
                     </DialogHeader>
                     <div className="mt-2">
-                      <Button variant="outline">CLEAR</Button>
+                      <Button variant="outline" type="button" onClick={handleClearFilters}>CLEAR</Button>
                     </div>
                     <div className="grid gap-4 py-4 pt-0">
                       {loadingSearchParams ? (
@@ -1756,6 +2359,10 @@ export function ShipmentsTable({
                                       "searchVisibleFields",
                                       JSON.stringify(updatedFields)
                                     );
+                                    applyAndExecute((current) => ({
+                                      ...current,
+                                      [key]: '',
+                                    }));
                                   }}
                                   className="h-6 w-6 p-0"
                                 >
@@ -1851,23 +2458,22 @@ export function ShipmentsTable({
                       </DialogClose>
                       <Button
                         variant="outline"
+                        type="button"
                         onClick={() => {
-                          setSearchValues({});
-                          // Reset all fields to their initial visibility state
+                          handleClearFilters();
                           if (searchFields) {
-                            const initialVisibility = Object.keys(
-                              searchFields
-                            ).reduce((acc, key) => {
-                              // Show top 5 fields by weight by default
-                              const topFields = Object.entries(searchFields)
-                                .sort((a, b) => b[1].weight - a[1].weight)
-                                .slice(0, 5)
-                                .map(([k]) => k);
-                              acc[key] = topFields.includes(key);
-                              return acc;
-                            }, {} as Record<string, boolean>);
+                            const topFields = Object.entries(searchFields)
+                              .sort((a, b) => b[1].weight - a[1].weight)
+                              .slice(0, 5)
+                              .map(([k]) => k);
+                            const initialVisibility = Object.keys(searchFields).reduce(
+                              (acc, key) => {
+                                acc[key] = topFields.includes(key);
+                                return acc;
+                              },
+                              {} as Record<string, boolean>
+                            );
                             setVisibleFields(initialVisibility);
-                            // Save reset fields to localStorage
                             localStorage.setItem(
                               "searchVisibleFields",
                               JSON.stringify(initialVisibility)
@@ -1878,43 +2484,9 @@ export function ShipmentsTable({
                         CLEAR
                       </Button>
                       <Button
-                        type="submit"
+                        type="button"
                         className="bg-[#3D753A] hover:bg-black text-white"
-                        onClick={() => {
-                          // Filter out empty values and fields that are not visible
-                          const filters = Object.entries(searchValues)
-                            .filter(([key, value]) => {
-                              // Only include values that are non-empty AND the field is visible
-                              return (
-                                value &&
-                                value.trim() !== "" &&
-                                visibleFields[key] === true
-                              );
-                            })
-                            .reduce((acc, [key, value]) => {
-                              // Use the column name from searchFields for the API
-                              if (searchFields[key]) {
-                                acc[searchFields[key].column] = value;
-                              }
-                              return acc;
-                            }, {} as Record<string, string>);
-
-                          // Convert filters object to URL query string format
-                          const queryString = Object.entries(filters)
-                            .map(
-                              ([key, value]) =>
-                                `${encodeURIComponent(
-                                  key
-                                )}=${encodeURIComponent(value)}`
-                            )
-                            .join("&");
-
-                          // Directly set the query string as the new search params
-                          setSearchParams(queryString);
-
-                          // Trigger search
-                          fetchShipments();
-                        }}
+                        onClick={() => executeSearch(searchValues)}
                       >
                         SEARCH
                       </Button>
@@ -1935,58 +2507,117 @@ export function ShipmentsTable({
                     <SelectItem value="50">50</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select>
+                <Select
+                  value={selectedOrderDateRange}
+                  onValueChange={handleOrderDateFilterChange}
+                  disabled={
+                    loadingSearchParams ||
+                    (!orderDateFieldConfig.from &&
+                      !orderDateFieldConfig.to &&
+                      !orderDateFieldConfig.single)
+                  }
+                >
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
                     <div className="text-white flex items-center">
-                      <FaCalendarDay className="h-5 w-5 mr-2 text-white" />{" "}
-                      Order Date
+                      <FaCalendarDay className="h-5 w-5 mr-2 text-white" />
+                      {orderDateLabel}
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {/* Add SelectItem options for Order Date here */}
+                    <SelectItem value="all">All Order Dates</SelectItem>
+                    {ORDER_DATE_PRESET_KEYS.map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {ORDER_DATE_PRESETS[key].label}
+                      </SelectItem>
+                    ))}
+                    {selectedOrderDateRange === 'custom' && (
+                      <SelectItem value="custom" disabled>
+                        Custom Range
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
-                <Select>
+                <Select
+                  value={selectedStatusFilter}
+                  onValueChange={handleStatusFilterChange}
+                  disabled={isLoadingStatuses || !statusField}
+                >
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
                     <div className="text-white flex items-center">
-                      <GrStatusGood className="h-5 w-5 mr-2 text-white" /> All
-                      Status
+                      <GrStatusGood className="h-5 w-5 mr-2 text-white" />
+                      {statusFilterLabel}
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {/* Add SelectItem options for Status here */}
+                    <SelectItem value="all">All Status</SelectItem>
+                    {statusOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                <Select>
+                <Select
+                  value={selectedCarrierFilter}
+                  onValueChange={handleCarrierFilterChange}
+                  disabled={
+                    loadingSearchParams ||
+                    !carrierField ||
+                    carrierOptions.length === 0
+                  }
+                >
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
                     <div className="text-white flex items-center">
-                      <Truck className="h-5 w-5 mr-2 text-white" /> All Shipping
+                      <Truck className="h-5 w-5 mr-2 text-white" /> {carrierFilterLabel}
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {/* Add SelectItem options for Shipping here */}
+                    <SelectItem value="all">All Shipping</SelectItem>
+                    {carrierOptions.map((carrier) => (
+                      <SelectItem key={carrier} value={carrier}>
+                        {carrier.toUpperCase()}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                <Select>
+                <Select
+                  value={selectedManifestFilter}
+                  onValueChange={handleManifestFilterChange}
+                  disabled={!manifestField}
+                >
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
                     <div className="text-white flex items-center">
-                      <AiFillHdd className="h-5 w-5 mr-2 text-white" /> All
-                      Manifest
+                      <AiFillHdd className="h-5 w-5 mr-2 text-white" /> {manifestFilterLabel}
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {/* Add SelectItem options for Manifest here */}
+                    <SelectItem value="all">All Manifest</SelectItem>
+                    <SelectItem value="true">Manifested</SelectItem>
+                    <SelectItem value="false">Not Manifested</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select>
+                <Select
+                  value={selectedStateFilter}
+                  onValueChange={handleStateFilterChange}
+                  disabled={
+                    loadingSearchParams ||
+                    !stateField ||
+                    stateOptions.length === 0
+                  }
+                >
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
                     <div className="text-white flex items-center">
                       <Settings className="text-white" />
-                      All States
+                      <span className="ml-2">{stateFilterLabel}</span>
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    {/* Add SelectItem options for States here */}
+                    <SelectItem value="all">All States</SelectItem>
+                    {stateOptions.map((state) => (
+                      <SelectItem key={state} value={state}>
+                        {state.toUpperCase()}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Button
