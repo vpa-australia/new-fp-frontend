@@ -40,6 +40,7 @@ interface UpdateUserData {
   name: string;
   password: string;
   confirmPassword: string;
+  roles: string[];
 }
 
 export default function UsersTab() {
@@ -58,6 +59,7 @@ export default function UsersTab() {
     name: '',
     password: '',
     confirmPassword: '',
+    roles: [],
   });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
@@ -193,9 +195,14 @@ export default function UsersTab() {
       }
 
       if (rolesChanged) {
-        editUserData.roles.forEach((role, index) => {
-          params.append(`roles[${index}]`, role);
-        });
+        params.append('roles[0]', 'super admin');
+
+        editUserData.roles
+          .filter((role) => role.trim() !== '')
+          .filter((role) => role.toLowerCase() !== 'super admin')
+          .forEach((role, index) => {
+            params.append(`roles[${index + 1}]`, role);
+          });
       }
 
       const response = await fetch(`https://ship-orders.vpa.com.au/api/users/${selectedUser.data.id}`, {
@@ -211,15 +218,16 @@ export default function UsersTab() {
         throw new Error('Failed to update user');
       }
 
-      const data = await response.json();
+      const data: { success?: boolean; message?: string } = await response.json();
+      const isSuccessful = typeof data.success === 'undefined' ? true : Boolean(data.success);
 
-      if (!data.success) {
+      if (!isSuccessful) {
         throw new Error(data.message || 'Failed to update user');
       }
 
       toast({
         title: 'Success',
-        description: 'User updated successfully',
+        description: data.message || 'User updated successfully',
       });
 
       const updatedName = hasNameChange ? trimmedName : selectedUser.data.name;
