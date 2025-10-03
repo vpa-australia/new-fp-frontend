@@ -8,10 +8,10 @@ import UsersTab from './components/UsersTab';
 import WarehousesTab from './components/WarehousesTab';
 import CarriersTab from './components/CarriersTab';
 import ActionsTab from './components/ActionsTab';
+import ShippingServiceCodesTab from "./components/ShippingServiceCodesTab";
 
 export default function SettingsPage() {
   const router = useRouter();
-
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -19,7 +19,7 @@ export default function SettingsPage() {
         <Button
           variant="ghost"
           className="flex items-center"
-          onClick={() => router.push('/dashboard')}
+          onClick={() => router.push("/dashboard")}
         >
           <ArrowLeftIcon className="mr-2 h-4 w-4" />
           Back to Dashboard
@@ -45,6 +45,13 @@ export default function SettingsPage() {
             <Package2 className="mr-2 h-4 w-4" />
             Carriers
           </TabsTrigger>
+          <TabsTrigger
+            value="shipping-service-codes"
+            className="flex items-center"
+          >
+            <Package2 className="mr-2 h-4 w-4" />
+            Shipping Service Codes
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="warehouses">
           <WarehousesTab />
@@ -58,6 +65,10 @@ export default function SettingsPage() {
 
         <TabsContent value="users">
           <UsersTab />
+        </TabsContent>
+
+        <TabsContent value="shipping-service-codes">
+          <ShippingServiceCodesTab />
         </TabsContent>
       </Tabs>
     </div>
