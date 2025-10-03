@@ -302,6 +302,7 @@ export function ShipmentsTable({
   const [searchValues, setSearchValues] = useState<Record<string, string>>({});
   const [initialSearchValues, setInitialSearchValues] =
     useState<Record<string, string>>({});
+  const pendingSearchValuesRef = useRef<Record<string, string> | null>(null);
   const [selectedOrderDateRange, setSelectedOrderDateRange] = useState<
     'all' | 'custom' | OrderDatePresetKey
   >('all');
@@ -324,16 +325,35 @@ export function ShipmentsTable({
   });
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
+  const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    const update = () => setCurrentTimeMs(Date.now());
+    update();
+    const intervalId = window.setInterval(update, 60000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const currentTimeSeconds = useMemo(
+    () => (currentTimeMs == null ? null : Math.floor(currentTimeMs / 1000)),
+    [currentTimeMs]
+  );
+
   const formatRelativeTime = useCallback((timestamp: number) => {
-    const seconds = Math.floor(Date.now() / 1000 - timestamp);
+    if (currentTimeSeconds == null) {
+      return '--';
+    }
+
+    const seconds = Math.max(0, currentTimeSeconds - timestamp);
 
     if (seconds < 60) return `${seconds}s`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
     if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d`;
     if (seconds < 31536000) return `${Math.floor(seconds / 2592000)}mo`;
-    return `${Math.floor(seconds / 31536000)}y`;
-  }, []);
+    const years = Math.floor(seconds / 31536000);
+    return `${years}y`;
+  }, [currentTimeSeconds]);
 
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -479,6 +499,20 @@ export function ShipmentsTable({
       single: { key: singleKey, column: singleField.column },
     };
   }, [searchFields]);
+
+  const orderDateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-AU', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Australia/Sydney',
+      }),
+    []
+  );
 
   const statusField = useMemo(
     () =>
@@ -627,12 +661,23 @@ export function ShipmentsTable({
     (updater: (current: Record<string, string>) => Record<string, string>) => {
       setSearchValues((current) => {
         const next = updater(current);
-        executeSearch(next);
+        pendingSearchValuesRef.current = next;
         return next;
       });
     },
-    [executeSearch]
+    [setSearchValues]
   );
+
+  // Run searches after state updates commit to avoid parent updates during render
+  useEffect(() => {
+    if (!pendingSearchValuesRef.current) {
+      return;
+    }
+
+    const nextValues = pendingSearchValuesRef.current;
+    pendingSearchValuesRef.current = null;
+    executeSearch(nextValues);
+  }, [searchValues, executeSearch]);
 
   const handleClearFilters = useCallback(() => {
     const template =
@@ -3112,7 +3157,7 @@ export function ShipmentsTable({
                     <div className="w-48 flex gap-x-2">
                       <FaCalendarDay className="w-4 h-4" />
                       <span className="font-medium">
-                        {new Date(shipment.orderDate * 1000).toLocaleString()}
+                        {orderDateFormatter.format(new Date(shipment.orderDate * 1000))}
                       </span>
                     </div>
                     <div className="w-28 flex items-center">

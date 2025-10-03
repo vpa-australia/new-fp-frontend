@@ -35,6 +35,7 @@ export default function RootLayout({
         <link rel="icon" href="/vpa-full-logo_410x.ico" />
       </head>
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}

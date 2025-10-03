@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -198,6 +198,20 @@ interface ShipmentDetailViewProps {
 
 export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewProps) {
   const { toast } = useToast();
+  const dateTimeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-AU', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Australia/Sydney',
+      }),
+    []
+  );
+
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [shipmentErrors, setShipmentErrors] = useState<ShipmentError[]>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(false);
@@ -777,7 +791,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                     </div>
                     <p className="text-gray-700 mb-2">{comment.comment}</p>
                     <div className="text-xs text-gray-500">
-                      {new Date(timestampMs).toLocaleString()}
+                      {dateTimeFormatter.format(new Date(timestampMs))}
                     </div>
                   </div>
                 );
