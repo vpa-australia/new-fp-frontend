@@ -65,7 +65,7 @@ const buildMonthMatrix = (anchor: Date) => {
   const startDay = firstOfMonth.getDay();
 
   const matrix: Array<Array<{ date: Date; inCurrentMonth: boolean }>> = [];
-  let current = new Date(firstOfMonth);
+  const current = new Date(firstOfMonth);
   current.setDate(current.getDate() - startDay);
 
   for (let week = 0; week < 6; week++) {
