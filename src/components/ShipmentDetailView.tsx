@@ -238,6 +238,31 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const orderLines = detail?.orderLines ?? [];
 
   useEffect(() => {
+    if (quotes.length === 0) {
+      setSelectedQuote(null);
+      return;
+    }
+
+    const quoteAlreadySelected = selectedQuote !== null && quotes.some((quote) => quote.id === selectedQuote);
+    if (!quoteAlreadySelected) {
+      setSelectedQuote(quotes[0].id);
+    }
+  }, [quotes, selectedQuote]);
+
+  const getQuoteRadioValue = useCallback(
+    (quote: ShipmentQuote) => `${quote.id}-${quote.carrierCode}-${quote.serviceCode}`,
+    [],
+  );
+
+  const selectedQuoteValue = useMemo(() => {
+    if (selectedQuote === null) {
+      return '';
+    }
+    const quote = quotes.find((item) => item.id === selectedQuote);
+    return quote ? getQuoteRadioValue(quote) : '';
+  }, [getQuoteRadioValue, quotes, selectedQuote]);
+
+  useEffect(() => {
     if (!detail) {
       setSelectedDispatchFrom({});
       setComments([]);
@@ -707,8 +732,9 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
           <CardHeader className="">
             <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Shipping Quotes</CardTitle>
           </CardHeader>
-          <CardContent className="-mt-12">
+          <CardContent>
             <RadioGroup
+              value={selectedQuoteValue}
               onValueChange={(value) => {
                 const [quoteId] = value.split('-');
                 const parsedId = Number.parseInt(quoteId, 10);
@@ -718,7 +744,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
               {quotes.map((quote) => (
                 <div key={quote.id} className="flex items-center space-x-2 mb-2">
                   <RadioGroupItem
-                    value={`${quote.id}-${quote.carrierCode}-${quote.serviceCode}`}
+                    value={getQuoteRadioValue(quote)}
                     id={`quote-${quote.id}`}
                   />
                   <Label htmlFor={`quote-${quote.id}`} className="flex-grow text-sm">
