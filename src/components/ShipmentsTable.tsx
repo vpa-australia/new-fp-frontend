@@ -21,6 +21,7 @@ import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
 import { PdfViewer } from "./ui/pdf-viewer";
 import Image from 'next/image';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Shipment {
   id: number;
@@ -218,6 +219,19 @@ export function ShipmentsTable({
   const [selectedRows, setSelectedRows] = useState<Record<number, boolean>>({});
   const [pdfUrl, setPdfUrl] = useState<string>("");
   const { toast } = useToast();
+  const { requireAuthToken } = useAuth();
+  const getAuthToken = useCallback(() => {
+    try {
+      return requireAuthToken();
+    } catch (error) {
+      toast({
+        title: 'Authentication Error',
+        description: 'Your session has expired. Please log in again.',
+        variant: 'destructive',
+      });
+      throw (error instanceof Error ? error : new Error('User is not authenticated.'));
+    }
+  }, [requireAuthToken, toast]);
 
   const handlePdfUpload = useCallback(async ({
     file,
@@ -234,15 +248,7 @@ export function ShipmentsTable({
     name: string;
     title: string;
   }): Promise<void> => {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      toast({
-        title: 'Authentication Error',
-        description: 'Authentication token not found. Please log in again.',
-        variant: 'destructive',
-      });
-      throw new Error('Authentication token not found');
-    }
+    const token = getAuthToken();
 
     const formData = new FormData();
     formData.append('file', file);
@@ -287,7 +293,7 @@ export function ShipmentsTable({
       description: 'PDF has been uploaded successfully.',
       variant: 'success',
     });
-  }, [toast]);
+  }, [getAuthToken, toast]);
   const [isPdfOpen, setIsPdfOpen] = useState(false);
   const [pdfTitle, setPdfTitle] = useState<string>("");
   const [detailedShipment, setDetailedShipment] = useState<ShipmentDetailResponse | null>(
@@ -950,15 +956,7 @@ export function ShipmentsTable({
     const fetchSearchParameters = async () => {
       setLoadingSearchParams(true);
       try {
-        const token = localStorage.getItem("authToken");
-        if (!token) {
-          toast({
-            variant: "destructive",
-            title: "Authentication Error",
-            description: "Please log in to continue.",
-          });
-          return;
-        }
+        const token = getAuthToken();
 
         const response = await fetch(
           "https://ship-orders.vpa.com.au/api/shipments/search/parameters",
@@ -1067,10 +1065,7 @@ export function ShipmentsTable({
     const fetchStatusOptions = async () => {
       setIsLoadingStatuses(true);
       try {
-        const token = localStorage.getItem("authToken");
-        if (!token) {
-          throw new Error("Authentication token not found");
-        }
+        const token = getAuthToken();
 
         const response = await fetch(
           "https://ship-orders.vpa.com.au/api/platform/statuses",
@@ -1106,7 +1101,7 @@ export function ShipmentsTable({
     };
 
     fetchStatusOptions();
-  }, [toast]);
+  }, [getAuthToken, toast]);
 
   // Calculate which edge is closest and snap to it
   const snapToEdge = useCallback(
@@ -1289,15 +1284,7 @@ export function ShipmentsTable({
 
   const handleStatusChange = useCallback(
     async (shipmentId: number | number[], newStatusId: string) => {
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "Please log in to continue.",
-        });
-        return;
-      }
+      const token = getAuthToken();
 
       const shipmentIdsString = Array.isArray(shipmentId)
         ? shipmentId.join(",")
@@ -1338,8 +1325,8 @@ export function ShipmentsTable({
           description: getErrorMessage(error, "Failed to update shipment status."),
         });
       }
-    },
-    [toast, setAction]
+  },
+    [getAuthToken, setAction, toast]
   );
 
   const handleBulkStatusChange = useCallback(
@@ -1363,15 +1350,7 @@ export function ShipmentsTable({
 
   const handleRefreshShipment = useCallback(
     async (shipmentId: number) => {
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "Please log in to continue.",
-        });
-        return;
-      }
+      const token = getAuthToken();
 
       const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/refresh/$${shipmentId}`;
 
@@ -1409,7 +1388,7 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction]
+    [getAuthToken, setAction, toast]
   );
 
   const handleMarkShipmentsAsShipped = useCallback(async () => {
@@ -1426,15 +1405,7 @@ export function ShipmentsTable({
       return;
     }
 
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: "Please log in to continue.",
-      });
-      return;
-    }
+    const token = getAuthToken();
 
     try {
       const response = await fetch(
@@ -1481,7 +1452,7 @@ export function ShipmentsTable({
         description: getErrorMessage(error, "Failed to mark shipments as shipped."),
       });
     }
-  }, [selectedRows, toast, setAction, setSelectedRows]);
+  }, [getAuthToken, selectedRows, setAction, setSelectedRows, toast]);
 
   const handleMarkShipmentsAsNotShipped = useCallback(async () => {
     const checkedIds = Object.entries(selectedRows)
@@ -1498,15 +1469,7 @@ export function ShipmentsTable({
       return;
     }
 
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: "Please log in to mark shipments as not shipped.",
-      });
-      return;
-    }
+    const token = getAuthToken();
 
     try {
       const response = await fetch(
@@ -1549,7 +1512,7 @@ export function ShipmentsTable({
           getErrorMessage(error, "Failed to mark shipments as not shipped."),
       });
     }
-  }, [selectedRows, toast, setAction, setSelectedRows]);
+  }, [getAuthToken, selectedRows, setAction, setSelectedRows, toast]);
 
   useEffect(() => {
     if (!selectedShipmentId) {
@@ -1558,15 +1521,7 @@ export function ShipmentsTable({
 
     (async () => {
       try {
-        const token = localStorage.getItem("authToken");
-        if (!token) {
-          toast({
-            variant: "destructive",
-            title: "Authentication Error",
-            description: "Please log in to continue.",
-          });
-          throw new Error("Authentication token not found");
-        }
+        const token = getAuthToken();
 
         const response = await fetch(
           `https://ship-orders.vpa.com.au/api/shipments/${selectedShipmentId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`,
@@ -1596,7 +1551,7 @@ export function ShipmentsTable({
         setIsLoadingDetail(false);
       }
     })();
-  }, [detailAction, selectedShipmentId, toast]);
+  }, [detailAction, getAuthToken, selectedShipmentId, toast]);
 
   const handleShipmentDetailClick = useCallback(
     (e: React.MouseEvent, shipmentId: number) => {
@@ -1619,15 +1574,7 @@ export function ShipmentsTable({
   const handleUnlStatusUpdate = useCallback(
     async (shipment: Shipment) => {
       try {
-        const token = localStorage.getItem("authToken");
-        if (!token) {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Authentication token not found. Please log in again.",
-          });
-          return;
-        }
+        const token = getAuthToken();
 
         const response = await fetch(
           `https://ship-orders.vpa.com.au/api/shipments/unlDone/${
@@ -1667,21 +1614,13 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction]
+    [getAuthToken, setAction, toast]
   );
 
   const handleLockUnlockShipment = useCallback(
     async (shipment: Shipment) => {
       try {
-        const token = localStorage.getItem("authToken");
-        if (!token) {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Authentication token not found. Please log in again.",
-          });
-          return;
-        }
+        const token = getAuthToken();
 
         const endpoint = shipment.locked ? "unlock" : "lock";
         const response = await fetch(
@@ -1724,20 +1663,12 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction]
+    [getAuthToken, setAction, toast]
   );
 
   const handleDeleteShipment = useCallback(
     async (shipmentId: number) => {
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "Please log in to continue.",
-        });
-        return;
-      }
+      const token = getAuthToken();
 
       const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/archive/$${shipmentId}`;
 
@@ -1784,7 +1715,7 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction]
+    [getAuthToken, setAction, toast]
   );
 
   const handleGenerateLabels = useCallback(async () => {
@@ -1801,15 +1732,7 @@ export function ShipmentsTable({
       return;
     }
 
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: "Please log in to continue.",
-      });
-      return;
-    }
+    const token = getAuthToken();
 
     try {
       setStillInProgress(true);
@@ -1850,7 +1773,7 @@ export function ShipmentsTable({
         description: getErrorMessage(error, "Failed to generate labels."),
       });
     }
-  }, [selectedRows, toast, setAction]);
+  }, [getAuthToken, selectedRows, setAction, toast]);
 
   const handleQuickPrint = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
@@ -1866,15 +1789,7 @@ export function ShipmentsTable({
       return;
     }
 
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: "Please log in to continue.",
-      });
-      return;
-    }
+    const token = getAuthToken();
 
     try {
       const response = await fetch(
@@ -1917,7 +1832,7 @@ export function ShipmentsTable({
         description: getErrorMessage(error, "Failed to quick print labels."),
       });
     }
-  }, [selectedRows, toast, setAction]);
+  }, [getAuthToken, selectedRows, setAction, toast]);
 
   const handleInvoicePrint = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
@@ -1933,15 +1848,7 @@ export function ShipmentsTable({
       return;
     }
 
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: "Please log in to continue.",
-      });
-      return;
-    }
+    const token = getAuthToken();
 
     try {
       const response = await fetch(
@@ -1985,7 +1892,7 @@ export function ShipmentsTable({
         description: getErrorMessage(error, "Failed to generate invoice PDF."),
       });
     }
-  }, [selectedRows, toast, setAction]);
+  }, [getAuthToken, selectedRows, setAction, toast]);
 
   const handlePdfClose = useCallback(() => {
     setIsPdfOpen(false);
@@ -1998,15 +1905,7 @@ export function ShipmentsTable({
   const handleRestoreShipment = useCallback(
     async (shipmentId: number) => {
       try {
-        const token = localStorage.getItem("authToken");
-        if (!token) {
-          toast({
-            variant: "destructive",
-            title: "Authentication Error",
-            description: "Please log in to continue.",
-          });
-          return;
-        }
+        const token = getAuthToken();
 
         const response = await fetch(
           `https://ship-orders.vpa.com.au/api/shipments/unarchive/$${shipmentId}`,
@@ -2042,20 +1941,12 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction]
+    [getAuthToken, setAction, toast]
   );
 
   const handleDeleteLabel = useCallback(
     async (shipmentId: number) => {
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "Please log in to continue.",
-        });
-        return;
-      }
+      const token = getAuthToken();
 
       try {
         const response = await fetch(
@@ -2091,20 +1982,12 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction]
+    [getAuthToken, setAction, toast]
   );
 
   const handlePrintLabel = useCallback(
     async (shipmentId: number) => {
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "Please log in to continue.",
-        });
-        return;
-      }
+      const token = getAuthToken();
 
       try {
         const response = await fetch(
@@ -2141,7 +2024,7 @@ export function ShipmentsTable({
         });
       }
     },
-    [toast, setAction]
+    [getAuthToken, setAction, toast]
   );
 
   if (shipmentsAreLoading) {

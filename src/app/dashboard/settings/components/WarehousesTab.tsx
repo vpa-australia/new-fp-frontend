@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Warehouse {
   id: number;
@@ -48,11 +49,12 @@ export default function WarehousesTab() {
     active: 0
   });
   const { toast } = useToast();
+  const { requireAuthToken } = useAuth();
 
   useEffect(() => {
     const fetchWarehouses = async () => {
       try {
-        const token = localStorage.getItem('authToken');
+        const token = requireAuthToken();
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -83,7 +85,7 @@ export default function WarehousesTab() {
     if (typeof window !== 'undefined') {
       fetchWarehouses();
     }
-  }, []);
+  }, [requireAuthToken]);
 
   const handleUpdateWarehouse = (warehouse: Warehouse) => {
     setSelectedWarehouse(warehouse);
@@ -103,7 +105,7 @@ export default function WarehousesTab() {
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = requireAuthToken();
 
       const response = await fetch(`https://ship-orders.vpa.com.au/api/platform/warehouses/address_only`, {
         method: 'PATCH',

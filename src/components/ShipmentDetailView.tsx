@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import Image from 'next/image';
 import { AlertCircleIcon, BoxIcon, Loader } from 'lucide-react';
 import { AlertDialog } from './ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface OutOfStockWarehouse {
   id: number;
@@ -198,6 +199,19 @@ interface ShipmentDetailViewProps {
 
 export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewProps) {
   const { toast } = useToast();
+  const { requireAuthToken } = useAuth();
+  const getAuthToken = useCallback(() => {
+    try {
+      return requireAuthToken();
+    } catch (error) {
+      toast({
+        title: 'Authentication Error',
+        description: 'Your session has expired. Please log in again.',
+        variant: 'destructive',
+      });
+      throw (error instanceof Error ? error : new Error('User is not authenticated.'));
+    }
+  }, [requireAuthToken, toast]);
   const dateTimeFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat('en-AU', {
@@ -248,10 +262,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   useEffect(() => {
     const fetchWarehouses = async () => {
       try {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-          throw new Error('Authentication token not found. Please log in.');
-        }
+        const token = getAuthToken();
 
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
           headers: {
@@ -281,7 +292,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     };
 
     fetchWarehouses();
-  }, [toast]);
+  }, [getAuthToken, toast]);
 
   // TODO: Add handlers for quote selection, warehouse selection, and comments
 
@@ -305,10 +316,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     }
 
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
+      const token = getAuthToken();
 
       const response = await fetch(
         `https://ship-orders.vpa.com.au/api/shipments/quote/${detail.id}?quote_id=${selectedQuote}`,
@@ -349,15 +357,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
   const handleMarkInStock = async (item: LineItem, code: string) => {
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Authentication token not found. Please log in again.',
-        });
-        return;
-      }
+      const token = getAuthToken();
 
       const response = await fetch(
         `https://ship-orders.vpa.com.au/api/product/oos?sku=${item.sku}&warehouse_code=${code}`,
@@ -397,15 +397,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
   const handleMarkOutOfStock = async (item: LineItem, code: string) => {
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Authentication token not found. Please log in again.',
-        });
-        return;
-      }
+      const token = getAuthToken();
 
       const response = await fetch(
         `https://ship-orders.vpa.com.au/api/product/oos?sku=${item.sku}&warehouse_code=${code}`,
@@ -456,10 +448,15 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       return;
     }
 
-    const token = localStorage.getItem('authToken');
-    const userDataStr = localStorage.getItem('userData');
+    let token: string;
+    try {
+      token = getAuthToken();
+    } catch {
+      return;
+    }
 
-    if (!token || !userDataStr) {
+    const userDataStr = localStorage.getItem('userData');
+    if (!userDataStr) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
@@ -547,15 +544,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       return;
     }
 
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      toast({
-        title: 'Authentication Error',
-        description: 'Authentication token not found. Please log in again.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    const token = getAuthToken();
 
     const itemsByWarehouseCode: Record<string, string[]> = {};
 
@@ -624,16 +613,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     setErrorDialogOpen(true);
 
     try {
-      const token = localStorage.getItem('authToken');
-
-      if (!token) {
-        toast({
-          title: 'Authentication Error',
-          description: 'You are not authenticated. Please log in again.',
-          variant: 'destructive',
-        });
-        return;
-      }
+      const token = getAuthToken();
 
       const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/errors/${shipmentId}`, {
         method: 'GET',

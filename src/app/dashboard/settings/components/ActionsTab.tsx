@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Status {
   id: number;
@@ -25,11 +26,12 @@ export default function ActionsTab() {
   const [error, setError] = useState<string | null>(null);
   const [isStatusDetailsOpen, setIsStatusDetailsOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Status | null>(null);
+  const { requireAuthToken } = useAuth();
 
   useEffect(() => {
     const fetchStatuses = async () => {
       try {
-        const token = localStorage.getItem('authToken');
+        const token = requireAuthToken();
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/statuses', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -57,7 +59,7 @@ export default function ActionsTab() {
     if (typeof window !== 'undefined') {
       fetchStatuses();
     }
-  }, []);
+  }, [requireAuthToken]);
 
   const handleViewDetails = (status: Status) => {
     setSelectedStatus(status);

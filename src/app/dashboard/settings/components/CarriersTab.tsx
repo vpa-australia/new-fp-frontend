@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Carrier {
   id: number;
@@ -50,11 +51,12 @@ export default function CarriersTab() {
     active: 0
   });
   const { toast } = useToast();
+  const { requireAuthToken } = useAuth();
 
   useEffect(() => {
     const fetchCarriers = async () => {
       try {
-        const token = localStorage.getItem('authToken');
+        const token = requireAuthToken();
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/carriers', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -85,7 +87,7 @@ export default function CarriersTab() {
     if (typeof window !== 'undefined') {
       fetchCarriers();
     }
-  }, []);
+  }, [requireAuthToken]);
 
   const handleViewDetails = (carrier: Carrier) => {
     setSelectedCarrier(carrier);
@@ -109,7 +111,7 @@ export default function CarriersTab() {
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = requireAuthToken();
 
       const response = await fetch(`https://ship-orders.vpa.com.au/api/platform/carriers/address_only`, {
         method: 'PATCH',

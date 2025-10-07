@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UserRole {
   roles: string[];
@@ -65,11 +66,12 @@ export default function UsersTab() {
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { requireAuthToken } = useAuth();
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const token = localStorage.getItem('authToken');
+        const token = requireAuthToken();
         const response = await fetch('https://ship-orders.vpa.com.au/api/users', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -98,7 +100,7 @@ export default function UsersTab() {
     if (typeof window !== 'undefined') {
       fetchUsers();
     }
-  }, []);
+  }, [requireAuthToken]);
 
   const handleRoleChange = (role: string, checked: boolean) => {
     if (checked) {
@@ -181,7 +183,7 @@ export default function UsersTab() {
     }
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = requireAuthToken();
 
       const params = new URLSearchParams();
 
@@ -280,7 +282,7 @@ export default function UsersTab() {
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = requireAuthToken();
       const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/register', {
         method: 'POST',
         headers: {
