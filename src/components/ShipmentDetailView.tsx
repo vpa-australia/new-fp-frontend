@@ -71,6 +71,7 @@ export interface ShipmentDetailResponse {
 interface ShipmentError {
   message: string;
   shipmentId: number;
+  createdAt: number;
 }
 
 interface WarehouseSummary {
@@ -702,15 +703,19 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             </div>
           ) : shipmentErrors.length > 0 ? (
             <div className="max-h-[60vh] overflow-y-auto">
-              {shipmentErrors.map((error) => (
+              {shipmentErrors.map((error) =>{
+
+                let d = new Date(error.createdAt * 1000);
+                return (
                 <div
                   key={`${error.shipmentId}-${error.message}`}
                   className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md"
                 >
+                  <p className="text-xs text-gray-500 mb-1">Time: {d.toLocaleDateString() + ' ' + d.toLocaleTimeString()}</p>
                   <p className="text-sm text-red-800 whitespace-pre-wrap">{error.message}</p>
                   <p className="text-xs text-gray-500 mt-1">Shipment ID: {error.shipmentId}</p>
                 </div>
-              ))}
+              )})}
             </div>
           ) : (
             <div className="py-6 text-center text-gray-500">
