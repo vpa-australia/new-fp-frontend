@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,9 +13,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { UserIcon, LogOutIcon, Loader2, CogIcon, GripVertical, MapPin, Globe, ArchiveIcon, DeleteIcon } from 'lucide-react'; // Assuming lucide-react for icons, Added Loader2 and new icons
+import { UserIcon, LogOutIcon, CogIcon, GripVertical, MapPin, Globe, DeleteIcon } from 'lucide-react'; // Assuming lucide-react for icons
 import { ShipmentsTable } from '@/components/ShipmentsTable';
 import Image from 'next/image';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Define Warehouse interface
 interface Warehouse {
@@ -65,8 +66,6 @@ interface Shipment {
 
 export default function DashboardPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [loadingWarehouses, setLoadingWarehouses] = useState(true);
-  const [warehouseError, setWarehouseError] = useState<string | null>(null);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
@@ -78,37 +77,31 @@ export default function DashboardPage() {
   const [shipmentsAreLoading, setShipmentsAreLoading] = useState(false);
   const router = useRouter();
   const [searchParams, setSearchParams] = useState("");
+  const { user, logout, requireAuthToken } = useAuth();
 
-  const [userEmail, setUserEmail] = useState('');
-
-  // Check authentication and get user email on component mount
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    const email = localStorage.getItem('userEmail');
-    if (!token) {
-      router.push('/login');
-    } else if (email) {
-      setUserEmail(email);
+  const userEmail = useMemo(() => {
+    if (!user) {
+      return '';
     }
-  }, [router]);
-
+    if (typeof user.email === 'string' && user.email.length > 0) {
+      return user.email;
+    }
+    const dataEmail =
+      user.data && typeof user.data === 'object'
+        ? (user.data as { email?: string | null }).email ?? ''
+        : '';
+    return typeof dataEmail === 'string' ? dataEmail : '';
+  }, [user]);
 
   // Logout handler function
   const handleLogout = useCallback(() => {
-    // Remove the authentication token and user email from localStorage
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userEmail');
-    // Redirect to the login page
-    router.push('/login');
-  }, [router]);
+    logout({ redirectTo: '/login' });
+  }, [logout]);
 
   useEffect(() => {
     const fetchSearchParams = async () => {
       try {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-          throw new Error('Authentication token not found. Please log in.');
-        }
+        const token = requireAuthToken();
 
         const response = await fetch('https://ship-orders.vpa.com.au/api/shipments/search/parameters', {
           headers: {
@@ -124,21 +117,15 @@ export default function DashboardPage() {
 
         const data = await response.json();
         console.log('Search Parameters:', data); // Log the fetched search parameters for verificatio
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching search parameters:', err);
       } finally {
       }
     };
 
     const fetchWarehouses = async () => {
-      setLoadingWarehouses(true);
-      setWarehouseError(null);
       try {
-        const token = localStorage.getItem('authToken');
-        console.log('Token:', token);
-        if (!token) {
-          throw new Error('Authentication token not found. Please log in.');
-        }
+        const token = requireAuthToken();
 
         const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
           headers: {
@@ -157,17 +144,17 @@ export default function DashboardPage() {
         const warehousesData = Object.values(data.warehouses || {});
         setWarehouses(warehousesData as Warehouse[]);
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching warehouses:', err);
-        setWarehouseError(err.message || 'An unexpected error occurred.');
+        const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+        console.error(message);
       } finally {
-        setLoadingWarehouses(false);
       }
     };
 
     fetchWarehouses();
     fetchSearchParams();
-  }, [action]); // Removed itemsPerPage and currentPage as they are not used in these fetches
+  }, [action, requireAuthToken]); // Removed itemsPerPage and currentPage as they are not used in these fetches
 
   const [isArchived, setIsArchived] = useState(false);
 
@@ -177,10 +164,7 @@ export default function DashboardPage() {
 
         setShipmentsAreLoading(true);
 
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-          throw new Error('Authentication token not found. Please log in.');
-        }
+        const token = requireAuthToken();
 
         const warehouseSegment =
           selectedWarehouse && selectedWarehouse !== 'Archived'
@@ -235,13 +219,13 @@ export default function DashboardPage() {
         setShipments(data.shipments || []);
         setTotalItems(data.total || 0);
         setLastPage(data.lastPage || 1);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching shipments:', err);
       } finally {
         setShipmentsAreLoading(false);
       }
     })();
-  }, [itemsPerPage, currentPage, selectedWarehouse, action, isArchived, searchParams, selectedWarehouseCategory]);
+    }, [itemsPerPage, currentPage, selectedWarehouse, action, isArchived, searchParams, selectedWarehouseCategory, requireAuthToken]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 p-6">
