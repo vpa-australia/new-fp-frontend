@@ -1352,7 +1352,7 @@ export function ShipmentsTable({
     async (shipmentId: number) => {
       const token = getAuthToken();
 
-      const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/refresh/$${shipmentId}`;
+      const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/refresh/${shipmentId}`;
 
       try {
         const response = await fetch(apiUrl, {
@@ -1670,7 +1670,7 @@ export function ShipmentsTable({
     async (shipmentId: number) => {
       const token = getAuthToken();
 
-      const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/archive/$${shipmentId}`;
+      const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/archive/${shipmentId}`;
 
       try {
         const response = await fetch(apiUrl, {
@@ -1908,7 +1908,7 @@ export function ShipmentsTable({
         const token = getAuthToken();
 
         const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/shipments/unarchive/$${shipmentId}`,
+          `https://ship-orders.vpa.com.au/api/shipments/unarchive/${shipmentId}`,
           {
             method: "PATCH",
             headers: {
@@ -1929,7 +1929,7 @@ export function ShipmentsTable({
         toast({
           variant: "success",
           title: "Shipment Restored",
-          description: `Shipment $${shipmentId} has been restored successfully.`,
+          description: `Shipment ${shipmentId} has been restored successfully.`,
         });
         setAction((prev) => prev + 1); // Refresh data
       } catch (error: unknown) {
@@ -1950,7 +1950,7 @@ export function ShipmentsTable({
 
       try {
         const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/pdf/labels?shipment_ids=$${shipmentId}`,
+          `https://ship-orders.vpa.com.au/api/pdf/labels?shipment_ids=${shipmentId}`,
           {
             method: "DELETE",
             headers: {
@@ -1971,7 +1971,7 @@ export function ShipmentsTable({
         toast({
           variant: "success",
           title: "Label Deleted",
-          description: `Label for shipment $${shipmentId} has been deleted successfully.`,
+          description: `Label for shipment ${shipmentId} has been deleted successfully.`,
         });
         setAction((prev) => prev + 1);
       } catch (error: unknown) {
@@ -1991,7 +1991,7 @@ export function ShipmentsTable({
 
       try {
         const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels?shipment_ids=$${shipmentId}`,
+          `https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels?shipment_ids=${shipmentId}`,
           {
             method: "PUT",
             headers: {
