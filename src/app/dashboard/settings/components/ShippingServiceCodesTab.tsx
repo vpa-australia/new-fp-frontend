@@ -187,18 +187,15 @@ export default function ShippingServiceCodesTab() {
 
     const k = Object.keys(shippingServiceCodes);
     let tables;
-    console.log('Services Data', editServiceData)
     if(k.length > 0 && carriers.length > 0){
 
         tables = k.map((key: string)  => {
-            console.log('TEST CODE', shippingServiceCodes, key)
             const serviceCodes : ShippingServiceCode[] = shippingServiceCodes[key];
 
             if(typeof serviceCodes[0] === 'undefined'){
                 return '';
             }
 
-            console.log('serviceCodes',  serviceCodes);
 
             let carrier = '';
             carriers.forEach((car : Carrier)=>{
@@ -209,7 +206,11 @@ export default function ShippingServiceCodesTab() {
 
 
 
-            return (<><h2>{carrier}</h2><Table key={key}>
+            return (<><Card className="mb-3">
+                <CardHeader>
+                    <CardTitle>{carrier}</CardTitle>
+                </CardHeader>
+                <CardContent><Table key={key}>
 
                 <TableHeader>
                     <TableRow>
@@ -234,91 +235,87 @@ export default function ShippingServiceCodesTab() {
                         </TableRow>);
                     })}
                 </TableBody>
-            </Table></>);
+                </Table></CardContent></Card></>);
         })
     }
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Shipping Service Codes</CardTitle>
-            </CardHeader>
-            <CardContent>
-                {carriers.length > 0 ? <div className="flex justify-end mb-4">
-                    <Button onClick={()=>{handleUpdateServiceCode({
-                        name: '',
-                        service_code: '',
-                        carrier_code: '',
-                        id: ''
-                    })}}>
-                        <Package2 className="mr-2 h-4 w-4" />
-                        Add New Service Code
-                    </Button>
-                </div> : ''}
+        <>{carriers.length > 0 ? <div className="flex justify-end mb-4">
+            <Button onClick={()=>{handleUpdateServiceCode({
+                name: '',
+                service_code: '',
+                carrier_code: '',
+                id: ''
+            })}}>
+                <Package2 className="mr-2 h-4 w-4" />
+                Add New Service Code
+            </Button>
+        </div> : ''}
+
+
                 {tables}
 
                 {/* Edit Shipping Service Code */}
-                {carriers.length > 0 ?
-                    <Dialog open={isEditShippingServiceCodeDialogOpen} onOpenChange={setIsEditShippingServiceCodeDialogOpen}>
-                        <DialogContent className="sm:max-w-[425px]">
-                            <DialogHeader>
-                                <DialogTitle>Edit Shipping Service Code</DialogTitle>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="edit-name" className="text-right">
-                                        Carrier
-                                    </Label>
-                                    <Select value={editServiceData.carrier_code} onValueChange={(value: string)=>{ setEditServiceData({ ...editServiceData, carrier_code: value }) }}>
-                                        <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Carriers" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {carriers.map((c: Carrier)=>{ return <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>;})}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="edit-service-name" className="text-right">
-                                        Service Name
-                                    </Label>
-                                    <Input
-                                        id="edit-service-name"
-                                        type="text"
-                                        value={editServiceData.name}
-                                        onChange={(e) => setEditServiceData({ ...editServiceData, name: e.target.value })}
-                                        className="col-span-3"
-                                        placeholder="Enter Name of Service"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="edit-service-code" className="text-right">
-                                        Service Code
-                                    </Label>
-                                    <Input
-                                        id="edit-service-code"
-                                        type="text"
-                                        value={editServiceData.service_code}
-                                        onChange={(e) => setEditServiceData({ ...editServiceData, service_code: e.target.value })}
-                                        className="col-span-3"
-                                        placeholder="Enter Service Code"
-                                    />
-                                </div>
 
-                            </div>
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsEditShippingServiceCodeDialogOpen(false)}>
-                                    Cancel
-                                </Button>
 
-                                <Button onClick={()=> {handleSubmitUpdate("add") }} disabled={isSubmitting}>
-                                    {isSubmitting && commandType === 'add' ? 'Updating...' : 'Update Service'}
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog> : ''}
+            {carriers.length > 0 ?
+            <Dialog open={isEditShippingServiceCodeDialogOpen} onOpenChange={setIsEditShippingServiceCodeDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Shipping Service Code</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="edit-name" className="text-right">
+                                Carrier
+                            </Label>
+                            <Select value={editServiceData.carrier_code} onValueChange={(value: string)=>{ setEditServiceData({ ...editServiceData, carrier_code: value }) }}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Carriers" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {carriers.map((c: Carrier)=>{ return <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>;})}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="edit-service-name" className="text-right">
+                                Service Name
+                            </Label>
+                            <Input
+                                id="edit-service-name"
+                                type="text"
+                                value={editServiceData.name}
+                                onChange={(e) => setEditServiceData({ ...editServiceData, name: e.target.value })}
+                                className="col-span-3"
+                                placeholder="Enter Name of Service"
+                            />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="edit-service-code" className="text-right">
+                                Service Code
+                            </Label>
+                            <Input
+                                id="edit-service-code"
+                                type="text"
+                                value={editServiceData.service_code}
+                                onChange={(e) => setEditServiceData({ ...editServiceData, service_code: e.target.value })}
+                                className="col-span-3"
+                                placeholder="Enter Service Code"
+                            />
+                        </div>
 
-            </CardContent>
-        </Card>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditShippingServiceCodeDialogOpen(false)}>
+                            Cancel
+                        </Button>
+
+                        <Button onClick={()=> {handleSubmitUpdate("add") }} disabled={isSubmitting}>
+                            {isSubmitting && commandType === 'add' ? 'Updating...' : 'Update Service'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog> : ''}</>
     );
 }
