@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,6 +12,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { login } = useAuth();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -33,11 +36,6 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
-      console.log('Login successful:', data);
-      // Save token and email to localStorage
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('userEmail', email);
-
       const userResponse = await fetch('https://ship-orders.vpa.com.au/api/users/auth/me', {
         headers: {
           'Authorization': `Bearer ${data.token}`,
@@ -50,9 +48,15 @@ export default function LoginPage() {
       }
 
       const userData = await userResponse.json();
-      localStorage.setItem('userData', JSON.stringify(userData));
+      await login({ token: data.token, user: userData, email });
 
-      router.push('/dashboard');
+      const redirectParam = searchParams?.get('redirect');
+      const safeRedirect =
+        redirectParam && redirectParam.startsWith('/')
+          ? redirectParam
+          : '/dashboard';
+
+      router.replace(safeRedirect);
 
     } catch (err: unknown) {
       const message =

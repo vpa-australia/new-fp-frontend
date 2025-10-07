@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { fetchCurrentUser, updateUser, type UpdateUserPayload } from '@/lib/api/users';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UserProfileResponse {
   data: {
@@ -20,6 +21,7 @@ interface UserProfileResponse {
 export default function UserProfilePage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { refreshUser } = useAuth();
 
   const [userId, setUserId] = useState<number | null>(null);
   const [name, setName] = useState('');
@@ -135,9 +137,7 @@ export default function UserProfilePage() {
         setInitialEmail(updated.data.email ?? payload.email ?? initialEmail);
       }
 
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('userData', JSON.stringify(updated));
-      }
+      await refreshUser();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update user profile.';
       setErrorMessage(message);
