@@ -63,7 +63,12 @@ interface Shipment {
     statusId?: number | null;
 }
 
-export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | undefined, onChangeMessage: Function | undefined}) {
+interface UploadFileProps {
+    shipment?: Shipment;
+    onChangeMessage?: (message: string) => void;
+}
+
+export function UploadFile({ shipment, onChangeMessage }: UploadFileProps) {
 
     const [manualUpload, setManualUpload] = useState<ManualUpload | undefined>(typeof shipment !== 'undefined' ? {tracking_code: shipment['tracking_code'], manual_carrier_code: shipment['manualCarrierCode']} : undefined);
     const [isSubmitting, setIsSubmitting]  = useState<boolean>(false);
@@ -76,7 +81,7 @@ export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | u
         }
     }, [shipment, manualUpload]);
 
-    const saveFile = () => {
+    const saveFile = (): void => {
 
         if(typeof manualUpload === 'undefined' || typeof shipment === 'undefined') {
             return;
@@ -123,7 +128,7 @@ export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | u
 
 
     if (typeof manualUpload === 'undefined') {
-        return '';
+        return null;
     }
     return (
         <Dialog open={isOpen}>

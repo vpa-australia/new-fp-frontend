@@ -1,73 +1,48 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {useState, useEffect} from "react";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {Button} from "@/components/ui/button";
-import {Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle} from "@/components/ui/dialog";
-import {Label} from "@/components/ui/label";
-import {Input} from "@/components/ui/input";
+import { useState, useEffect } from "react";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
-import {Package2} from "lucide-react";
-
-
-interface ShippingServiceCode {
-    id: number | string;
-    carrier_code: string;
-    service_code: string;
-    name: string;
-}
-
-interface ShippingServiceCodeSuccess {
-    success: boolean;
-    carrier_service_code: ShippingServiceCode;
-}
-
-interface ShippingServiceCodeFailure {
-    success: boolean;
-    message: string;
-}
-
-interface Carrier {
-    id: number;
-    code: string;
-    name: string;
-    description: string | null;
-    maxParcelWeight: number | null;
-    active: boolean;
-    manual: boolean;
-    color: string | null;
-    warehouses: string[];
-}
-
-interface ShippingCarrierSuccess {
-    success: boolean;
-    carriers: Record<string, Carrier>;
-}
-
-interface ShippingServiceCodesSuccess {
-    success: boolean;
-    carriers: Record<string, ShippingServiceCode[]>;
-}
-
-interface UpdateServiceData {
-    id: number | string;
-    service_code: string;
-    name: string;
-    carrier_code: string;
-}
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Package2 } from "lucide-react";
+import {
+  Carrier,
+  ShippingCarrierSuccess,
+  ShippingServiceCode,
+  ShippingServiceCodeFailure,
+  ShippingServiceCodeMap,
+  ShippingServiceCodeSuccess,
+  ShippingServiceCodesSuccess,
+  UpdateServiceData,
+} from "./ShippingServiceCodesTab.types";
 
 export default function ShippingServiceCodesTab() {
 
-    const [shippingServiceCodes, setShippingServiceCodes] =  useState<Record<string, ShippingServiceCode[]>>({});
+    const [shippingServiceCodes, setShippingServiceCodes] =  useState<ShippingServiceCodeMap>({});
     const [carriers, setCarriers] = useState<Carrier[]>([]);
-    const [loaded, setLoaded] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editServiceData, setEditServiceData] = useState<UpdateServiceData>({
         name: '',
@@ -76,10 +51,9 @@ export default function ShippingServiceCodesTab() {
         id: ''
     });
     const [isEditShippingServiceCodeDialogOpen, setIsEditShippingServiceCodeDialogOpen] = useState(false);
-    const [commandType, setCommandType] = useState('add');
+    const [commandType, setCommandType] = useState<'add' | 'edit'>('add');
 
     useEffect(() => {
-        if (!loaded) {
             loadAll(()=>{});
 
             const token = localStorage.getItem('authToken');
@@ -100,10 +74,7 @@ export default function ShippingServiceCodesTab() {
                 }
             })
 
-
-            setLoaded(true);
-        }
-    }, [loaded]);
+    }, []);
 
     const loadAll = (callback?: () => void) =>{
         const token = localStorage.getItem('authToken');
@@ -199,7 +170,7 @@ export default function ShippingServiceCodesTab() {
 
 
 
-            return (<><Card className="mb-3" key={key}>
+            return (<Card className="mb-3" key={key}>
                 <CardHeader>
                     <CardTitle>{carrier}</CardTitle>
                 </CardHeader>
