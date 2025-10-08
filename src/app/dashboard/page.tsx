@@ -142,7 +142,13 @@ export default function DashboardPage() {
 
         const data = await response.json();
         const warehousesData = Object.values(data.warehouses || {});
-        setWarehouses(warehousesData as Warehouse[]);
+        const normalizedWarehouses = (warehousesData as Warehouse[]).map((warehouse) => {
+          if (typeof warehouse.code === 'string' && warehouse.code.toUpperCase() === 'BRI') {
+            return { ...warehouse, international: false };
+          }
+          return warehouse;
+        });
+        setWarehouses(normalizedWarehouses);
 
       } catch (err: unknown) {
         console.error('Error fetching warehouses:', err);
@@ -166,10 +172,18 @@ export default function DashboardPage() {
 
         const token = requireAuthToken();
 
-        const warehouseSegment =
-          selectedWarehouse && selectedWarehouse !== 'Archived'
-            ? selectedWarehouse
-            : 'All';
+        const warehouseSegment = (() => {
+          if (selectedWarehouseCategory === 'International') {
+            return 'Int';
+          }
+          if (selectedWarehouse && selectedWarehouse !== 'Archived') {
+            if (selectedWarehouse.toUpperCase() === 'BRI') {
+              return 'Brisbane';
+            }
+            return selectedWarehouse;
+          }
+          return 'All';
+        })();
         const typeSegment = (() => {
           if (isArchived || selectedWarehouse === 'Archived') {
             return 'archived';

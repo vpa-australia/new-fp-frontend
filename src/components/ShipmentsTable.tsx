@@ -5,23 +5,66 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronDownIcon, ChevronRightIcon, Clock, DollarSign, GripVertical, FileText, QrCode, SearchIcon, Send, Tag, Truck, X, Zap, Lock, Unlock, Loader, Settings } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ShipmentDetailView, type ShipmentDetailResponse } from './ShipmentDetailView';
-import { useToast } from '@/hooks/use-toast';
+import {
+  Check,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  Clock,
+  DollarSign,
+  GripVertical,
+  FileText,
+  QrCode,
+  SearchIcon,
+  Send,
+  Tag,
+  Truck,
+  X,
+  Zap,
+  Lock,
+  Unlock,
+  Loader,
+  Settings,
+  Loader2,
+} from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ShipmentDetailView,
+  type ShipmentDetailResponse,
+} from "./ShipmentDetailView";
+import { useToast } from "@/hooks/use-toast";
 import { AiFillHdd } from "react-icons/ai";
 import { PiCubeFocusBold } from "react-icons/pi";
-import { FaLink, FaTimes, FaTrashRestore, FaUser, FaCalendarDay } from "react-icons/fa";
+import {
+  FaLink,
+  FaTimes,
+  FaTrashRestore,
+  FaUser,
+  FaCalendarDay,
+} from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
-import { Input } from './ui/input';
-import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
+import { Input } from "./ui/input";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
 import { PdfViewer } from "./ui/pdf-viewer";
-import Image from 'next/image';
-import { useAuth } from '@/contexts/AuthContext';
+import Image from "next/image";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Shipment {
   id: number;
@@ -89,7 +132,13 @@ type StatusApiResponse = {
   statuses?: StatusApiStatus[];
 };
 
-type OrderDatePresetKey = 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'lastMonth';
+type OrderDatePresetKey =
+  | "today"
+  | "yesterday"
+  | "last7"
+  | "last30"
+  | "thisMonth"
+  | "lastMonth";
 
 type OrderDateRange = {
   from: string;
@@ -104,21 +153,24 @@ type OrderDateFieldConfig = {
 
 const formatDateForApi = (date: Date): string => {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return [year, month, day].join('-');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return [year, month, day].join("-");
 };
 
-const ORDER_DATE_PRESETS: Record<OrderDatePresetKey, { label: string; getRange: () => OrderDateRange }> = {
+const ORDER_DATE_PRESETS: Record<
+  OrderDatePresetKey,
+  { label: string; getRange: () => OrderDateRange }
+> = {
   today: {
-    label: 'Today',
+    label: "Today",
     getRange: () => {
       const now = new Date();
       return { from: formatDateForApi(now), to: formatDateForApi(now) };
     },
   },
   yesterday: {
-    label: 'Yesterday',
+    label: "Yesterday",
     getRange: () => {
       const now = new Date();
       now.setDate(now.getDate() - 1);
@@ -126,7 +178,7 @@ const ORDER_DATE_PRESETS: Record<OrderDatePresetKey, { label: string; getRange: 
     },
   },
   last7: {
-    label: 'Last 7 Days',
+    label: "Last 7 Days",
     getRange: () => {
       const now = new Date();
       const start = new Date(now);
@@ -135,7 +187,7 @@ const ORDER_DATE_PRESETS: Record<OrderDatePresetKey, { label: string; getRange: 
     },
   },
   last30: {
-    label: 'Last 30 Days',
+    label: "Last 30 Days",
     getRange: () => {
       const now = new Date();
       const start = new Date(now);
@@ -144,7 +196,7 @@ const ORDER_DATE_PRESETS: Record<OrderDatePresetKey, { label: string; getRange: 
     },
   },
   thisMonth: {
-    label: 'This Month',
+    label: "This Month",
     getRange: () => {
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -152,7 +204,7 @@ const ORDER_DATE_PRESETS: Record<OrderDatePresetKey, { label: string; getRange: 
     },
   },
   lastMonth: {
-    label: 'Last Month',
+    label: "Last Month",
     getRange: () => {
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -162,12 +214,14 @@ const ORDER_DATE_PRESETS: Record<OrderDatePresetKey, { label: string; getRange: 
   },
 };
 
-const ORDER_DATE_PRESET_KEYS = Object.keys(ORDER_DATE_PRESETS) as OrderDatePresetKey[];
+const ORDER_DATE_PRESET_KEYS = Object.keys(
+  ORDER_DATE_PRESETS
+) as OrderDatePresetKey[];
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message) {
     return error.message;
   }
-  if (typeof error === 'string' && error.length > 0) {
+  if (typeof error === "string" && error.length > 0) {
     return error;
   }
   return fallback;
@@ -225,97 +279,104 @@ export function ShipmentsTable({
       return requireAuthToken();
     } catch (error) {
       toast({
-        title: 'Authentication Error',
-        description: 'Your session has expired. Please log in again.',
-        variant: 'destructive',
+        title: "Authentication Error",
+        description: "Your session has expired. Please log in again.",
+        variant: "destructive",
       });
-      throw (error instanceof Error ? error : new Error('User is not authenticated.'));
+      throw error instanceof Error
+        ? error
+        : new Error("User is not authenticated.");
     }
   }, [requireAuthToken, toast]);
 
-  const handlePdfUpload = useCallback(async ({
-    file,
-    shipmentId,
-    trackingCode,
-    carrierCode,
-    name,
-    title,
-  }: {
-    file: File;
-    shipmentId: number;
-    trackingCode: string;
-    carrierCode: string;
-    name: string;
-    title: string;
-  }): Promise<void> => {
-    const token = getAuthToken();
+  const handlePdfUpload = useCallback(
+    async ({
+      file,
+      shipmentId,
+      trackingCode,
+      carrierCode,
+      name,
+      title,
+    }: {
+      file: File;
+      shipmentId: number;
+      trackingCode: string;
+      carrierCode: string;
+      name: string;
+      title: string;
+    }): Promise<void> => {
+      const token = getAuthToken();
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('name', name || file.name);
-    formData.append('title', title || 'Uploaded PDF');
-    formData.append('tracking_code', trackingCode || '');
-    formData.append('manual_carrier_code', carrierCode || '');
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", name || file.name);
+      formData.append("title", title || "Uploaded PDF");
+      formData.append("tracking_code", trackingCode || "");
+      formData.append("manual_carrier_code", carrierCode || "");
 
-    const response = await fetch(
-      `https://ship-orders.vpa.com.au/api/shipments/pdf/${shipmentId}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      }
-    );
-
-    if (!response.ok) {
-      let message = 'Failed to upload PDF.';
-      try {
-        const errorData = await response.json();
-        if (errorData?.message) {
-          message = errorData.message;
+      const response = await fetch(
+        `https://ship-orders.vpa.com.au/api/shipments/pdf/${shipmentId}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
         }
-      } catch {
-        // ignore JSON parsing errors
+      );
+
+      if (!response.ok) {
+        let message = "Failed to upload PDF.";
+        try {
+          const errorData = await response.json();
+          if (errorData?.message) {
+            message = errorData.message;
+          }
+        } catch {
+          // ignore JSON parsing errors
+        }
+
+        toast({
+          title: "Upload Failed",
+          description: message,
+          variant: "destructive",
+        });
+
+        throw new Error(message);
       }
 
       toast({
-        title: 'Upload Failed',
-        description: message,
-        variant: 'destructive',
+        title: "Upload Successful",
+        description: "PDF has been uploaded successfully.",
+        variant: "success",
       });
-
-      throw new Error(message);
-    }
-
-    toast({
-      title: 'Upload Successful',
-      description: 'PDF has been uploaded successfully.',
-      variant: 'success',
-    });
-  }, [getAuthToken, toast]);
+    },
+    [getAuthToken, toast]
+  );
   const [isPdfOpen, setIsPdfOpen] = useState(false);
   const [pdfTitle, setPdfTitle] = useState<string>("");
-  const [detailedShipment, setDetailedShipment] = useState<ShipmentDetailResponse | null>(
-    null
-  );
+  const [detailedShipment, setDetailedShipment] =
+    useState<ShipmentDetailResponse | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [statusOptions, setStatusOptions] =
     useState<StatusOption[]>(defaultStatusOptions);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
-  const [searchFields, setSearchFields] = useState<Record<string, SearchParameter>>({});
+  const [searchFields, setSearchFields] = useState<
+    Record<string, SearchParameter>
+  >({});
   const [searchValues, setSearchValues] = useState<Record<string, string>>({});
-  const [initialSearchValues, setInitialSearchValues] =
-    useState<Record<string, string>>({});
+  const [initialSearchValues, setInitialSearchValues] = useState<
+    Record<string, string>
+  >({});
   const pendingSearchValuesRef = useRef<Record<string, string> | null>(null);
   const [selectedOrderDateRange, setSelectedOrderDateRange] = useState<
-    'all' | 'custom' | OrderDatePresetKey
-  >('all');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
-  const [selectedCarrierFilter, setSelectedCarrierFilter] = useState('all');
-  const [selectedManifestFilter, setSelectedManifestFilter] = useState('all');
-  const [selectedStateFilter, setSelectedStateFilter] = useState('all');
+    "all" | "custom" | OrderDatePresetKey
+  >("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
+  const [selectedCarrierFilter, setSelectedCarrierFilter] = useState("all");
+  const [selectedManifestFilter, setSelectedManifestFilter] = useState("all");
+  const [selectedStateFilter, setSelectedStateFilter] = useState("all");
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>(
     {}
   );
@@ -324,10 +385,10 @@ export function ShipmentsTable({
   const [openPdfDialogId, setOpenPdfDialogId] = useState<number | null>(null);
   const [pdfFormState, setPdfFormState] = useState<PdfFormState>({
     file: null,
-    name: '',
-    title: '',
-    trackingCode: '',
-    carrierCode: '',
+    name: "",
+    title: "",
+    trackingCode: "",
+    carrierCode: "",
   });
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -345,21 +406,24 @@ export function ShipmentsTable({
     [currentTimeMs]
   );
 
-  const formatRelativeTime = useCallback((timestamp: number) => {
-    if (currentTimeSeconds == null) {
-      return '--';
-    }
+  const formatRelativeTime = useCallback(
+    (timestamp: number) => {
+      if (currentTimeSeconds == null) {
+        return "--";
+      }
 
-    const seconds = Math.max(0, currentTimeSeconds - timestamp);
+      const seconds = Math.max(0, currentTimeSeconds - timestamp);
 
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-    if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d`;
-    if (seconds < 31536000) return `${Math.floor(seconds / 2592000)}mo`;
-    const years = Math.floor(seconds / 31536000);
-    return `${years}y`;
-  }, [currentTimeSeconds]);
+      if (seconds < 60) return `${seconds}s`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+      if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d`;
+      if (seconds < 31536000) return `${Math.floor(seconds / 2592000)}mo`;
+      const years = Math.floor(seconds / 31536000);
+      return `${years}y`;
+    },
+    [currentTimeSeconds]
+  );
 
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -389,7 +453,7 @@ export function ShipmentsTable({
       return false;
     }
 
-    setEdge('bottom');
+    setEdge("bottom");
     setPosition(defaultPosition);
     return true;
   }, [getDefaultToolbarPosition]);
@@ -439,7 +503,7 @@ export function ShipmentsTable({
 
     const orderEntries = Object.entries(searchFields).filter(([key, field]) => {
       const combined = `${key} ${field.column} ${field.name}`.toLowerCase();
-      return combined.includes('order') && combined.includes('date');
+      return combined.includes("order") && combined.includes("date");
     });
 
     if (orderEntries.length === 0) {
@@ -453,11 +517,11 @@ export function ShipmentsTable({
       });
 
     const fromEntry =
-      findEntry(['from', 'start', 'after', '>=']) ??
-      findEntry(['lower', 'min']);
+      findEntry(["from", "start", "after", ">="]) ??
+      findEntry(["lower", "min"]);
 
     const toEntry =
-      findEntry(['to', 'end', 'before', '<=']) ?? findEntry(['upper', 'max']);
+      findEntry(["to", "end", "before", "<="]) ?? findEntry(["upper", "max"]);
 
     if (fromEntry && toEntry) {
       return {
@@ -508,42 +572,42 @@ export function ShipmentsTable({
 
   const orderDateFormatter = useMemo(
     () =>
-      new Intl.DateTimeFormat('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+      new Intl.DateTimeFormat("en-AU", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
         hour12: false,
-        timeZone: 'Australia/Sydney',
+        timeZone: "Australia/Sydney",
       }),
     []
   );
 
   const statusField = useMemo(
     () =>
-      findSearchField(['status_id'], { matchAll: true }) ??
-      findSearchField(['status']),
+      findSearchField(["status_id"], { matchAll: true }) ??
+      findSearchField(["status"]),
     [findSearchField]
   );
 
   const carrierField = useMemo(
     () =>
-      findSearchField(['carrier_code'], { matchAll: true }) ??
-      findSearchField(['carrier', 'shipping']),
+      findSearchField(["carrier_code"], { matchAll: true }) ??
+      findSearchField(["carrier", "shipping"]),
     [findSearchField]
   );
 
   const manifestField = useMemo(
-    () => findSearchField(['manifest'], { matchAll: false }),
+    () => findSearchField(["manifest"], { matchAll: false }),
     [findSearchField]
   );
 
   const stateField = useMemo(
     () =>
-      findSearchField(['state'], { matchAll: true }) ??
-      findSearchField(['region'], { matchAll: true }) ??
-      findSearchField(['state', 'region']),
+      findSearchField(["state"], { matchAll: true }) ??
+      findSearchField(["region"], { matchAll: true }) ??
+      findSearchField(["state", "region"]),
     [findSearchField]
   );
 
@@ -554,7 +618,9 @@ export function ShipmentsTable({
 
     const carriers = shipments
       .map((shipment) => shipment.carrierCode)
-      .filter((code): code is string => Boolean(code && code.trim().length > 0));
+      .filter((code): code is string =>
+        Boolean(code && code.trim().length > 0)
+      );
 
     return Array.from(new Set(carriers)).sort((a, b) => a.localeCompare(b));
   }, [shipments]);
@@ -566,60 +632,123 @@ export function ShipmentsTable({
 
     const states = shipments
       .map((shipment) => shipment.region)
-      .filter((state): state is string => Boolean(state && state.trim().length > 0));
+      .filter((state): state is string =>
+        Boolean(state && state.trim().length > 0)
+      );
 
     return Array.from(new Set(states)).sort((a, b) => a.localeCompare(b));
   }, [shipments]);
 
   const statusFilterLabel = useMemo(() => {
-    if (selectedStatusFilter === 'all') {
-      return 'All Status';
+    if (selectedStatusFilter === "all") {
+      return "All Status";
     }
 
     const match = statusOptions.find(
       (option) => option.value === selectedStatusFilter
     );
 
-    return match?.label ?? 'Custom Status';
+    return match?.label ?? "Custom Status";
   }, [selectedStatusFilter, statusOptions]);
 
   const carrierFilterLabel = useMemo(() => {
-    if (selectedCarrierFilter === 'all') {
-      return 'All Shipping';
+    if (selectedCarrierFilter === "all") {
+      return "All Shipping";
     }
     return selectedCarrierFilter.toUpperCase();
   }, [selectedCarrierFilter]);
 
   const manifestFilterLabel = useMemo(() => {
-    if (selectedManifestFilter === 'all') {
-      return 'All Manifest';
+    if (selectedManifestFilter === "all") {
+      return "All Manifest";
     }
 
-    return selectedManifestFilter === 'true' ? 'Manifested' : 'Not Manifested';
+    return selectedManifestFilter === "true" ? "Manifested" : "Not Manifested";
   }, [selectedManifestFilter]);
 
   const stateFilterLabel = useMemo(() => {
-    if (selectedStateFilter === 'all') {
-      return 'All States';
+    if (selectedStateFilter === "all") {
+      return "All States";
     }
 
     return selectedStateFilter.toUpperCase();
   }, [selectedStateFilter]);
 
   const orderDateLabel = useMemo(() => {
-    if (selectedOrderDateRange === 'all') {
-      return 'Order Date';
+    if (selectedOrderDateRange === "all") {
+      return "Order Date";
     }
-    if (selectedOrderDateRange === 'custom') {
-      return 'Custom Range';
+    if (selectedOrderDateRange === "custom") {
+      return "Custom Range";
     }
     return ORDER_DATE_PRESETS[selectedOrderDateRange].label;
   }, [selectedOrderDateRange]);
 
+  const orderDateFromKey = orderDateFieldConfig.from?.key ?? null;
+  const orderDateToKey = orderDateFieldConfig.to?.key ?? null;
+  const orderDateSingleKey = orderDateFieldConfig.single?.key ?? null;
+
+  const orderDateFromValue = orderDateFromKey
+    ? searchValues[orderDateFromKey] ?? ""
+    : "";
+  const orderDateToValue = orderDateToKey
+    ? searchValues[orderDateToKey] ?? ""
+    : "";
+  const orderDateSingleValue = orderDateSingleKey
+    ? searchValues[orderDateSingleKey] ?? ""
+    : "";
+
+  const orderDateInputsDisabled =
+    loadingSearchParams ||
+    (!orderDateFromKey && !orderDateToKey && !orderDateSingleKey);
+
+  const [orderDateDraftFrom, setOrderDateDraftFrom] = useState("");
+  const [orderDateDraftTo, setOrderDateDraftTo] = useState("");
+  const [orderDateDraftSingle, setOrderDateDraftSingle] = useState("");
+  const [refreshingShipmentIds, setRefreshingShipmentIds] = useState<
+    Set<number>
+  >(new Set());
+
+  useEffect(() => {
+    if (orderDateFromKey && orderDateToKey) {
+      setOrderDateDraftFrom(orderDateFromValue);
+      setOrderDateDraftTo(orderDateToValue);
+      setOrderDateDraftSingle("");
+      return;
+    }
+
+    if (orderDateSingleKey) {
+      setOrderDateDraftSingle(orderDateSingleValue);
+      setOrderDateDraftFrom("");
+      setOrderDateDraftTo("");
+      return;
+    }
+
+    setOrderDateDraftFrom("");
+    setOrderDateDraftTo("");
+    setOrderDateDraftSingle("");
+  }, [
+    orderDateFromKey,
+    orderDateToKey,
+    orderDateSingleKey,
+    orderDateFromValue,
+    orderDateToValue,
+    orderDateSingleValue,
+  ]);
+
+  const orderDateDraftApplyDisabled =
+    orderDateInputsDisabled ||
+    (orderDateFromKey && orderDateToKey
+      ? orderDateDraftFrom === orderDateFromValue &&
+        orderDateDraftTo === orderDateToValue
+      : orderDateSingleKey
+      ? orderDateDraftSingle === orderDateSingleValue
+      : true);
+
   const executeSearch = useCallback(
     (values: Record<string, string>) => {
       if (!searchFields || Object.keys(searchFields).length === 0) {
-        setSearchParams('');
+        setSearchParams("");
         setCurrentPage(1);
         fetchShipments();
         return;
@@ -635,7 +764,7 @@ export function ShipmentsTable({
             return false;
           }
 
-          if (typeof value === 'string') {
+          if (typeof value === "string") {
             return value.trim().length > 0;
           }
 
@@ -644,7 +773,7 @@ export function ShipmentsTable({
         .reduce((acc, [key, value]) => {
           const column = searchFields[key]?.column;
           if (column) {
-            acc[column] = typeof value === 'string' ? value.trim() : value;
+            acc[column] = typeof value === "string" ? value.trim() : value;
           }
           return acc;
         }, {} as Record<string, string>);
@@ -654,7 +783,7 @@ export function ShipmentsTable({
           ([key, value]) =>
             `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
         )
-        .join('&');
+        .join("&");
 
       setSearchParams(queryString);
       setCurrentPage(1);
@@ -691,36 +820,29 @@ export function ShipmentsTable({
         ? initialSearchValues
         : searchValues;
 
-    const clearedValues = Object.keys(template).reduce(
-      (acc, key) => {
-        acc[key] = '';
-        return acc;
-      },
-      {} as Record<string, string>
-    );
+    const clearedValues = Object.keys(template).reduce((acc, key) => {
+      acc[key] = "";
+      return acc;
+    }, {} as Record<string, string>);
 
-    setSelectedOrderDateRange('all');
-    setSelectedStatusFilter('all');
-    setSelectedCarrierFilter('all');
-    setSelectedManifestFilter('all');
-    setSelectedStateFilter('all');
+    setSelectedOrderDateRange("all");
+    setSelectedStatusFilter("all");
+    setSelectedCarrierFilter("all");
+    setSelectedManifestFilter("all");
+    setSelectedStateFilter("all");
 
     applyAndExecute(() => ({ ...clearedValues }));
-  }, [
-    applyAndExecute,
-    initialSearchValues,
-    searchValues
-  ]);
+  }, [applyAndExecute, initialSearchValues, searchValues]);
 
   const handleOrderDateFilterChange = useCallback(
     (value: string) => {
-      if (value === 'custom') {
-        setSelectedOrderDateRange('custom');
+      if (value === "custom") {
+        setSelectedOrderDateRange("custom");
         return;
       }
 
       const nextSelected =
-        value === 'all' ? 'all' : (value as OrderDatePresetKey);
+        value === "all" ? "all" : (value as OrderDatePresetKey);
 
       setSelectedOrderDateRange(nextSelected);
 
@@ -736,17 +858,18 @@ export function ShipmentsTable({
         const next = { ...current };
 
         if (orderDateFieldConfig.from) {
-          next[orderDateFieldConfig.from.key] = '';
+          next[orderDateFieldConfig.from.key] = "";
         }
         if (orderDateFieldConfig.to) {
-          next[orderDateFieldConfig.to.key] = '';
+          next[orderDateFieldConfig.to.key] = "";
         }
         if (orderDateFieldConfig.single) {
-          next[orderDateFieldConfig.single.key] = '';
+          next[orderDateFieldConfig.single.key] = "";
         }
 
-        if (nextSelected !== 'all') {
-          const range = ORDER_DATE_PRESETS[nextSelected as OrderDatePresetKey].getRange();
+        if (nextSelected !== "all") {
+          const range =
+            ORDER_DATE_PRESETS[nextSelected as OrderDatePresetKey].getRange();
 
           if (range) {
             if (orderDateFieldConfig.from && orderDateFieldConfig.to) {
@@ -764,6 +887,51 @@ export function ShipmentsTable({
     [applyAndExecute, orderDateFieldConfig]
   );
 
+  const handleOrderDateInputChange = useCallback(
+    (field: "from" | "to" | "single", value: string) => {
+      if (field === "from") {
+        setOrderDateDraftFrom(value);
+        return;
+      }
+      if (field === "to") {
+        setOrderDateDraftTo(value);
+        return;
+      }
+      setOrderDateDraftSingle(value);
+    },
+    []
+  );
+
+  const handleApplyOrderDateInputs = useCallback(() => {
+    if (orderDateFromKey && orderDateToKey) {
+      const hasValues = Boolean(orderDateDraftFrom || orderDateDraftTo);
+      setSelectedOrderDateRange(hasValues ? "custom" : "all");
+      applyAndExecute((current) => ({
+        ...current,
+        [orderDateFromKey]: orderDateDraftFrom,
+        [orderDateToKey]: orderDateDraftTo,
+      }));
+      return;
+    }
+
+    if (orderDateSingleKey) {
+      const hasValue = Boolean(orderDateDraftSingle);
+      setSelectedOrderDateRange(hasValue ? "custom" : "all");
+      applyAndExecute((current) => ({
+        ...current,
+        [orderDateSingleKey]: orderDateDraftSingle,
+      }));
+    }
+  }, [
+    applyAndExecute,
+    orderDateDraftFrom,
+    orderDateDraftSingle,
+    orderDateDraftTo,
+    orderDateFromKey,
+    orderDateSingleKey,
+    orderDateToKey,
+  ]);
+
   const handleStatusFilterChange = useCallback(
     (value: string) => {
       setSelectedStatusFilter(value);
@@ -773,7 +941,7 @@ export function ShipmentsTable({
 
       applyAndExecute((current) => ({
         ...current,
-        [statusField.key]: value === 'all' ? '' : value,
+        [statusField.key]: value === "all" ? "" : value,
       }));
     },
     [applyAndExecute, statusField]
@@ -788,7 +956,7 @@ export function ShipmentsTable({
 
       applyAndExecute((current) => ({
         ...current,
-        [carrierField.key]: value === 'all' ? '' : value,
+        [carrierField.key]: value === "all" ? "" : value,
       }));
     },
     [applyAndExecute, carrierField]
@@ -803,7 +971,7 @@ export function ShipmentsTable({
 
       applyAndExecute((current) => ({
         ...current,
-        [manifestField.key]: value === 'all' ? '' : value,
+        [manifestField.key]: value === "all" ? "" : value,
       }));
     },
     [applyAndExecute, manifestField]
@@ -818,7 +986,7 @@ export function ShipmentsTable({
 
       applyAndExecute((current) => ({
         ...current,
-        [stateField.key]: value === 'all' ? '' : value,
+        [stateField.key]: value === "all" ? "" : value,
       }));
     },
     [applyAndExecute, stateField]
@@ -829,10 +997,10 @@ export function ShipmentsTable({
       return;
     }
 
-    const value = searchValues[statusField.key] ?? '';
+    const value = searchValues[statusField.key] ?? "";
 
-    if (!value && selectedStatusFilter !== 'all') {
-      setSelectedStatusFilter('all');
+    if (!value && selectedStatusFilter !== "all") {
+      setSelectedStatusFilter("all");
       return;
     }
 
@@ -846,10 +1014,10 @@ export function ShipmentsTable({
       return;
     }
 
-    const value = searchValues[carrierField.key] ?? '';
+    const value = searchValues[carrierField.key] ?? "";
 
-    if (!value && selectedCarrierFilter !== 'all') {
-      setSelectedCarrierFilter('all');
+    if (!value && selectedCarrierFilter !== "all") {
+      setSelectedCarrierFilter("all");
       return;
     }
 
@@ -863,16 +1031,16 @@ export function ShipmentsTable({
       return;
     }
 
-    const value = searchValues[manifestField.key] ?? '';
+    const value = searchValues[manifestField.key] ?? "";
     let normalized = value.trim().toLowerCase();
-    if (normalized === '1') {
-      normalized = 'true';
-    } else if (normalized === '0') {
-      normalized = 'false';
+    if (normalized === "1") {
+      normalized = "true";
+    } else if (normalized === "0") {
+      normalized = "false";
     }
 
-    if (!normalized && selectedManifestFilter !== 'all') {
-      setSelectedManifestFilter('all');
+    if (!normalized && selectedManifestFilter !== "all") {
+      setSelectedManifestFilter("all");
       return;
     }
 
@@ -886,10 +1054,10 @@ export function ShipmentsTable({
       return;
     }
 
-    const value = searchValues[stateField.key] ?? '';
+    const value = searchValues[stateField.key] ?? "";
 
-    if (!value && selectedStateFilter !== 'all') {
-      setSelectedStateFilter('all');
+    if (!value && selectedStateFilter !== "all") {
+      setSelectedStateFilter("all");
       return;
     }
 
@@ -908,21 +1076,21 @@ export function ShipmentsTable({
       return;
     }
 
-    let fromValue = '';
-    let toValue = '';
+    let fromValue = "";
+    let toValue = "";
 
     if (orderDateFieldConfig.from && orderDateFieldConfig.to) {
-      fromValue = searchValues[orderDateFieldConfig.from.key] ?? '';
-      toValue = searchValues[orderDateFieldConfig.to.key] ?? '';
+      fromValue = searchValues[orderDateFieldConfig.from.key] ?? "";
+      toValue = searchValues[orderDateFieldConfig.to.key] ?? "";
     } else if (orderDateFieldConfig.single) {
-      const singleValue = searchValues[orderDateFieldConfig.single.key] ?? '';
+      const singleValue = searchValues[orderDateFieldConfig.single.key] ?? "";
       fromValue = singleValue;
       toValue = singleValue;
     }
 
     if (!fromValue && !toValue) {
-      if (selectedOrderDateRange !== 'all') {
-        setSelectedOrderDateRange('all');
+      if (selectedOrderDateRange !== "all") {
+        setSelectedOrderDateRange("all");
       }
       return;
     }
@@ -939,18 +1107,11 @@ export function ShipmentsTable({
       return;
     }
 
-    const customValue: typeof selectedOrderDateRange = 'custom';
+    const customValue: typeof selectedOrderDateRange = "custom";
     if (selectedOrderDateRange !== customValue) {
       setSelectedOrderDateRange(customValue);
     }
-  }, [
-    orderDateFieldConfig,
-    searchValues,
-    selectedOrderDateRange
-  ]);
-
-
-
+  }, [orderDateFieldConfig, searchValues, selectedOrderDateRange]);
 
   useEffect(() => {
     const fetchSearchParameters = async () => {
@@ -1322,10 +1483,13 @@ export function ShipmentsTable({
         toast({
           variant: "destructive",
           title: "Update Failed",
-          description: getErrorMessage(error, "Failed to update shipment status."),
+          description: getErrorMessage(
+            error,
+            "Failed to update shipment status."
+          ),
         });
       }
-  },
+    },
     [getAuthToken, setAction, toast]
   );
 
@@ -1353,6 +1517,12 @@ export function ShipmentsTable({
       const token = getAuthToken();
 
       const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/refresh/${shipmentId}`;
+
+      setRefreshingShipmentIds((prev) => {
+        const next = new Set(prev);
+        next.add(shipmentId);
+        return next;
+      });
 
       try {
         const response = await fetch(apiUrl, {
@@ -1385,6 +1555,12 @@ export function ShipmentsTable({
           variant: "destructive",
           title: "Refresh Failed",
           description: getErrorMessage(error, "Failed to refresh shipment."),
+        });
+      } finally {
+        setRefreshingShipmentIds((prev) => {
+          const next = new Set(prev);
+          next.delete(shipmentId);
+          return next;
         });
       }
     },
@@ -1449,7 +1625,10 @@ export function ShipmentsTable({
       toast({
         variant: "destructive",
         title: "Error",
-        description: getErrorMessage(error, "Failed to mark shipments as shipped."),
+        description: getErrorMessage(
+          error,
+          "Failed to mark shipments as shipped."
+        ),
       });
     }
   }, [getAuthToken, selectedRows, setAction, setSelectedRows, toast]);
@@ -1508,8 +1687,10 @@ export function ShipmentsTable({
       toast({
         variant: "destructive",
         title: "Operation Failed",
-        description:
-          getErrorMessage(error, "Failed to mark shipments as not shipped."),
+        description: getErrorMessage(
+          error,
+          "Failed to mark shipments as not shipped."
+        ),
       });
     }
   }, [getAuthToken, selectedRows, setAction, setSelectedRows, toast]);
@@ -1545,7 +1726,10 @@ export function ShipmentsTable({
         toast({
           variant: "destructive",
           title: "Error",
-          description: getErrorMessage(error, "Failed to fetch shipment details."),
+          description: getErrorMessage(
+            error,
+            "Failed to fetch shipment details."
+          ),
         });
       } finally {
         setIsLoadingDetail(false);
@@ -2254,7 +2438,13 @@ export function ShipmentsTable({
                       </DialogDescription> */}
                     </DialogHeader>
                     <div className="mt-2">
-                      <Button variant="outline" type="button" onClick={handleClearFilters}>CLEAR</Button>
+                      <Button
+                        variant="outline"
+                        type="button"
+                        onClick={handleClearFilters}
+                      >
+                        CLEAR
+                      </Button>
                     </div>
                     <div className="grid gap-4 py-4 pt-0">
                       {loadingSearchParams ? (
@@ -2289,7 +2479,7 @@ export function ShipmentsTable({
                                     );
                                     applyAndExecute((current) => ({
                                       ...current,
-                                      [key]: '',
+                                      [key]: "",
                                     }));
                                   }}
                                   className="h-6 w-6 p-0"
@@ -2394,13 +2584,12 @@ export function ShipmentsTable({
                               .sort((a, b) => b[1].weight - a[1].weight)
                               .slice(0, 5)
                               .map(([k]) => k);
-                            const initialVisibility = Object.keys(searchFields).reduce(
-                              (acc, key) => {
-                                acc[key] = topFields.includes(key);
-                                return acc;
-                              },
-                              {} as Record<string, boolean>
-                            );
+                            const initialVisibility = Object.keys(
+                              searchFields
+                            ).reduce((acc, key) => {
+                              acc[key] = topFields.includes(key);
+                              return acc;
+                            }, {} as Record<string, boolean>);
                             setVisibleFields(initialVisibility);
                             localStorage.setItem(
                               "searchVisibleFields",
@@ -2435,36 +2624,94 @@ export function ShipmentsTable({
                     <SelectItem value="50">50</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select
-                  value={selectedOrderDateRange}
-                  onValueChange={handleOrderDateFilterChange}
-                  disabled={
-                    loadingSearchParams ||
-                    (!orderDateFieldConfig.from &&
-                      !orderDateFieldConfig.to &&
-                      !orderDateFieldConfig.single)
-                  }
-                >
-                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                    <div className="text-white flex items-center">
-                      <FaCalendarDay className="h-5 w-5 mr-2 text-white" />
-                      {orderDateLabel}
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Order Dates</SelectItem>
-                    {ORDER_DATE_PRESET_KEYS.map((key) => (
-                      <SelectItem key={key} value={key}>
-                        {ORDER_DATE_PRESETS[key].label}
-                      </SelectItem>
-                    ))}
-                    {selectedOrderDateRange === 'custom' && (
-                      <SelectItem value="custom" disabled>
-                        Custom Range
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={selectedOrderDateRange}
+                    onValueChange={handleOrderDateFilterChange}
+                    disabled={
+                      loadingSearchParams ||
+                      (!orderDateFieldConfig.from &&
+                        !orderDateFieldConfig.to &&
+                        !orderDateFieldConfig.single)
+                    }
+                  >
+                    <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
+                      <div className="text-white flex items-center">
+                        <FaCalendarDay className="h-5 w-5 mr-2 text-white" />
+                        {orderDateLabel}
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Order Dates</SelectItem>
+                      {ORDER_DATE_PRESET_KEYS.map((key) => (
+                        <SelectItem key={key} value={key}>
+                          {ORDER_DATE_PRESETS[key].label}
+                        </SelectItem>
+                      ))}
+                      {selectedOrderDateRange === "custom" && (
+                        <SelectItem value="custom" disabled>
+                          Custom Range
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {orderDateFromKey && orderDateToKey ? (
+                    <>
+                      <Input
+                        type="date"
+                        value={orderDateDraftFrom}
+                        onChange={(event) =>
+                          handleOrderDateInputChange("from", event.target.value)
+                        }
+                        disabled={orderDateInputsDisabled}
+                        className="h-10 w-[150px] rounded-full border px-3 text-sm"
+                      />
+                      <span className="text-sm text-gray-500">to</span>
+                      <Input
+                        type="date"
+                        value={orderDateDraftTo}
+                        onChange={(event) =>
+                          handleOrderDateInputChange("to", event.target.value)
+                        }
+                        disabled={orderDateInputsDisabled}
+                        className="h-10 w-[150px] rounded-full border px-3 text-sm"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleApplyOrderDateInputs}
+                        disabled={orderDateDraftApplyDisabled}
+                        className="h-10 px-4"
+                      >
+                        Apply
+                      </Button>
+                    </>
+                  ) : orderDateSingleKey ? (
+                    <>
+                      <Input
+                        type="date"
+                        value={orderDateDraftSingle}
+                        onChange={(event) =>
+                          handleOrderDateInputChange(
+                            "single",
+                            event.target.value
+                          )
+                        }
+                        disabled={orderDateInputsDisabled}
+                        className="h-10 w-[150px] rounded-full border px-3 text-sm"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleApplyOrderDateInputs}
+                        disabled={orderDateDraftApplyDisabled}
+                        className="h-10 px-4"
+                      >
+                        Apply
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
                 <Select
                   value={selectedStatusFilter}
                   onValueChange={handleStatusFilterChange}
@@ -2496,7 +2743,8 @@ export function ShipmentsTable({
                 >
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
                     <div className="text-white flex items-center">
-                      <Truck className="h-5 w-5 mr-2 text-white" /> {carrierFilterLabel}
+                      <Truck className="h-5 w-5 mr-2 text-white" />{" "}
+                      {carrierFilterLabel}
                     </div>
                   </SelectTrigger>
                   <SelectContent>
@@ -2515,7 +2763,8 @@ export function ShipmentsTable({
                 >
                   <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
                     <div className="text-white flex items-center">
-                      <AiFillHdd className="h-5 w-5 mr-2 text-white" /> {manifestFilterLabel}
+                      <AiFillHdd className="h-5 w-5 mr-2 text-white" />{" "}
+                      {manifestFilterLabel}
                     </div>
                   </SelectTrigger>
                   <SelectContent>
@@ -2722,14 +2971,25 @@ export function ShipmentsTable({
                     {selectedWarehouse !== "Archived" ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div
-                            className="cursor-pointer"
+                          <button
+                            type="button"
+                            className="h-8 w-8 flex items-center justify-center rounded-full text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             onClick={() => handleRefreshShipment(shipment.id)}
+                            disabled={refreshingShipmentIds.has(shipment.id)}
+                            aria-busy={refreshingShipmentIds.has(shipment.id)}
                           >
-                            <MdRefresh className="w-5 h-5 text-white" />
-                          </div>
+                            {refreshingShipmentIds.has(shipment.id) ? (
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                            ) : (
+                              <MdRefresh className="h-6 w-6" />
+                            )}
+                          </button>
                         </TooltipTrigger>
-                        <TooltipContent>Refresh Shipment</TooltipContent>
+                        <TooltipContent>
+                          {refreshingShipmentIds.has(shipment.id)
+                            ? "Refreshing..."
+                            : "Refresh Shipment"}
+                        </TooltipContent>
                       </Tooltip>
                     ) : null}
 
@@ -2755,7 +3015,7 @@ export function ShipmentsTable({
                             <FaTrashRestore className="w-5 h-5 text-white" />
                           </div>
                         </TooltipTrigger>
-                        <TooltipContent>Restore Shipment</TooltipContent>
+                        <TooltipContent>Restore Shipment</TooltipContent> 
                       </Tooltip>
                     )}
 
@@ -2793,10 +3053,10 @@ export function ShipmentsTable({
                               setOpenPdfDialogId(shipment.id);
                               setPdfFormState({
                                 file: null,
-                                name: '',
-                                title: '',
-                                trackingCode: shipment.tracking_code || '',
-                                carrierCode: shipment.carrierCode || '',
+                                name: "",
+                                title: "",
+                                trackingCode: shipment.tracking_code || "",
+                                carrierCode: shipment.carrierCode || "",
                               });
                             } else {
                               setOpenPdfDialogId((current) =>
@@ -2804,10 +3064,10 @@ export function ShipmentsTable({
                               );
                               setPdfFormState({
                                 file: null,
-                                name: '',
-                                title: '',
-                                trackingCode: '',
-                                carrierCode: '',
+                                name: "",
+                                title: "",
+                                trackingCode: "",
+                                carrierCode: "",
                               });
                             }
                           }}
@@ -2819,10 +3079,10 @@ export function ShipmentsTable({
                                 setOpenPdfDialogId(shipment.id);
                                 setPdfFormState({
                                   file: null,
-                                  name: '',
-                                  title: '',
-                                  trackingCode: shipment.tracking_code || '',
-                                  carrierCode: shipment.carrierCode || '',
+                                  name: "",
+                                  title: "",
+                                  trackingCode: shipment.tracking_code || "",
+                                  carrierCode: shipment.carrierCode || "",
                                 });
                               }}
                             >
@@ -2855,9 +3115,9 @@ export function ShipmentsTable({
                                 event.preventDefault();
                                 if (!pdfFormState.file) {
                                   toast({
-                                    title: 'Error',
-                                    description: 'Please select a PDF file',
-                                    variant: 'destructive',
+                                    title: "Error",
+                                    description: "Please select a PDF file",
+                                    variant: "destructive",
                                   });
                                   return;
                                 }
@@ -2869,16 +3129,17 @@ export function ShipmentsTable({
                                     trackingCode: pdfFormState.trackingCode,
                                     carrierCode: pdfFormState.carrierCode,
                                     name:
-                                      pdfFormState.name || pdfFormState.file.name,
-                                    title: pdfFormState.title || 'Uploaded PDF',
+                                      pdfFormState.name ||
+                                      pdfFormState.file.name,
+                                    title: pdfFormState.title || "Uploaded PDF",
                                   });
 
                                   setPdfFormState({
                                     file: null,
-                                    name: '',
-                                    title: '',
-                                    trackingCode: shipment.tracking_code || '',
-                                    carrierCode: shipment.carrierCode || '',
+                                    name: "",
+                                    title: "",
+                                    trackingCode: shipment.tracking_code || "",
+                                    carrierCode: shipment.carrierCode || "",
                                   });
                                   setOpenPdfDialogId(null);
                                 } catch {
@@ -2951,19 +3212,24 @@ export function ShipmentsTable({
                                   <div className="space-y-2">
                                     <input
                                       ref={(node) => {
-                                        fileInputRefs.current[shipment.id] = node;
+                                        fileInputRefs.current[shipment.id] =
+                                          node;
                                       }}
                                       type="file"
                                       accept=".pdf"
                                       className="hidden"
                                       onChange={(event) => {
-                                        const file = event.target.files?.[0] || null;
+                                        const file =
+                                          event.target.files?.[0] || null;
                                         setPdfFormState((prev) => ({
                                           ...prev,
                                           file,
                                           name:
                                             file && !prev.name
-                                              ? file.name.replace(/\.[^/.]+$/, '')
+                                              ? file.name.replace(
+                                                  /\.[^/.]+$/,
+                                                  ""
+                                                )
                                               : prev.name,
                                         }));
                                       }}
@@ -2974,24 +3240,26 @@ export function ShipmentsTable({
                                       variant="outline"
                                       className="w-full justify-start"
                                       onClick={() =>
-                                        fileInputRefs.current[shipment.id]?.click()
+                                        fileInputRefs.current[
+                                          shipment.id
+                                        ]?.click()
                                       }
                                     >
                                       <FileText className="h-4 w-4 mr-2" />
                                       {pdfFormState.file
                                         ? pdfFormState.file.name
-                                        : 'Choose PDF File'}
+                                        : "Choose PDF File"}
                                     </Button>
                                     <p
                                       className={`text-sm mt-1 ${
                                         pdfFormState.file
-                                          ? 'text-green-600 font-medium'
-                                          : 'text-muted-foreground'
+                                          ? "text-green-600 font-medium"
+                                          : "text-muted-foreground"
                                       }`}
                                     >
                                       {pdfFormState.file
                                         ? `Selected: ${pdfFormState.file.name}`
-                                        : 'No file selected'}
+                                        : "No file selected"}
                                     </p>
                                   </div>
                                 </div>
@@ -3007,9 +3275,9 @@ export function ShipmentsTable({
                             </form>
                           </DialogContent>
                         </Dialog>
-                    </TooltipTrigger>
-                    <TooltipContent>Upload PDF</TooltipContent>
-                  </Tooltip>
+                      </TooltipTrigger>
+                      <TooltipContent>Upload PDF</TooltipContent>
+                    </Tooltip>
 
                     <div className="ml-5 w-56 flex items-center gap-x-1">
                       <FaUser className="w-4 h-4" />
@@ -3040,7 +3308,9 @@ export function ShipmentsTable({
                     <div className="w-48 flex gap-x-2">
                       <FaCalendarDay className="w-4 h-4" />
                       <span className="font-medium">
-                        {orderDateFormatter.format(new Date(shipment.orderDate * 1000))}
+                        {orderDateFormatter.format(
+                          new Date(shipment.orderDate * 1000)
+                        )}
                       </span>
                     </div>
                     <div className="w-28 flex items-center">

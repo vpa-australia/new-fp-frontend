@@ -51,11 +51,6 @@ interface ShippingCarrierSuccess {
     carriers: Record<string, Carrier>;
 }
 
-interface ShippingCarrierFailure {
-    success: boolean;
-    message: string;
-}
-
 interface ShippingServiceCodesSuccess {
     success: boolean;
     carriers: Record<string, ShippingServiceCode[]>;
@@ -110,7 +105,7 @@ export default function ShippingServiceCodesTab() {
         }
     }, [loaded]);
 
-    const loadAll = (callback : Function) =>{
+    const loadAll = (callback?: () => void) =>{
         const token = localStorage.getItem('authToken');
         fetch('https://ship-orders.vpa.com.au/api/platform/carrier_service_codes', {
             method: 'GET',
@@ -121,9 +116,7 @@ export default function ShippingServiceCodesTab() {
             if(data.success) {
                 console.log('CARRIERS ARE', data['carriers'])
                 setShippingServiceCodes(data['carriers']);
-                if (typeof callback === 'function') {
-                    callback();
-                }
+                callback?.();
             }
         });
     }
@@ -192,8 +185,8 @@ export default function ShippingServiceCodesTab() {
         tables = k.map((key: string)  => {
             const serviceCodes : ShippingServiceCode[] = shippingServiceCodes[key];
 
-            if(typeof serviceCodes[0] === 'undefined'){
-                return '';
+            if(!serviceCodes || typeof serviceCodes[0] === 'undefined'){
+                return null;
             }
 
 
@@ -206,11 +199,11 @@ export default function ShippingServiceCodesTab() {
 
 
 
-            return (<><Card className="mb-3">
+            return (<Card key={key} className="mb-3">
                 <CardHeader>
                     <CardTitle>{carrier}</CardTitle>
                 </CardHeader>
-                <CardContent><Table key={key}>
+                <CardContent><Table>
 
                 <TableHeader>
                     <TableRow>
@@ -235,7 +228,7 @@ export default function ShippingServiceCodesTab() {
                         </TableRow>);
                     })}
                 </TableBody>
-                </Table></CardContent></Card></>);
+                </Table></CardContent></Card>);
         })
     }
 

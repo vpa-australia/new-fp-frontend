@@ -58,6 +58,11 @@ interface ShipmentQuote {
 interface ShipmentDetail {
   id: number;
   warehouseCode: string;
+  carrierCode?: string | null;
+  serviceCode?: string | null;
+  carrierCodeDesired?: string | null;
+  serviceCodeDesired?: string | null;
+  selectedQuoteId?: number | null;
   comments?: ShipmentComment[];
   orderLines?: LineItem[];
   quotes?: ShipmentQuote[];
@@ -234,20 +239,79 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState<ShipmentComment[]>([]);
   const detail = shipment?.shipment ?? null;
-  const quotes = detail?.quotes ?? [];
+  const quotes = useMemo(() => detail?.quotes ?? [], [detail]);
   const orderLines = detail?.orderLines ?? [];
 
   useEffect(() => {
     if (quotes.length === 0) {
-      setSelectedQuote(null);
+      if (selectedQuote !== null) {
+        setSelectedQuote(null);
+      }
       return;
     }
 
-    const quoteAlreadySelected = selectedQuote !== null && quotes.some((quote) => quote.id === selectedQuote);
-    if (!quoteAlreadySelected) {
-      setSelectedQuote(quotes[0].id);
+    const normalize = (value?: string | null) =>
+      typeof value === 'string' ? value.trim().toLowerCase() : null;
+
+    const currentCarrier = normalize(detail?.carrierCode ?? detail?.carrierCodeDesired ?? null);
+    const currentService = normalize(detail?.serviceCode ?? detail?.serviceCodeDesired ?? null);
+    const desiredCarrier = normalize(detail?.carrierCodeDesired ?? null);
+    const desiredService = normalize(detail?.serviceCodeDesired ?? null);
+    const persistedQuoteId =
+      typeof detail?.selectedQuoteId === 'number' && !Number.isNaN(detail.selectedQuoteId)
+        ? detail.selectedQuoteId
+        : null;
+
+    const findMatch = () => {
+      if (persistedQuoteId !== null) {
+        const byId = quotes.find((quote) => quote.id === persistedQuoteId);
+        if (byId) {
+          return byId;
+        }
+      }
+
+      if (currentCarrier) {
+        const byCurrent = quotes.find((quote) => {
+          const quoteCarrier = normalize(quote.carrierCode);
+          const quoteService = normalize(quote.serviceCode);
+          if (quoteCarrier !== currentCarrier) {
+            return false;
+          }
+          if (currentService && quoteService !== currentService) {
+            return false;
+          }
+          return true;
+        });
+        if (byCurrent) {
+          return byCurrent;
+        }
+      }
+
+      if (desiredCarrier) {
+        const byDesired = quotes.find((quote) => {
+          const quoteCarrier = normalize(quote.carrierCode);
+          const quoteService = normalize(quote.serviceCode);
+          if (quoteCarrier !== desiredCarrier) {
+            return false;
+          }
+          if (desiredService && quoteService !== desiredService) {
+            return false;
+          }
+          return true;
+        });
+        if (byDesired) {
+          return byDesired;
+        }
+      }
+
+      return quotes[0];
+    };
+
+    const match = findMatch();
+    if (match && match.id !== selectedQuote) {
+      setSelectedQuote(match.id);
     }
-  }, [quotes, selectedQuote]);
+  }, [detail, quotes, selectedQuote]);
 
   const getQuoteRadioValue = useCallback(
     (quote: ShipmentQuote) => `${quote.id}-${quote.carrierCode}-${quote.serviceCode}`,
