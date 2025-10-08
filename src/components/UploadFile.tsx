@@ -138,14 +138,16 @@ export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | u
                             Upload a label manually to this order.
                         </DialogDescription>
                     </DialogHeader>
-                    {error.length > 0 ? <Alert variant="destructive">
-                        <AlertCircleIcon />
-                        <AlertTitle>There was an error uploading the PDF/s</AlertTitle>
-                        <AlertDescription>
-                            <p>{error}</p>
-                        </AlertDescription>
-                    </Alert> : ''}
+
                     <div className="grid gap-4">
+                        {error.length > 0 ? <Alert variant="destructive">
+                            <AlertCircleIcon />
+                            <AlertTitle>There was an error uploading the PDF/s</AlertTitle>
+                            <AlertDescription>
+                                <p>{error}</p>
+                            </AlertDescription>
+                        </Alert> : ''}
+
                         <div className="grid gap-3">
                             <Label htmlFor="tracking_code">Tracking Code</Label>
                             <Input id="tracking_code" name="name" defaultValue={manualUpload['tracking_code']} onChange={(e)=>setManualUpload({...manualUpload, 'tracking_code': e.target.value })} />
