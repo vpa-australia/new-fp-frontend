@@ -96,15 +96,15 @@ export default function ShippingServiceCodesTab() {
         setEditServiceData(sc);
         setIsEditShippingServiceCodeDialogOpen(true);
     }
-    const handleSubmitUpdate = (command : string) :void => {
+    const handleSubmitUpdate = (command: 'add' | 'edit'): void => {
 
         const token = localStorage.getItem('authToken');
         if(command === 'add'){
 
             const formData = new FormData();
 
-            Object.keys(editServiceData).forEach((k)=>{
-                formData.append(k, editServiceData[k]);
+            Object.entries(editServiceData).forEach(([key, value]) => {
+                formData.append(key, String(value ?? ''))
             })
 
 
@@ -129,7 +129,7 @@ export default function ShippingServiceCodesTab() {
         setIsSubmitting(true);
     }
 
-    const handleDelete = (id : number) =>{
+    const handleDelete = (id: number | string) =>{
 
         const token = localStorage.getItem('authToken');
 
