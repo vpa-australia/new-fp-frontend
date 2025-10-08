@@ -12,6 +12,7 @@ import { AlertCircleIcon, BoxIcon, Loader } from 'lucide-react';
 import { AlertDialog } from './ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import {UploadFile} from "@/components/UploadFile";
 
 interface OutOfStockWarehouse {
   id: number;
@@ -822,6 +823,8 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                 </div>
               ))}
             </RadioGroup>
+
+            {selectedQuoteValue === "manual" || true? <UploadFile shipment={shipment['shipment']} name={"users name"} title={'users title'} onChangeMessage={(value) => { setComments(value); }} /> :''}
 
             <Button className="mt-5" onClick={handleQuoteSelection} size="sm" variant="outline">
               Change Quote

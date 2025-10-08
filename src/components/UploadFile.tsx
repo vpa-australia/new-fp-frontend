@@ -71,7 +71,7 @@ interface Shipment {
     statusId?: number | null;
 }
 
-export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | undefined, onChangeMessage: Function | undefined}) {
+export function UploadFile({shipment, onChangeMessage, name, title} : {shipment: Shipment | undefined, onChangeMessage: Function | undefined, name: string | undefined, title: string | undefined}) {
 
     const [manualUpload, setManualUpload] = useState<ManualUpload | undefined>(typeof shipment !== 'undefined' ? {tracking_code: shipment['tracking_code'], manual_carrier_code: shipment['manualCarrierCode']} : undefined);
     const [isSubmitting, setIsSubmitting]  = useState<boolean>(false);
@@ -101,6 +101,8 @@ export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | u
 
         formData.append('tracking_code', manualUpload['tracking_code']);
         formData.append('manual_carrier_code', manualUpload['manual_carrier_code']);
+        formData.append('name', name !== undefined ? name : '');
+        formData.append('title', title !== undefined ? title : '');
         if (files && files.length > 0) {
             for (let i = 0; i < files.length; i++) {
                 formData.append('files[]', files[i]);
