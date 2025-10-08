@@ -12,11 +12,11 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import {
+/*import {
     Alert,
     AlertDescription,
     AlertTitle,
-} from "@/components/ui/alert"
+} from "@/components/ui/alert"*/
 import { AlertCircleIcon } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
@@ -25,6 +25,14 @@ import { Label } from "@/components/ui/label"
 interface ManualUpload{
     tracking_code: string;
     manual_carrier_code: string;
+}
+
+interface ShipmentComment {
+    id: number;
+    comment: string;
+    name: string;
+    title: string;
+    time: number;
 }
 
 interface Shipment {
@@ -98,22 +106,23 @@ export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | u
                 formData.append('files[]', files[i]);
             }
         }
-
+        console.log('The shipment', shipment)
         fetch('https://ship-orders.vpa.com.au/api/shipments/pdf/'+shipment['id'], {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
             },
             body: formData,
-        }).then(res => res.json()).then( (data : {success: boolean, message: string} | {success: boolean, message: string, comments: string}) =>{
+        }).then(res => res.json()).then( (data : {success: boolean, message: string} | {success: boolean, message: string, comments: ShipmentComment[]}) =>{
             if (data.success) {
                 if(typeof onChangeMessage === 'function'){
                     if(typeof data.comments !== 'undefined') {
                         onChangeMessage(data.comments);
                     }
-                    setIsSubmitting(false);
-                    setIsOpen(false);
+
                 }
+                setIsSubmitting(false);
+                setIsOpen(false);
             } else {
                 setError(data.message);
                 setIsSubmitting(false);
@@ -129,7 +138,7 @@ export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | u
         <Dialog open={isOpen}>
             <form>
                 <DialogTrigger asChild>
-                    <Button variant="outline">Upload File</Button>
+                    <Button variant="outline" onClick={()=>{setIsOpen(true)}}>Upload File</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
@@ -138,16 +147,14 @@ export function UploadFile({shipment, onChangeMessage} : {shipment: Shipment | u
                             Upload a label manually to this order.
                         </DialogDescription>
                     </DialogHeader>
-
+                    {error.length > 0 ? <><div>{error}</div>{/*<Alert variant="destructive">
+                        <AlertCircleIcon />
+                        <AlertTitle>There was an error uploading the PDF/s</AlertTitle>
+                        <AlertDescription>
+                            <p>{error}</p>
+                        </AlertDescription>
+                    </Alert>*/}</> : ''}
                     <div className="grid gap-4">
-                        {error.length > 0 ? <Alert variant="destructive">
-                            <AlertCircleIcon />
-                            <AlertTitle>There was an error uploading the PDF/s</AlertTitle>
-                            <AlertDescription>
-                                <p>{error}</p>
-                            </AlertDescription>
-                        </Alert> : ''}
-
                         <div className="grid gap-3">
                             <Label htmlFor="tracking_code">Tracking Code</Label>
                             <Input id="tracking_code" name="name" defaultValue={manualUpload['tracking_code']} onChange={(e)=>setManualUpload({...manualUpload, 'tracking_code': e.target.value })} />
