@@ -100,6 +100,7 @@ type ApiSuccessResponse = {
 type StoredUserData = {
   data?: {
     name?: string | null;
+    title?: string | null;
   };
   roles?: {
     roles?: Array<string | number>;
@@ -850,7 +851,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
               <UploadFile
                 shipment={shipment?.shipment}
                 name={user?.data.name}
-                title={''}
+                title={user?.data.title}
                 onChangeMessage={(value) => {
                   setComments(value);
                 }}
