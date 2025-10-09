@@ -58,6 +58,8 @@ interface ShipmentQuote {
   carrier?: {
     manual?: boolean;
     name: string;
+    code?: string | null;
+    color?: string | null;
   };
   isExpress?: boolean;
 }

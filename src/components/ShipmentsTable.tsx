@@ -94,6 +94,13 @@ interface Shipment {
     carrierCode: string;
     serviceCode: string;
     costIncludingTax: string;
+    carrier?: {
+      name?: string | null;
+      manual?: boolean;
+      code?: string | null;
+      color?: string | null;
+    };
+    color?: string | null;
   }>;
   orderDate: number;
   totalPrice: string;
@@ -2342,6 +2349,41 @@ export function ShipmentsTable({
     [generateLabelsForShipments, setAction, toast]
   );
 
+  const resolveShipmentRowColor = useCallback((shipment: Shipment): string => {
+    const fallbackColor = "#9370db";
+    const effectiveCode = (
+      shipment.carrierCode?.trim() ?? shipment.carrierCodeDesired?.trim() ?? ""
+    ).toLowerCase();
+
+    if (!effectiveCode) {
+      return fallbackColor;
+    }
+
+    const quotes = shipment.quotes ?? [];
+    const match = quotes.find((quote) => {
+      const codes = [
+        quote.carrierCode,
+        quote.carrierCodeDesired,
+        quote.carrier?.code,
+      ]
+        .map((code) =>
+          typeof code === "string" ? code.trim().toLowerCase() : ""
+        )
+        .filter(Boolean);
+      return codes.some((code) => code === effectiveCode);
+    });
+
+    const colorCandidate =
+      match?.carrier?.color ??
+      (typeof match?.color === "string" ? match.color : undefined);
+
+    if (colorCandidate && colorCandidate.trim().length > 0) {
+      return colorCandidate.trim();
+    }
+
+    return fallbackColor;
+  }, []);
+
   if (shipmentsAreLoading) {
     return (
       <div className="flex flex-1 justify-center items-center h-[90vh] w-full">
@@ -2956,11 +2998,8 @@ export function ShipmentsTable({
               >
                 <TableCell
                   id={`select-row-${shipment.id}`}
-                  className={`text-white ${
-                    shipment.carrierCode === "auspost"
-                      ? "bg-[#F46E6B]"
-                      : "bg-[#9370db]"
-                  } py-0`}
+                  className="text-white py-0"
+                  style={{ backgroundColor: resolveShipmentRowColor(shipment) }}
                 >
                   <div className="flex flex-row gap-x-3 items-center">
                     <Checkbox
