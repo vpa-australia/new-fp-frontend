@@ -43,7 +43,7 @@ export interface UploadableShipment {
 }
 interface UploadFileProps {
     shipment?: UploadableShipment;
-    onChangeMessage?: (message: string) => void;
+    onChangeMessage?: (comments: ShipmentComment[]) => void;
     name?: string;
     title?: string;
 }
