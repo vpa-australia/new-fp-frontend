@@ -117,6 +117,18 @@ interface StatusOption {
   greenTick: boolean;
 }
 
+interface CarrierSummary {
+  id: number;
+  code: string;
+  name: string;
+  color: string | null;
+}
+
+type CarriersResponse = {
+  success: boolean;
+  carriers?: Record<string, CarrierSummary>;
+};
+
 type SearchParameter = {
   name: string;
   column: string;
@@ -370,6 +382,9 @@ export function ShipmentsTable({
   const [statusOptions, setStatusOptions] =
     useState<StatusOption[]>(defaultStatusOptions);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
+  const [carrierColors, setCarrierColors] = useState<Record<string, string>>(
+    {}
+  );
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
   const [searchFields, setSearchFields] = useState<
     Record<string, SearchParameter>
@@ -1324,6 +1339,46 @@ export function ShipmentsTable({
     };
 
     fetchStatusOptions();
+
+    const fetchCarrierSummaries = async () => {
+      try {
+        const token = getAuthToken();
+
+        const response = await fetch(
+          "https://ship-orders.vpa.com.au/api/platform/carriers",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch carriers");
+        }
+
+        const data = (await response.json()) as CarriersResponse;
+        if (data.success && data.carriers) {
+          const mapped = Object.values(data.carriers).reduce<
+            Record<string, string>
+          >((acc, carrier) => {
+            if (carrier.code) {
+              acc[carrier.code.toLowerCase()] =
+                carrier.color?.trim() ?? acc[carrier.code.toLowerCase()] ?? "";
+            }
+            return acc;
+          }, {});
+
+          setCarrierColors(mapped);
+        }
+      } catch (error) {
+        console.error("Error fetching carriers:", error);
+        setCarrierColors({});
+      }
+    };
+
+    fetchCarrierSummaries();
   }, [getAuthToken, toast]);
 
   // Calculate which edge is closest and snap to it
@@ -2409,42 +2464,26 @@ export function ShipmentsTable({
     [generateLabelsForShipments, setAction, toast]
   );
 
-  const resolveShipmentRowColor = useCallback((shipment: Shipment): string => {
-    const fallbackColor = "#9370db";
-    const effectiveCode = (
-      shipment.carrierCode?.trim() ??
-      shipment.carrierCodeDesired?.trim() ??
-      ""
-    ).toLowerCase();
+  const resolveShipmentRowColor = useCallback(
+    (shipment: Shipment): string => {
+      const fallbackColor = "#9370db";
+      const effectiveCode = (
+        shipment.carrierCode?.trim() ?? shipment.carrierCodeDesired?.trim() ?? ""
+      ).toLowerCase();
 
-    if (!effectiveCode) {
+      if (!effectiveCode) {
+        return fallbackColor;
+      }
+
+      const mappedColor = carrierColors[effectiveCode];
+      if (mappedColor && mappedColor.trim().length > 0) {
+        return mappedColor.trim();
+      }
+
       return fallbackColor;
-    }
-
-    const quotes = shipment.quotes ?? [];
-    const match = quotes.find((quote) => {
-      const codes = [
-        quote.carrierCode,
-        quote.carrierCodeDesired,
-        quote.carrier?.code,
-      ]
-        .map((code) =>
-          typeof code === "string" ? code.trim().toLowerCase() : ""
-        )
-        .filter(Boolean);
-      return codes.some((code) => code === effectiveCode);
-    });
-
-    const colorCandidate =
-      match?.carrier?.color ??
-      (typeof match?.color === "string" ? match.color : undefined);
-
-    if (colorCandidate && colorCandidate.trim().length > 0) {
-      return colorCandidate.trim();
-    }
-
-    return fallbackColor;
-  }, []);
+    },
+    [carrierColors]
+  );
 
   if (shipmentsAreLoading) {
     return (
