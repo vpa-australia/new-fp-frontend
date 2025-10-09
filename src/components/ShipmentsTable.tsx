@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -803,6 +803,15 @@ export function ShipmentsTable({
     [setSearchValues]
   );
 
+  const updateSearchValue = useCallback(
+    (fieldKey: string, value: string) =>
+      applyAndExecute((current) => ({
+        ...current,
+        [fieldKey]: value,
+      })),
+    [applyAndExecute]
+  );
+
   // Run searches after state updates commit to avoid parent updates during render
   useEffect(() => {
     if (!pendingSearchValuesRef.current) {
@@ -1137,6 +1146,62 @@ export function ShipmentsTable({
         if (data && data.success && data.searchParameters) {
           setSearchFields(data.searchParameters);
 
+          const parameterEntries = Object.entries(data.searchParameters);
+
+          // Prefer standard customer/address fields when deciding defaults
+          const essentialFieldKeywords = [
+            "customer",
+            "address",
+            "first_name",
+            "last_name",
+            "firstname",
+            "lastname",
+          ];
+          const defaultFieldKeywords = [
+            "customer",
+            "address",
+            "suburb",
+            "postcode",
+            "city",
+            "state",
+            "first_name",
+            "last_name",
+            "firstname",
+            "lastname",
+          ];
+
+          const findMatchingKeys = (keywords: string[]) =>
+            parameterEntries
+              .filter(([key, field]) => {
+                const haystack = `${key} ${field.name} ${field.column}`.toLowerCase();
+                return keywords.some((keyword) => haystack.includes(keyword));
+              })
+              .map(([key]) => key);
+
+          const essentialFieldKeys = new Set(
+            findMatchingKeys(essentialFieldKeywords)
+          );
+
+          const defaultFieldKeys = new Set(findMatchingKeys(defaultFieldKeywords));
+
+          const topWeightedKeys = parameterEntries
+            .slice()
+            .sort(([, a], [, b]) => b.weight - a.weight)
+            .slice(0, 5)
+            .map(([key]) => key);
+
+          topWeightedKeys.forEach((key) => defaultFieldKeys.add(key));
+          essentialFieldKeys.forEach((key) => defaultFieldKeys.add(key));
+
+          const applyDefaultVisibility = (
+            target: Record<string, boolean>
+          ): Record<string, boolean> => {
+            parameterEntries.forEach(([key]) => {
+              target[key] = defaultFieldKeys.has(key);
+            });
+            return target;
+          };
+
           // Initialize visible fields and search values
           let initialVisibleFields: Record<string, boolean> = {};
           const initialSearchValueMap: Record<string, string> = {};
@@ -1150,57 +1215,46 @@ export function ShipmentsTable({
             try {
               // Parse saved fields and validate they still exist in the API response
               const parsedFields = JSON.parse(savedVisibleFields);
-              // Filter out any fields that no longer exist in the API response
-              initialVisibleFields = Object.keys(data.searchParameters).reduce(
-                (acc, key) => {
+              initialVisibleFields = parameterEntries.reduce(
+                (acc, [key]) => {
                   acc[key] = parsedFields[key] === true;
                   return acc;
                 },
                 {} as Record<string, boolean>
               );
 
-              // If no fields are visible (all false), show default top fields
+              // If no fields are visible (all false), show defaults
               if (
                 !Object.values(initialVisibleFields).some(
                   (value) => value === true
                 )
               ) {
-                // Fall back to default top fields
-                const topFields = Object.entries(data.searchParameters)
-                  .sort(([, a], [, b]) => b.weight - a.weight)
-                  .slice(0, 5)
-                  .map(([key]) => key);
-
-                Object.keys(data.searchParameters).forEach((key) => {
-                  initialVisibleFields[key] = topFields.includes(key);
-                });
+                initialVisibleFields = applyDefaultVisibility(
+                  initialVisibleFields
+                );
               }
             } catch (error: unknown) {
               console.error("Error parsing saved search fields:", error);
-              // Fall back to default top fields
-              const topFields = Object.entries(data.searchParameters)
-                .sort(([, a], [, b]) => b.weight - a.weight)
-                .slice(0, 5)
-                .map(([key]) => key);
-
-              Object.keys(data.searchParameters).forEach((key) => {
-                initialVisibleFields[key] = topFields.includes(key); // Only top fields visible by default
-              });
+              initialVisibleFields = applyDefaultVisibility({});
             }
           } else {
-            // No saved fields, use default top fields
-            const topFields = Object.entries(data.searchParameters)
-              .sort(([, a], [, b]) => b.weight - a.weight)
-              .slice(0, 5)
-              .map(([key]) => key);
-
-            Object.keys(data.searchParameters).forEach((key) => {
-              initialVisibleFields[key] = topFields.includes(key); // Only top fields visible by default
-            });
+            initialVisibleFields = applyDefaultVisibility({});
           }
 
+          // Always ensure essential fields remain visible
+          essentialFieldKeys.forEach((key) => {
+            if (key in initialVisibleFields) {
+              initialVisibleFields[key] = true;
+            }
+          });
+
+          localStorage.setItem(
+            "searchVisibleFields",
+            JSON.stringify(initialVisibleFields)
+          );
+
           // Initialize all search values as empty
-          Object.keys(data.searchParameters).forEach((key) => {
+          parameterEntries.forEach(([key]) => {
             initialSearchValueMap[key] = ""; // Empty values by default
           });
 
@@ -1700,6 +1754,11 @@ export function ShipmentsTable({
       return;
     }
 
+    const abortController = new AbortController();
+    let isActive = true;
+
+    setIsLoadingDetail(true);
+
     (async () => {
       try {
         const token = getAuthToken();
@@ -1711,17 +1770,34 @@ export function ShipmentsTable({
               Authorization: `Bearer ${token}`,
               Accept: "application/json",
             },
+            signal: abortController.signal,
           }
         );
+
+        if (abortController.signal.aborted || !isActive) {
+          return;
+        }
 
         if (!response.ok) {
           throw new Error("Failed to fetch shipment details");
         }
 
         const data = (await response.json()) as ShipmentDetailResponse;
+        if (!isActive) {
+          return;
+        }
         setDetailedShipment(data);
       } catch (error: unknown) {
+        if (
+          abortController.signal.aborted ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
+          return;
+        }
         console.error("Error fetching shipment details:", error);
+        if (!isActive) {
+          return;
+        }
         setDetailedShipment(null);
         toast({
           variant: "destructive",
@@ -1732,9 +1808,16 @@ export function ShipmentsTable({
           ),
         });
       } finally {
-        setIsLoadingDetail(false);
+        if (isActive) {
+          setIsLoadingDetail(false);
+        }
       }
     })();
+
+    return () => {
+      isActive = false;
+      abortController.abort();
+    };
   }, [detailAction, getAuthToken, selectedShipmentId, toast]);
 
   const handleShipmentDetailClick = useCallback(
@@ -1901,63 +1984,6 @@ export function ShipmentsTable({
     },
     [getAuthToken, setAction, toast]
   );
-
-  const handleGenerateLabels = useCallback(async () => {
-    const selectedIds = Object.entries(selectedRows)
-      .filter(([, isChecked]) => isChecked)
-      .map(([id]) => id);
-
-    if (selectedIds.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "No Shipments Selected",
-        description: "Please select at least one shipment to generate labels.",
-      });
-      return;
-    }
-
-    const token = getAuthToken();
-
-    try {
-      setStillInProgress(true);
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels?shipment_ids=${selectedIds.join(
-          ","
-        )}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/pdf",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message ||
-            `Failed to generate labels: ${response.statusText}`
-        );
-      }
-
-      toast({
-        variant: "success",
-        title: "Labels Generated",
-        description: "Labels have been generated successfully.",
-      });
-      setAction((prev) => prev + 1);
-      setStillInProgress(false);
-      setSelectedRows({});
-    } catch (error: unknown) {
-      console.error("Error generating labels:", error);
-      toast({
-        variant: "destructive",
-        title: "Generation Failed",
-        description: getErrorMessage(error, "Failed to generate labels."),
-      });
-    }
-  }, [getAuthToken, selectedRows, setAction, toast]);
 
   const handleQuickPrint = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
@@ -2169,29 +2195,134 @@ export function ShipmentsTable({
     [getAuthToken, setAction, toast]
   );
 
-  const handlePrintLabel = useCallback(
-    async (shipmentId: number) => {
-      const token = getAuthToken();
+  const generateLabelsForShipments = useCallback(
+    async (shipmentIds: number[]) => {
+      if (shipmentIds.length === 0) {
+        throw new Error("No shipment ids provided for label generation.");
+      }
 
-      try {
-        const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels?shipment_ids=${shipmentId}`,
-          {
-            method: "PUT",
+      const token = getAuthToken();
+      const baseUrl =
+        "https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels";
+      const query = `shipment_ids=${shipmentIds.join(",")}`;
+
+      const performRequest = async (
+        method: "POST" | "PUT"
+      ): Promise<{
+        ok: boolean;
+        status: number | null;
+        message?: string;
+      }> => {
+        try {
+          const init: RequestInit = {
+            method,
             headers: {
               Authorization: `Bearer ${token}`,
-              Accept: "application/pdf",
+              Accept: "application/json",
             },
-          }
-        );
+          };
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.message ||
-              `Failed to generate labels: ${response.statusText}`
-          );
+          if (method === "POST") {
+            init.headers = {
+              ...init.headers,
+              "Content-Type": "application/json",
+            };
+            init.body = JSON.stringify({ shipment_ids: shipmentIds });
+          }
+
+          const response = await fetch(`${baseUrl}?${query}`, init);
+
+          if (response.ok) {
+            return { ok: true, status: response.status };
+          }
+
+          const errorData = await response.json().catch(() => null);
+          const message =
+            (errorData &&
+              typeof errorData === "object" &&
+              errorData !== null &&
+              "message" in errorData
+              ? String(
+                  (errorData as { message?: unknown }).message ??
+                    "Failed to generate labels."
+                )
+              : undefined) ??
+            `Failed to generate labels: ${response.status} ${response.statusText}`;
+
+          return {
+            ok: false,
+            status: response.status,
+            message,
+          };
+        } catch (error: unknown) {
+          return {
+            ok: false,
+            status: null,
+            message: getErrorMessage(
+              error,
+              "Failed to contact the label service."
+            ),
+          };
         }
+      };
+
+      let result = await performRequest("POST");
+
+      if (
+        !result.ok &&
+        (result.status === null || result.status === 405 || result.status === 404)
+      ) {
+        result = await performRequest("PUT");
+      }
+
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+    },
+    [getAuthToken]
+  );
+
+  const handleGenerateLabels = useCallback(async () => {
+    const selectedIds = Object.entries(selectedRows)
+      .filter(([, isChecked]) => isChecked)
+      .map(([id]) => Number(id));
+
+    if (selectedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Please select at least one shipment to generate labels.",
+      });
+      return;
+    }
+
+    try {
+      setStillInProgress(true);
+      await generateLabelsForShipments(selectedIds);
+
+      toast({
+        variant: "success",
+        title: "Labels Generated",
+        description: "Labels have been generated successfully.",
+      });
+      setAction((prev) => prev + 1);
+      setSelectedRows({});
+    } catch (error: unknown) {
+      console.error("Error generating labels:", error);
+      toast({
+        variant: "destructive",
+        title: "Generation Failed",
+        description: getErrorMessage(error, "Failed to generate labels."),
+      });
+    } finally {
+      setStillInProgress(false);
+    }
+  }, [generateLabelsForShipments, selectedRows, setAction, setStillInProgress, toast]);
+
+  const handlePrintLabel = useCallback(
+    async (shipmentId: number) => {
+      try {
+        await generateLabelsForShipments([shipmentId]);
 
         toast({
           variant: "success",
@@ -2208,7 +2339,7 @@ export function ShipmentsTable({
         });
       }
     },
-    [getAuthToken, setAction, toast]
+    [generateLabelsForShipments, setAction, toast]
   );
 
   if (shipmentsAreLoading) {
@@ -2238,174 +2369,171 @@ export function ShipmentsTable({
         pdfUrl={pdfUrl}
         title={pdfTitle}
       />
-      <TooltipProvider delayDuration={300}>
+      <div
+        ref={toolbarRef}
+        className={cn(
+          "fixed bg-background border rounded-lg shadow-lg p-1 select-none",
+          isVertical ? "flex flex-col items-center" : "flex items-center",
+          isDragging
+            ? "cursor-grabbing transition-none"
+            : "transition-all duration-300 ease-out"
+        )}
+        style={{
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          zIndex: 50,
+        }}
+        aria-label="Toolbar"
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="p-2 cursor-grab hover:bg-muted rounded-md"
+              onMouseDown={handleMouseDown}
+              aria-label="Drag handle"
+            >
+              <GripVertical
+                className={cn("h-4 w-4", isVertical && "transform rotate-90")}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side={getTooltipSide()}>
+            <p>Drag to move toolbar</p>
+          </TooltipContent>
+        </Tooltip>
+
         <div
-          ref={toolbarRef}
           className={cn(
-            "fixed bg-background border rounded-lg shadow-lg p-1 select-none",
-            isVertical ? "flex flex-col items-center" : "flex items-center",
-            isDragging
-              ? "cursor-grabbing transition-none"
-              : "transition-all duration-300 ease-out"
+            isVertical ? "flex flex-col gap-2" : "flex flex-wrap gap-2"
           )}
-          style={{
-            left: `${position.x}px`,
-            top: `${position.y}px`,
-            zIndex: 50,
-          }}
-          aria-label="Toolbar"
         >
+          <div className="flex-grow sm:flex-grow-0">
+            <Select
+              disabled={isLoadingStatuses || selectedWarehouse === "All"}
+              onValueChange={handleBulkStatusChange}
+            >
+              <SelectTrigger className="w-full sm:w-[60px] text-xs sm:text-sm">
+                <GrStatusGood />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-" disabled>
+                  Change Status
+                </SelectItem>
+                {statusOptions.map((option) => (
+                  <SelectItem
+                    className="-p-2"
+                    key={option.value}
+                    value={option.value}
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div
-                className="p-2 cursor-grab hover:bg-muted rounded-md"
-                onMouseDown={handleMouseDown}
-                aria-label="Drag handle"
+              <Button
+                disabled={isLoadingStatuses || selectedWarehouse === "All"}
+                onClick={handleInvoicePrint}
+                variant="outline"
+                size="icon"
+                className="flex-grow-0"
               >
-                <GripVertical
-                  className={cn("h-4 w-4", isVertical && "transform rotate-90")}
-                />
-              </div>
+                <FileText className="h-4 w-4" />
+              </Button>
             </TooltipTrigger>
             <TooltipContent side={getTooltipSide()}>
-              <p>Drag to move toolbar</p>
+              <p>Print Invoices</p>
             </TooltipContent>
           </Tooltip>
 
-          <div
-            className={cn(
-              isVertical ? "flex flex-col gap-2" : "flex flex-wrap gap-2"
-            )}
-          >
-            <div className="flex-grow sm:flex-grow-0">
-              <Select
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
                 disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                onValueChange={handleBulkStatusChange}
+                variant="outline"
+                size="icon"
+                onClick={handleGenerateLabels}
               >
-                <SelectTrigger className="w-full sm:w-[60px] text-xs sm:text-sm">
-                  <GrStatusGood />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="-" disabled>
-                    Change Status
-                  </SelectItem>
-                  {statusOptions.map((option) => (
-                    <SelectItem
-                      className="-p-2"
-                      key={option.value}
-                      value={option.value}
-                    >
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                  onClick={handleInvoicePrint}
-                  variant="outline"
-                  size="icon"
-                  className="flex-grow-0"
-                >
-                  <FileText className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={getTooltipSide()}>
-                <p>Print Invoices</p>
-              </TooltipContent>
-            </Tooltip>
+                <Tag className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()}>
+              <p>Generate Labels</p>
+            </TooltipContent>
+          </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                  variant="outline"
-                  size="icon"
-                  onClick={handleGenerateLabels}
-                >
-                  <Tag className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={getTooltipSide()}>
-                <p>Generate Labels</p>
-              </TooltipContent>
-            </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                disabled={isLoadingStatuses || selectedWarehouse === "All"}
+                variant="outline"
+                size="icon"
+                onClick={handleQuickPrint}
+              >
+                <Zap className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()}>
+              <p>Quick Print</p>
+            </TooltipContent>
+          </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                  variant="outline"
-                  size="icon"
-                  onClick={handleQuickPrint}
-                >
-                  <Zap className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={getTooltipSide()}>
-                <p>Quick Print</p>
-              </TooltipContent>
-            </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                disabled={isLoadingStatuses || selectedWarehouse === "All"}
+                variant="outline"
+                size="icon"
+                onClick={handleMarkShipmentsAsShipped}
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()}>
+              <p>Mark Shipped</p>
+            </TooltipContent>
+          </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                  variant="outline"
-                  size="icon"
-                  onClick={handleMarkShipmentsAsShipped}
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={getTooltipSide()}>
-                <p>Mark Shipped</p>
-              </TooltipContent>
-            </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                disabled={isLoadingStatuses || selectedWarehouse === "All"}
+                variant="outline"
+                size="icon"
+                onClick={handleMarkShipmentsAsNotShipped}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()}>
+              <p>Mark Not Shipped</p>
+            </TooltipContent>
+          </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                  variant="outline"
-                  size="icon"
-                  onClick={handleMarkShipmentsAsNotShipped}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={getTooltipSide()}>
-                <p>Mark Not Shipped</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <Send className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={getTooltipSide()}>
-                <p>Manifest</p>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <QrCode className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={getTooltipSide()}>
-                <p>Manifest Codes</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Send className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()}>
+              <p>Manifest</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon">
+                <QrCode className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()}>
+              <p>Manifest Codes</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
-      </TooltipProvider>
-
+      </div>
       <Table className="">
         <TableHeader>
           <TableRow className="">
@@ -2446,30 +2574,100 @@ export function ShipmentsTable({
                         CLEAR
                       </Button>
                     </div>
-                    <div className="grid gap-4 py-4 pt-0">
+                    <div className="py-4 pt-0 space-y-4">
                       {loadingSearchParams ? (
                         <div className="flex justify-center items-center py-4">
                           <Loader className="h-6 w-6 animate-spin mr-2" />
                           <span>Loading search fields...</span>
                         </div>
                       ) : (
-                        Object.entries(searchFields)
-                          .sort((a, b) => b[1].weight - a[1].weight) // Sort by weight (highest first)
-                          .filter(([key]) => visibleFields[key])
-                          .map(([key, field]) => (
-                            <div
-                              key={key}
-                              className="grid grid-cols-1 items-center gap-2"
-                            >
-                              <div className="flex justify-between items-center">
-                                <Label htmlFor={key}>{field.name}</Label>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
+                        <>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            {Object.entries(searchFields)
+                              .sort((a, b) => b[1].weight - a[1].weight) // Sort by weight (highest first)
+                              .filter(([key]) => visibleFields[key])
+                              .map(([key, field]) => (
+                                <div key={key} className="flex flex-col gap-2">
+                                  <div className="flex justify-between items-center">
+                                    <Label htmlFor={key}>{field.name}</Label>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const updatedFields = {
+                                          ...visibleFields,
+                                          [key]: false,
+                                        };
+                                        setVisibleFields(updatedFields);
+                                        // Save to localStorage
+                                        localStorage.setItem(
+                                          "searchVisibleFields",
+                                          JSON.stringify(updatedFields)
+                                        );
+                                        applyAndExecute((current) => ({
+                                          ...current,
+                                          [key]: "",
+                                        }));
+                                      }}
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                  {field.type === "date" ? (
+                                    <Input
+                                      id={key}
+                                      type="date"
+                                      value={searchValues[key] || ""}
+                                      className="w-full"
+                                      onChange={(e) => {
+                                        updateSearchValue(key, e.target.value);
+                                      }}
+                                    />
+                                  ) : field.type === "boolean" ? (
+                                    <Select
+                                      value={searchValues[key] || ""}
+                                      onValueChange={(value) => {
+                                        updateSearchValue(key, value);
+                                      }}
+                                    >
+                                      <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="true">
+                                          Yes
+                                        </SelectItem>
+                                        <SelectItem value="false">
+                                          No
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Input
+                                      id={key}
+                                      placeholder={field.name}
+                                      value={searchValues[key] || ""}
+                                      className="w-full"
+                                      onChange={(e) => {
+                                        updateSearchValue(key, e.target.value);
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+
+                          {!loadingSearchParams &&
+                            Object.keys(searchFields).some(
+                              (key) => !visibleFields[key]
+                            ) && (
+                              <div className="mt-2">
+                                <Select
+                                  onValueChange={(value) => {
                                     const updatedFields = {
                                       ...visibleFields,
-                                      [key]: false,
+                                      [value]: true,
                                     };
                                     setVisibleFields(updatedFields);
                                     // Save to localStorage
@@ -2477,98 +2675,25 @@ export function ShipmentsTable({
                                       "searchVisibleFields",
                                       JSON.stringify(updatedFields)
                                     );
-                                    applyAndExecute((current) => ({
-                                      ...current,
-                                      [key]: "",
-                                    }));
-                                  }}
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              {field.type === "date" ? (
-                                <Input
-                                  id={key}
-                                  type="date"
-                                  value={searchValues[key] || ""}
-                                  onChange={(e) => {
-                                    setSearchValues((prev) => ({
-                                      ...prev,
-                                      [key]: e.target.value,
-                                    }));
-                                  }}
-                                />
-                              ) : field.type === "boolean" ? (
-                                <Select
-                                  value={searchValues[key] || ""}
-                                  onValueChange={(value) => {
-                                    setSearchValues((prev) => ({
-                                      ...prev,
-                                      [key]: value,
-                                    }));
                                   }}
                                 >
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Select..." />
+                                    <SelectValue placeholder="Add search field" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="true">Yes</SelectItem>
-                                    <SelectItem value="false">No</SelectItem>
+                                    {Object.entries(searchFields)
+                                      .filter(([key]) => !visibleFields[key])
+                                      .map(([key, field]) => (
+                                        <SelectItem key={key} value={key}>
+                                          {field.name}
+                                        </SelectItem>
+                                      ))}
                                   </SelectContent>
                                 </Select>
-                              ) : (
-                                <Input
-                                  id={key}
-                                  placeholder=""
-                                  value={searchValues[key] || ""}
-                                  onChange={(e) => {
-                                    setSearchValues((prev) => ({
-                                      ...prev,
-                                      [key]: e.target.value,
-                                    }));
-                                  }}
-                                />
-                              )}
-                            </div>
-                          ))
+                              </div>
+                            )}
+                        </>
                       )}
-
-                      {/* Field selector dropdown */}
-                      {!loadingSearchParams &&
-                        Object.keys(searchFields).some(
-                          (key) => !visibleFields[key]
-                        ) && (
-                          <div className="mt-2">
-                            <Select
-                              onValueChange={(value) => {
-                                const updatedFields = {
-                                  ...visibleFields,
-                                  [value]: true,
-                                };
-                                setVisibleFields(updatedFields);
-                                // Save to localStorage
-                                localStorage.setItem(
-                                  "searchVisibleFields",
-                                  JSON.stringify(updatedFields)
-                                );
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Add search field" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(searchFields)
-                                  .filter(([key]) => !visibleFields[key])
-                                  .map(([key, field]) => (
-                                    <SelectItem key={key} value={key}>
-                                      {field.name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
                     </div>
                     <DialogFooter className="justify-end space-x-2">
                       <DialogClose asChild>
@@ -3015,7 +3140,7 @@ export function ShipmentsTable({
                             <FaTrashRestore className="w-5 h-5 text-white" />
                           </div>
                         </TooltipTrigger>
-                        <TooltipContent>Restore Shipment</TooltipContent> 
+                        <TooltipContent>Restore Shipment</TooltipContent>
                       </Tooltip>
                     )}
 
