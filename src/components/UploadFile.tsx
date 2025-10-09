@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useRef} from 'react';
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -35,44 +35,15 @@ interface ShipmentComment {
     time: number;
 }
 
-interface Shipment {
+export interface UploadableShipment {
     id: number;
-    shopifyId: number;
-    shopifyOrderNumber: string;
-    orderName: string;
-    email: string;
-    address1: string;
-    suburb: string;
-    region: string;
-    postCode: string;
-    country: string;
-    locked: boolean;
-    warehouseCode: string;
-    carrierCode: string;
-    serviceCode: string;
-    tracking_code: string;
-    manualCarrierCode: string;
-    labelPrinted: boolean;
-    unlDone: boolean;
-    sent: boolean;
-    invoicePrinted: boolean;
-    manifested: boolean;
-    status: string | null;
-    carrierCodeDesired: string;
-    quotes: Array<{
-        carrierCodeDesired: string;
-        carrierCode: string;
-        serviceCode: string;
-        costIncludingTax: string;
-    }>;
-    orderDate: number;
-    totalPrice: string;
-    lastApiUpdate: number;
-    statusId?: number | null;
+    tracking_code?: string;
+    manualCarrierCode?: string;
+    [key: string]: unknown;
 }
 interface UploadFileProps {
-    shipment?: Shipment;
-    onChangeMessage?: (message: string) => void;
+    shipment?: UploadableShipment;
+    onChangeMessage?: (comments: ShipmentComment[]) => void;
     name?: string;
     title?: string;
 }
@@ -80,14 +51,35 @@ interface UploadFileProps {
 export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFileProps) {
 
 
-    const [manualUpload, setManualUpload] = useState<ManualUpload | undefined>(typeof shipment !== 'undefined' ? {tracking_code: shipment['tracking_code'], manual_carrier_code: shipment['manualCarrierCode']} : undefined);
+    const [manualUpload, setManualUpload] = useState<ManualUpload | undefined>(
+        typeof shipment !== 'undefined'
+            ? {
+                tracking_code: shipment.tracking_code ?? "",
+                manual_carrier_code: shipment.manualCarrierCode ?? "",
+            }
+            : undefined
+    );
+    const lastShipmentIdRef = useRef<number | null>(shipment?.id ?? null);
     const [isSubmitting, setIsSubmitting]  = useState<boolean>(false);
     const [isOpen, setIsOpen] = useState<boolean>(false);
     const [files, setFiles] = useState<FileList | null>(null);
     const [error, setError] = useState<string>('');
     useEffect(() => {
-        if (typeof manualUpload === 'undefined' && typeof shipment !== 'undefined') {
-            setManualUpload({tracking_code: shipment['tracking_code'], manual_carrier_code: shipment['manualCarrierCode']});
+        if (!shipment) {
+            setManualUpload(undefined);
+            lastShipmentIdRef.current = null;
+            return;
+        }
+
+        const shipmentId = shipment.id;
+        const hasChanged = lastShipmentIdRef.current !== shipmentId;
+
+        if (hasChanged || !manualUpload) {
+            setManualUpload({
+                tracking_code: shipment.tracking_code ?? "",
+                manual_carrier_code: shipment.manualCarrierCode ?? "",
+            });
+            lastShipmentIdRef.current = shipmentId;
         }
     }, [shipment, manualUpload]);
 
@@ -108,8 +100,8 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
         const token = localStorage.getItem('authToken');
         const formData = new FormData();
 
-        formData.append('tracking_code', manualUpload['tracking_code']);
-        formData.append('manual_carrier_code', manualUpload['manual_carrier_code']);
+        formData.append('tracking_code', manualUpload.tracking_code);
+        formData.append('manual_carrier_code', manualUpload.manual_carrier_code);
         formData.append('name', name !== undefined ? name : '');
         formData.append('title', title !== undefined ? title : '');
         if (files && files.length > 0) {
@@ -118,7 +110,7 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
             }
         }
         console.log('The shipment', shipment)
-        fetch('https://ship-orders.vpa.com.au/api/shipments/pdf/'+shipment['id'], {
+        fetch('https://ship-orders.vpa.com.au/api/shipments/pdf/'+shipment.id, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
