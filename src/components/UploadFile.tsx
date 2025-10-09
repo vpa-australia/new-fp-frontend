@@ -90,11 +90,6 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
             return;
         }
 
-        if(files === null){
-            setError("You must select at least one file.")
-            return;
-        }
-
         setError("");
         setIsSubmitting(true);
         const token = localStorage.getItem('authToken');
