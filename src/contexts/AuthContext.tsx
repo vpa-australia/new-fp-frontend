@@ -16,13 +16,29 @@ const AUTH_TOKEN_KEY = 'authToken';
 const USER_EMAIL_KEY = 'userEmail';
 const USER_DATA_KEY = 'userData';
 
-type AuthUser = Record<string, unknown> & {
-  email?: string | null;
-  data?: {
-    email?: string | null;
-    [key: string]: unknown;
-  };
-};
+export interface AuthUserRolesInfo {
+  roles: string[];
+  warehouses: string[];
+}
+
+export interface AuthUserProfile {
+  id: number;
+  name: string;
+  email: string;
+  email_verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}
+
+export interface AuthUser {
+  status: boolean;
+  message?: string;
+  data: AuthUserProfile;
+  roles: AuthUserRolesInfo;
+  availableRoles?: AuthUserRolesInfo;
+  [key: string]: unknown;
+}
 
 type LoginParams = {
   token: string;
@@ -49,7 +65,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const readJsonFromStorage = <T,>(key: string): T | null => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return null;
   }
   const rawValue = window.localStorage.getItem(key);
@@ -64,23 +80,75 @@ const readJsonFromStorage = <T,>(key: string): T | null => {
   }
 };
 
-const resolveUserEmail = (user: AuthUser | null | undefined): string | null => {
-  if (!user) {
-    return null;
-  }
-  if (typeof user.email === 'string' && user.email.length > 0) {
-    return user.email;
-  }
-  const nestedEmail = user.data && typeof user.data === 'object'
-    ? (user.data.email ?? null)
-    : null;
+const resolveUserEmail = (user: AuthUser | null | undefined): string | null =>
+  user?.data?.email ?? null;
 
-  return typeof nestedEmail === 'string' && nestedEmail.length > 0
-    ? nestedEmail
-    : null;
+const ensureBrowserStorageLoaded = () => typeof window !== "undefined";
+
+const normalizeRoles = (input: unknown): AuthUserRolesInfo => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { roles: [], warehouses: [] };
+  }
+  const candidate = input as { roles?: unknown; warehouses?: unknown };
+  const roles = Array.isArray(candidate.roles)
+    ? candidate.roles.map((value) => String(value))
+    : [];
+  const warehouses = Array.isArray(candidate.warehouses)
+    ? candidate.warehouses.map((value) => String(value))
+    : [];
+  return { roles, warehouses };
 };
 
-const ensureBrowserStorageLoaded = () => typeof window !== 'undefined';
+const normalizeProfile = (input: unknown): AuthUserProfile => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {
+      id: 0,
+      name: "",
+      email: "",
+      email_verified_at: null,
+      created_at: "",
+      updated_at: "",
+    };
+  }
+
+  const source = input as Record<string, unknown>;
+
+  return {
+    id: typeof source.id === "number" ? source.id : Number(source.id ?? 0),
+    name: typeof source.name === "string" ? source.name : "",
+    email: typeof source.email === "string" ? source.email : "",
+    email_verified_at:
+      typeof source.email_verified_at === "string" ||
+      source.email_verified_at === null
+        ? (source.email_verified_at as string | null)
+        : null,
+    created_at: typeof source.created_at === "string" ? source.created_at : "",
+    updated_at: typeof source.updated_at === "string" ? source.updated_at : "",
+  };
+};
+
+const normalizeAuthUser = (input: unknown): AuthUser | null => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const candidate = input as Record<string, unknown>;
+
+  const normalized: AuthUser = {
+    status: Boolean(candidate.status),
+    message:
+      typeof candidate.message === "string" ? candidate.message : undefined,
+    data: normalizeProfile(candidate.data),
+    roles: normalizeRoles(candidate.roles),
+  };
+
+  const availableRoles = normalizeRoles(candidate.availableRoles);
+  if (availableRoles.roles.length > 0 || availableRoles.warehouses.length > 0) {
+    normalized.availableRoles = availableRoles;
+  }
+
+  return normalized;
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => {
@@ -93,12 +161,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!ensureBrowserStorageLoaded()) {
       return null;
     }
-    const storedUser = readJsonFromStorage<AuthUser>(USER_DATA_KEY);
-    if (storedUser) {
-      return storedUser;
-    }
-    const storedEmail = window.localStorage.getItem(USER_EMAIL_KEY);
-    return storedEmail ? ({ email: storedEmail } as AuthUser) : null;
+    const storedUserRaw = readJsonFromStorage<unknown>(USER_DATA_KEY);
+    return normalizeAuthUser(storedUserRaw);
   });
   const [initializing, setInitializing] = useState(true);
   const [loadingUser, setLoadingUser] = useState(false);
@@ -136,19 +200,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoadingUser(true);
       try {
         const response = await fetch(`${API_BASE_URL}/users/auth/me`, {
-          method: 'GET',
+          method: "GET",
           headers: {
-            Accept: 'application/json',
+            Accept: "application/json",
             Authorization: `Bearer ${authToken}`,
           },
-          cache: 'no-store',
+          cache: "no-store",
         });
 
         if (!response.ok) {
           throw new Error(`Failed to fetch user profile: ${response.status}`);
         }
 
-        const profile = (await response.json()) as AuthUser;
+        const payload = await response.json();
+        const profile = normalizeAuthUser(payload);
+        if (!profile) {
+          throw new Error("Failed to parse user profile.");
+        }
         setUser(profile);
         persistUser(profile);
         return profile;
@@ -159,7 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoadingUser(false);
       }
     },
-    [clearAuthState, persistUser],
+    [clearAuthState, persistUser]
   );
 
   useEffect(() => {
@@ -207,7 +275,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async ({ token: nextToken, user: maybeUser, email }: LoginParams) => {
       if (!nextToken) {
-        throw new Error('Attempted to login without a token.');
+        throw new Error("Attempted to login without a token.");
       }
 
       if (ensureBrowserStorageLoaded()) {
@@ -220,14 +288,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(nextToken);
 
       if (maybeUser) {
-        setUser(maybeUser);
-        persistUser(maybeUser);
-        return;
+        const normalized = normalizeAuthUser(maybeUser);
+        if (normalized) {
+          setUser(normalized);
+          persistUser(normalized);
+          return;
+        }
       }
 
       await fetchAndStoreUser(nextToken);
     },
-    [fetchAndStoreUser, persistUser],
+    [fetchAndStoreUser, persistUser]
   );
 
   const logout = useCallback(
@@ -237,7 +308,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push(options.redirectTo);
       }
     },
-    [clearAuthState, router],
+    [clearAuthState, router]
   );
 
   const refreshUser = useCallback(async () => {
@@ -256,7 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token) {
       return token;
     }
-    throw new Error('User is not authenticated.');
+    throw new Error("User is not authenticated.");
   }, [token]);
 
   const value = useMemo<AuthContextValue>(
@@ -280,7 +351,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requireAuthToken,
       token,
       user,
-    ],
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
