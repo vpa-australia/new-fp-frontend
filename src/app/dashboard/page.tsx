@@ -13,10 +13,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { UserIcon, LogOutIcon, CogIcon, GripVertical, MapPin, Globe, DeleteIcon } from 'lucide-react'; // Assuming lucide-react for icons
-import { ShipmentsTable } from '@/components/ShipmentsTable';
-import Image from 'next/image';
-import { useAuth } from '@/contexts/AuthContext';
+import {
+  UserIcon,
+  LogOutIcon,
+  CogIcon,
+  GripVertical,
+  MapPin,
+  Globe,
+  DeleteIcon,
+} from "lucide-react"; // Assuming lucide-react for icons
+import Image from "next/image";
+import { useAuth } from "@/contexts/AuthContext";
+import { ShipmentsTable } from "@/components/ShipmentsTable";
 
 // Define Warehouse interface
 interface Warehouse {
