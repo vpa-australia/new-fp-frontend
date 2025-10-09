@@ -350,7 +350,10 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     });
 
     setSelectedDispatchFrom(nextDispatch);
-    setComments(detail.comments ?? []);
+    const sortedComments = (detail.comments ?? [])
+      .slice()
+      .sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
+    setComments(sortedComments);
   }, [detail]);
 
   // Fetch warehouses on component mount
@@ -614,7 +617,10 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             time: Math.floor(Date.now() / 1000),
           };
 
-      setComments((prevComments) => [...prevComments, commentToAdd]);
+      setComments((prevComments) => {
+        const next = [commentToAdd, ...prevComments];
+        return next.sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
+      });
       setCommentText('');
 
       toast({
