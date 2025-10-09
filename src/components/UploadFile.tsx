@@ -35,7 +35,7 @@ interface ShipmentComment {
     time: number;
 }
 
-interface UploadableShipment {
+export interface UploadableShipment {
     id: number;
     tracking_code?: string;
     manualCarrierCode?: string;

@@ -12,7 +12,7 @@ import { AlertCircleIcon, BoxIcon, Loader } from 'lucide-react';
 import { AlertDialog } from './ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
-import {UploadFile} from "@/components/UploadFile";
+import { UploadFile, UploadableShipment } from "@/components/UploadFile";
 
 interface OutOfStockWarehouse {
   id: number;
@@ -334,6 +334,28 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     () => (selectedQuote === null ? null : quotes.find((item) => item.id === selectedQuote) ?? null),
     [quotes, selectedQuote],
   );
+
+  const uploadableShipment = useMemo<UploadableShipment | undefined>(() => {
+    if (!detail) {
+      return undefined;
+    }
+    const record = detail as unknown as Record<string, unknown>;
+    const trackingCode =
+      typeof record.tracking_code === 'string'
+        ? (record.tracking_code as string)
+        : typeof record.trackingCode === 'string'
+          ? (record.trackingCode as string)
+          : undefined;
+    const manualCarrierCode =
+      typeof record.manualCarrierCode === 'string' ? (record.manualCarrierCode as string) : undefined;
+
+    return {
+      ...record,
+      id: detail.id,
+      tracking_code: trackingCode,
+      manualCarrierCode,
+    } as UploadableShipment;
+  }, [detail]);
 
   useEffect(() => {
     if (!detail) {
@@ -848,7 +870,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
             {selectedQuoteDetails?.carrier?.manual === true ? (
               <UploadFile
-                shipment={shipment?.shipment}
+                shipment={uploadableShipment}
                 name={'users name'}
                 title={'users title'}
                 onChangeMessage={(value) => {
