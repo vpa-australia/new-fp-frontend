@@ -113,7 +113,9 @@ const normalizeProfile = (input: unknown): AuthUserProfile => {
     };
   }
 
+
   const source = input as Record<string, unknown>;
+
 
   return {
     id: typeof source.id === "number" ? source.id : Number(source.id ?? 0),
