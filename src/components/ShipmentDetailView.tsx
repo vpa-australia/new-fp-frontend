@@ -64,6 +64,7 @@ interface ShipmentDetail {
   carrierCodeDesired?: string | null;
   serviceCodeDesired?: string | null;
   selectedQuoteId?: number | null;
+  labelPrinted?: boolean;
   comments?: ShipmentComment[];
   orderLines?: LineItem[];
   quotes?: ShipmentQuote[];
@@ -243,6 +244,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const detail = shipment?.shipment ?? null;
   const quotes = useMemo(() => detail?.quotes ?? [], [detail]);
   const orderLines = detail?.orderLines ?? [];
+  const isLabelPrinted = detail?.labelPrinted === true;
 
   useEffect(() => {
     if (quotes.length === 0) {
@@ -327,6 +329,11 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     const quote = quotes.find((item) => item.id === selectedQuote);
     return quote ? getQuoteRadioValue(quote) : '';
   }, [getQuoteRadioValue, quotes, selectedQuote]);
+
+  const selectedQuoteDetails = useMemo(
+    () => (selectedQuote === null ? null : quotes.find((item) => item.id === selectedQuote) ?? null),
+    [quotes, selectedQuote],
+  );
 
   useEffect(() => {
     if (!detail) {
@@ -806,6 +813,9 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             <RadioGroup
               value={selectedQuoteValue}
               onValueChange={(value) => {
+                if (isLabelPrinted) {
+                  return;
+                }
                 const [quoteId] = value.split('-');
                 const parsedId = Number.parseInt(quoteId, 10);
                 setSelectedQuote(Number.isNaN(parsedId) ? null : parsedId);
@@ -816,17 +826,38 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                   <RadioGroupItem
                     value={getQuoteRadioValue(quote)}
                     id={`quote-${quote.id}`}
+                    disabled={isLabelPrinted}
                   />
                   <Label htmlFor={`quote-${quote.id}`} className="flex-grow text-sm">
                     {getQuoteLabel(quote)}
                   </Label>
+                  {isLabelPrinted ? (
+                    <span className="inline-flex items-center px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white bg-red-600 rounded-none">
+                      Printed
+                    </span>
+                  ) : null}
                 </div>
               ))}
             </RadioGroup>
 
-            {selectedQuoteValue === "manual" || true? <UploadFile shipment={shipment['shipment']} name={"users name"} title={'users title'} onChangeMessage={(value) => { setComments(value); }} /> :''}
+            {selectedQuoteDetails?.carrier?.manual === true ? (
+              <UploadFile
+                shipment={shipment?.shipment}
+                name={'users name'}
+                title={'users title'}
+                onChangeMessage={(value) => {
+                  setComments(value);
+                }}
+              />
+            ) : null}
 
-            <Button className="mt-5" onClick={handleQuoteSelection} size="sm" variant="outline">
+            <Button
+              className="mt-5"
+              onClick={handleQuoteSelection}
+              size="sm"
+              variant="outline"
+              disabled={isLabelPrinted}
+            >
               Change Quote
             </Button>
           </CardContent>
@@ -934,7 +965,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                     {item.url ? (
                       <Image
                         src={item.url}
-                        alt={item.title}
+                        alt={item.title && item.title.trim().length > 0 ? item.title : 'Line item image'}
                         width={48}
                         height={48}
                         className="w-12 h-12 rounded-lg object-cover"
