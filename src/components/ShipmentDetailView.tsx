@@ -207,7 +207,7 @@ interface ShipmentDetailViewProps {
 
 export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewProps) {
   const { toast } = useToast();
-  const { requireAuthToken } = useAuth();
+  const { user, requireAuthToken } = useAuth();
   const getAuthToken = useCallback(() => {
     try {
       return requireAuthToken();
@@ -849,8 +849,8 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             {selectedQuoteDetails?.carrier?.manual === true ? (
               <UploadFile
                 shipment={shipment?.shipment}
-                name={'users name'}
-                title={'users title'}
+                name={user?.data.name}
+                title={''}
                 onChangeMessage={(value) => {
                   setComments(value);
                 }}
