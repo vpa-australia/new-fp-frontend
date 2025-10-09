@@ -303,8 +303,14 @@ export function ShipmentDetailView({
   }, []);
 
   const isLabelPrinted = useMemo(() => {
-    const detailRecord = detail && typeof detail === 'object' ? (detail as Record<string, unknown>) : null;
-    const rootRecord = shipment && typeof shipment === 'object' ? (shipment as Record<string, unknown>) : null;
+    const detailRecord =
+      detail && typeof detail === "object"
+        ? (detail as unknown as Record<string, unknown>)
+        : null;
+    const rootRecord =
+      shipment && typeof shipment === "object"
+        ? (shipment as unknown as Record<string, unknown>)
+        : null;
 
     const candidates: unknown[] = [
       detailRecord?.labelPrinted,
@@ -397,7 +403,7 @@ export function ShipmentDetailView({
     if (match && match.id !== selectedQuote) {
       setSelectedQuote(match.id);
     }
-  }, [detail, quotes, selectedQuote]);
+  }, [detail, quotes]);
 
   const getQuoteRadioValue = useCallback(
     (quote: ShipmentQuote) =>
@@ -980,6 +986,7 @@ export function ShipmentDetailView({
                   key={quote.id}
                   className="flex items-center space-x-2 mb-2"
                 >
+                  <p>Is Disable: {isLabelPrinted ? "Yes" : "No"}</p>
                   <RadioGroupItem
                     value={getQuoteRadioValue(quote)}
                     id={`quote-${quote.id}`}
