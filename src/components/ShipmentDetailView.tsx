@@ -1,17 +1,23 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import Image from 'next/image';
-import { AlertCircleIcon, BoxIcon, Loader } from 'lucide-react';
-import { AlertDialog } from './ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import Image from "next/image";
+import { AlertCircleIcon, BoxIcon, Loader } from "lucide-react";
+import { AlertDialog } from "./ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "./ui/dialog";
+import { useAuth } from "@/contexts/AuthContext";
 import { UploadFile, UploadableShipment } from "@/components/UploadFile";
 
 interface OutOfStockWarehouse {
@@ -110,32 +116,39 @@ const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
 const isWarehouseSummary = (value: unknown): value is WarehouseSummary => {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
   const candidate = value as { code?: unknown; name?: unknown };
-  return typeof candidate.code === 'string' && typeof candidate.name === 'string';
+  return (
+    typeof candidate.code === "string" && typeof candidate.name === "string"
+  );
 };
 
-const isWarehousesResponseData = (value: unknown): value is WarehousesResponse => {
-  if (typeof value !== 'object' || value === null) {
+const isWarehousesResponseData = (
+  value: unknown
+): value is WarehousesResponse => {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
   const candidate = value as { success?: unknown; warehouses?: unknown };
-  if (typeof candidate.success !== 'boolean') {
+  if (typeof candidate.success !== "boolean") {
     return false;
   }
   if (candidate.warehouses === undefined) {
     return true;
   }
-  if (typeof candidate.warehouses !== 'object' || candidate.warehouses === null) {
+  if (
+    typeof candidate.warehouses !== "object" ||
+    candidate.warehouses === null
+  ) {
     return false;
   }
   return Object.values(candidate.warehouses).every(isWarehouseSummary);
 };
 
 const isShipmentComment = (value: unknown): value is ShipmentComment => {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
   const candidate = value as {
@@ -146,56 +159,70 @@ const isShipmentComment = (value: unknown): value is ShipmentComment => {
     time?: unknown;
   };
   return (
-    typeof candidate.id === 'number' &&
-    typeof candidate.comment === 'string' &&
-    typeof candidate.name === 'string' &&
-    typeof candidate.title === 'string' &&
-    typeof candidate.time === 'number'
+    typeof candidate.id === "number" &&
+    typeof candidate.comment === "string" &&
+    typeof candidate.name === "string" &&
+    typeof candidate.title === "string" &&
+    typeof candidate.time === "number"
   );
 };
 
 const isShipmentError = (value: unknown): value is ShipmentError => {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
   const candidate = value as { message?: unknown; shipmentId?: unknown };
-  return typeof candidate.message === 'string' && typeof candidate.shipmentId === 'number';
+  return (
+    typeof candidate.message === "string" &&
+    typeof candidate.shipmentId === "number"
+  );
 };
 
-const isShipmentErrorsResponse = (value: unknown): value is { success: boolean; errors: ShipmentError[] } => {
-  if (typeof value !== 'object' || value === null) {
+const isShipmentErrorsResponse = (
+  value: unknown
+): value is { success: boolean; errors: ShipmentError[] } => {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
   const candidate = value as { success?: unknown; errors?: unknown };
   return (
-    typeof candidate.success === 'boolean' &&
+    typeof candidate.success === "boolean" &&
     Array.isArray(candidate.errors) &&
     candidate.errors.every(isShipmentError)
   );
 };
 
-const formatQuoteCost = (cost: ShipmentQuote['costIncludingTax']): string => {
-  const numericCost = typeof cost === 'number' ? cost : Number.parseFloat(cost);
+const formatQuoteCost = (cost: ShipmentQuote["costIncludingTax"]): string => {
+  const numericCost = typeof cost === "number" ? cost : Number.parseFloat(cost);
   if (Number.isNaN(numericCost)) {
-    return '';
+    return "";
   }
   return `$${numericCost.toFixed(2)}`;
 };
 
 const getQuoteLabel = (quote: ShipmentQuote): string => {
-  const costPrefix = quote.carrier?.manual === true ? '' : `${formatQuoteCost(quote.costIncludingTax)} `;
+  const costPrefix =
+    quote.carrier?.manual === true
+      ? ""
+      : `${formatQuoteCost(quote.costIncludingTax)} `;
   const carrierName = quote.carrier?.name ?? quote.carrierCode;
-  const expressSuffix = quote.isExpress ? ' (Express)' : '';
+  const expressSuffix = quote.isExpress ? " (Express)" : "";
   return `${costPrefix}${carrierName}${expressSuffix}`;
 };
 
-const isItemOutOfStockAtWarehouse = (item: LineItem, warehouseCode: string): boolean =>
-  item.oosWarehouses?.some((warehouse) => warehouse.warehouseCode === warehouseCode) ?? false;
+const isItemOutOfStockAtWarehouse = (
+  item: LineItem,
+  warehouseCode: string
+): boolean =>
+  item.oosWarehouses?.some(
+    (warehouse) => warehouse.warehouseCode === warehouseCode
+  ) ?? false;
 
-const formatPrice = (price: LineItem['price']): string => {
-  const numericPrice = typeof price === 'number' ? price : Number.parseFloat(price);
+const formatPrice = (price: LineItem["price"]): string => {
+  const numericPrice =
+    typeof price === "number" ? price : Number.parseFloat(price);
   if (Number.isNaN(numericPrice)) {
-    return '';
+    return "";
   }
   return `$${numericPrice.toFixed(2)}`;
 };
@@ -205,31 +232,36 @@ interface ShipmentDetailViewProps {
   setAction: React.Dispatch<React.SetStateAction<number>>;
 }
 
-export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewProps) {
+export function ShipmentDetailView({
+  shipment,
+  setAction,
+}: ShipmentDetailViewProps) {
   const { toast } = useToast();
-  const { requireAuthToken } = useAuth();
+  const { user, requireAuthToken } = useAuth();
   const getAuthToken = useCallback(() => {
     try {
       return requireAuthToken();
     } catch (error) {
       toast({
-        title: 'Authentication Error',
-        description: 'Your session has expired. Please log in again.',
-        variant: 'destructive',
+        title: "Authentication Error",
+        description: "Your session has expired. Please log in again.",
+        variant: "destructive",
       });
-      throw (error instanceof Error ? error : new Error('User is not authenticated.'));
+      throw error instanceof Error
+        ? error
+        : new Error("User is not authenticated.");
     }
   }, [requireAuthToken, toast]);
   const dateTimeFormatter = useMemo(
     () =>
-      new Intl.DateTimeFormat('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+      new Intl.DateTimeFormat("en-AU", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
         hour12: false,
-        timeZone: 'Australia/Sydney',
+        timeZone: "Australia/Sydney",
       }),
     []
   );
@@ -237,9 +269,11 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [shipmentErrors, setShipmentErrors] = useState<ShipmentError[]>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(false);
-  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<Record<number, string>>({});
+  const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<
+    Record<number, string>
+  >({});
   const [selectedQuote, setSelectedQuote] = useState<number | null>(null);
-  const [commentText, setCommentText] = useState('');
+  const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<ShipmentComment[]>([]);
   const detail = shipment?.shipment ?? null;
   const quotes = useMemo(() => detail?.quotes ?? [], [detail]);
@@ -255,14 +289,19 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     }
 
     const normalize = (value?: string | null) =>
-      typeof value === 'string' ? value.trim().toLowerCase() : null;
+      typeof value === "string" ? value.trim().toLowerCase() : null;
 
-    const currentCarrier = normalize(detail?.carrierCode ?? detail?.carrierCodeDesired ?? null);
-    const currentService = normalize(detail?.serviceCode ?? detail?.serviceCodeDesired ?? null);
+    const currentCarrier = normalize(
+      detail?.carrierCode ?? detail?.carrierCodeDesired ?? null
+    );
+    const currentService = normalize(
+      detail?.serviceCode ?? detail?.serviceCodeDesired ?? null
+    );
     const desiredCarrier = normalize(detail?.carrierCodeDesired ?? null);
     const desiredService = normalize(detail?.serviceCodeDesired ?? null);
     const persistedQuoteId =
-      typeof detail?.selectedQuoteId === 'number' && !Number.isNaN(detail.selectedQuoteId)
+      typeof detail?.selectedQuoteId === "number" &&
+      !Number.isNaN(detail.selectedQuoteId)
         ? detail.selectedQuoteId
         : null;
 
@@ -318,21 +357,25 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   }, [detail, quotes, selectedQuote]);
 
   const getQuoteRadioValue = useCallback(
-    (quote: ShipmentQuote) => `${quote.id}-${quote.carrierCode}-${quote.serviceCode}`,
-    [],
+    (quote: ShipmentQuote) =>
+      `${quote.id}-${quote.carrierCode}-${quote.serviceCode}`,
+    []
   );
 
   const selectedQuoteValue = useMemo(() => {
     if (selectedQuote === null) {
-      return '';
+      return "";
     }
     const quote = quotes.find((item) => item.id === selectedQuote);
-    return quote ? getQuoteRadioValue(quote) : '';
+    return quote ? getQuoteRadioValue(quote) : "";
   }, [getQuoteRadioValue, quotes, selectedQuote]);
 
   const selectedQuoteDetails = useMemo(
-    () => (selectedQuote === null ? null : quotes.find((item) => item.id === selectedQuote) ?? null),
-    [quotes, selectedQuote],
+    () =>
+      selectedQuote === null
+        ? null
+        : quotes.find((item) => item.id === selectedQuote) ?? null,
+    [quotes, selectedQuote]
   );
 
   const uploadableShipment = useMemo<UploadableShipment | undefined>(() => {
@@ -341,13 +384,15 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     }
     const record = detail as unknown as Record<string, unknown>;
     const trackingCode =
-      typeof record.tracking_code === 'string'
+      typeof record.tracking_code === "string"
         ? (record.tracking_code as string)
-        : typeof record.trackingCode === 'string'
-          ? (record.trackingCode as string)
-          : undefined;
+        : typeof record.trackingCode === "string"
+        ? (record.trackingCode as string)
+        : undefined;
     const manualCarrierCode =
-      typeof record.manualCarrierCode === 'string' ? (record.manualCarrierCode as string) : undefined;
+      typeof record.manualCarrierCode === "string"
+        ? (record.manualCarrierCode as string)
+        : undefined;
 
     return {
       ...record,
@@ -364,7 +409,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       return;
     }
 
-    const currentWarehouseCode = detail.warehouseCode ?? '';
+    const currentWarehouseCode = detail.warehouseCode ?? "";
     const nextDispatch: Record<number, string> = {};
 
     detail.orderLines?.forEach((item) => {
@@ -387,29 +432,37 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       try {
         const token = getAuthToken();
 
-        const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
-          headers: {
-            Authorization: 'Bearer ' + token,
-            Accept: 'application/json',
-          },
-        });
+        const response = await fetch(
+          "https://ship-orders.vpa.com.au/api/platform/warehouses",
+          {
+            headers: {
+              Authorization: "Bearer " + token,
+              Accept: "application/json",
+            },
+          }
+        );
         if (!response.ok) {
-          throw new Error('Failed to fetch warehouses');
+          throw new Error("Failed to fetch warehouses");
         }
 
         const data: unknown = await response.json();
         if (!isWarehousesResponseData(data) || !data.warehouses) {
-          throw new Error('Unexpected data format received for warehouses.');
+          throw new Error("Unexpected data format received for warehouses.");
         }
 
-        const formattedWarehouses = Object.values(data.warehouses).filter(isWarehouseSummary);
+        const formattedWarehouses = Object.values(data.warehouses).filter(
+          isWarehouseSummary
+        );
         setWarehouses(formattedWarehouses);
       } catch (error) {
-        console.error('Error fetching warehouses:', error);
+        console.error("Error fetching warehouses:", error);
         toast({
-          title: 'Error',
-          description: getErrorMessage(error, 'Failed to fetch warehouses. Please try again.'),
-          variant: 'destructive',
+          title: "Error",
+          description: getErrorMessage(
+            error,
+            "Failed to fetch warehouses. Please try again."
+          ),
+          variant: "destructive",
         });
       }
     };
@@ -422,18 +475,18 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const handleQuoteSelection = async () => {
     if (!detail?.id) {
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Shipment details are unavailable. Please try again.',
+        variant: "destructive",
+        title: "Error",
+        description: "Shipment details are unavailable. Please try again.",
       });
       return;
     }
 
     if (!selectedQuote) {
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Please select a quote first',
+        variant: "destructive",
+        title: "Error",
+        description: "Please select a quote first",
       });
       return;
     }
@@ -444,36 +497,41 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       const response = await fetch(
         `https://ship-orders.vpa.com.au/api/shipments/quote/${detail.id}?quote_id=${selectedQuote}`,
         {
-          method: 'PATCH',
+          method: "PATCH",
           headers: {
-            Authorization: 'Bearer ' + token,
-            Accept: 'application/json',
+            Authorization: "Bearer " + token,
+            Accept: "application/json",
           },
         }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to update shipment quote');
+        throw new Error("Failed to update shipment quote");
       }
-  
-      const result = (await response.json().catch(() => null)) as ApiSuccessResponse | null;
+
+      const result = (await response
+        .json()
+        .catch(() => null)) as ApiSuccessResponse | null;
       if (result?.success === false) {
-        throw new Error(result.message ?? 'Failed to update shipment quote');
+        throw new Error(result.message ?? "Failed to update shipment quote");
       }
 
       toast({
-        variant: 'success',
-        title: 'Success',
-        description: 'Quote has been updated successfully',
+        variant: "success",
+        title: "Success",
+        description: "Quote has been updated successfully",
       });
 
       setAction((prev) => prev + 1);
     } catch (error) {
-      console.error('Failed to update shipment quote:', error);
+      console.error("Failed to update shipment quote:", error);
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: getErrorMessage(error, 'Failed to update quote. Please try again.'),
+        variant: "destructive",
+        title: "Error",
+        description: getErrorMessage(
+          error,
+          "Failed to update quote. Please try again."
+        ),
       });
     }
   };
@@ -485,35 +543,37 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       const response = await fetch(
         `https://ship-orders.vpa.com.au/api/product/oos?sku=${item.sku}&warehouse_code=${code}`,
         {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
             Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
+            Accept: "application/json",
           },
         }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to update stock status');
+        throw new Error("Failed to update stock status");
       }
 
-      const result = (await response.json().catch(() => null)) as ApiSuccessResponse | null;
+      const result = (await response
+        .json()
+        .catch(() => null)) as ApiSuccessResponse | null;
       if (result?.success === false) {
-        throw new Error(result.message ?? 'Failed to update stock status');
+        throw new Error(result.message ?? "Failed to update stock status");
       }
 
       setAction((prev) => prev + 1);
       toast({
-        variant: 'success',
-        title: 'Success',
-        description: 'Stock status updated successfully',
+        variant: "success",
+        title: "Success",
+        description: "Stock status updated successfully",
       });
     } catch (error) {
-      console.error('Error updating stock status:', error);
+      console.error("Error updating stock status:", error);
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: getErrorMessage(error, 'Failed to update stock status'),
+        variant: "destructive",
+        title: "Error",
+        description: getErrorMessage(error, "Failed to update stock status"),
       });
     }
   };
@@ -525,48 +585,47 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       const response = await fetch(
         `https://ship-orders.vpa.com.au/api/product/oos?sku=${item.sku}&warehouse_code=${code}`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
+            Accept: "application/json",
           },
         }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to update stock status');
+        throw new Error("Failed to update stock status");
       }
 
-      const result = (await response.json().catch(() => null)) as ApiSuccessResponse | null;
+      const result = (await response
+        .json()
+        .catch(() => null)) as ApiSuccessResponse | null;
       if (result?.success === false) {
-        throw new Error(result.message ?? 'Failed to update stock status');
+        throw new Error(result.message ?? "Failed to update stock status");
       }
 
       setAction((prev) => prev + 1);
       toast({
-        variant: 'success',
-        title: 'Success',
-        description: 'Stock status updated successfully',
+        variant: "success",
+        title: "Success",
+        description: "Stock status updated successfully",
       });
     } catch (error) {
-      console.error('Error updating stock status:', error);
+      console.error("Error updating stock status:", error);
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: getErrorMessage(error, 'Failed to update stock status'),
+        variant: "destructive",
+        title: "Error",
+        description: getErrorMessage(error, "Failed to update stock status"),
       });
     }
   };
 
-
-
-
   const handleSaveNote = async () => {
     if (!commentText.trim()) {
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Comment cannot be empty.',
+        variant: "destructive",
+        title: "Error",
+        description: "Comment cannot be empty.",
       });
       return;
     }
@@ -578,54 +637,62 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       return;
     }
 
-    const userDataStr = localStorage.getItem('userData');
+    const userDataStr = localStorage.getItem("userData");
     if (!userDataStr) {
       toast({
-        variant: 'destructive',
-        title: 'Authentication Error',
-        description: 'Authentication data not found. Please log in again.',
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "Authentication data not found. Please log in again.",
       });
       return;
     }
 
     if (!detail?.id) {
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Shipment details are unavailable. Please try again.',
+        variant: "destructive",
+        title: "Error",
+        description: "Shipment details are unavailable. Please try again.",
       });
       return;
     }
 
     try {
-      const parsedUserData = JSON.parse(userDataStr) as StoredUserData | unknown;
+      const parsedUserData = JSON.parse(userDataStr) as
+        | StoredUserData
+        | unknown;
       const storedUserData = (parsedUserData as StoredUserData) ?? {};
-      const userName = (
-        typeof storedUserData.data?.name === 'string' ? storedUserData.data.name : 'User'
-      );
-      const userRole = (
-        Array.isArray(storedUserData.roles?.roles) && storedUserData.roles.roles.length > 0
+      const userName =
+        typeof storedUserData.data?.name === "string"
+          ? storedUserData.data.name
+          : "User";
+      const userRole =
+        Array.isArray(storedUserData.roles?.roles) &&
+        storedUserData.roles.roles.length > 0
           ? String(storedUserData.roles.roles[0])
-          : 'User'
-      );
+          : "User";
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/comment/${detail.id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + token,
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          comment: commentText,
-          name: userName,
-          title: userRole,
-        }),
-      });
+      const response = await fetch(
+        `https://ship-orders.vpa.com.au/api/shipments/comment/${detail.id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            comment: commentText,
+            name: userName,
+            title: userRole,
+          }),
+        }
+      );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null) as ApiSuccessResponse | null;
-        throw new Error(errorData?.message ?? 'Failed to save note');
+        const errorData = (await response
+          .json()
+          .catch(() => null)) as ApiSuccessResponse | null;
+        throw new Error(errorData?.message ?? "Failed to save note");
       }
 
       const apiComment = await response.json().catch(() => null);
@@ -643,19 +710,22 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         const next = [commentToAdd, ...prevComments];
         return next.sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
       });
-      setCommentText('');
+      setCommentText("");
 
       toast({
-        variant: 'success',
-        title: 'Success',
-        description: 'Note saved successfully.',
+        variant: "success",
+        title: "Success",
+        description: "Note saved successfully.",
       });
     } catch (error) {
-      console.error('Error saving note:', error);
+      console.error("Error saving note:", error);
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: getErrorMessage(error, 'Failed to save note. Please try again.'),
+        variant: "destructive",
+        title: "Error",
+        description: getErrorMessage(
+          error,
+          "Failed to save note. Please try again."
+        ),
       });
     }
   };
@@ -663,9 +733,9 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
   const handleMoveShipment = async () => {
     if (!detail?.id) {
       toast({
-        title: 'Error',
-        description: 'Shipment details are unavailable. Please try again.',
-        variant: 'destructive',
+        title: "Error",
+        description: "Shipment details are unavailable. Please try again.",
+        variant: "destructive",
       });
       return;
     }
@@ -688,48 +758,53 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
 
     if (Object.keys(itemsByWarehouseCode).length === 0) {
       toast({
-        title: 'No Items Selected',
-        description: 'Please select at least one item to move.',
-        variant: 'destructive',
+        title: "No Items Selected",
+        description: "Please select at least one item to move.",
+        variant: "destructive",
       });
       return;
     }
 
     const queryString = Object.entries(itemsByWarehouseCode)
-      .map(([code, itemIds]) => `${encodeURIComponent(code)}=${encodeURIComponent(itemIds.join(','))}`)
-      .join('&');
+      .map(
+        ([code, itemIds]) =>
+          `${encodeURIComponent(code)}=${encodeURIComponent(itemIds.join(","))}`
+      )
+      .join("&");
 
     const url = `https://ship-orders.vpa.com.au/api/shipments/move/${detail.id}?${queryString}`;
 
     try {
       const response = await fetch(url, {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          Authorization: 'Bearer ' + token,
-          Accept: 'application/json',
+          Authorization: "Bearer " + token,
+          Accept: "application/json",
         },
       });
-      const payload = await response.json().catch(() => null) as ApiSuccessResponse | null;
+      const payload = (await response
+        .json()
+        .catch(() => null)) as ApiSuccessResponse | null;
       if (!response.ok) {
-        throw new Error(payload?.message ?? 'Failed to move items');
+        throw new Error(payload?.message ?? "Failed to move items");
       }
 
       if (payload?.success === false) {
-        throw new Error(payload.message ?? 'Failed to move items');
+        throw new Error(payload.message ?? "Failed to move items");
       }
 
       setAction((prev) => prev + 1);
       toast({
-        title: 'Move Successful',
-        description: 'Selected items have been moved.',
-        variant: 'success',
+        title: "Move Successful",
+        description: "Selected items have been moved.",
+        variant: "success",
       });
     } catch (error) {
-      console.error('Error moving items:', error);
+      console.error("Error moving items:", error);
       toast({
-        title: 'Move Failed',
-        description: getErrorMessage(error, 'Failed to move items.'),
-        variant: 'destructive',
+        title: "Move Failed",
+        description: getErrorMessage(error, "Failed to move items."),
+        variant: "destructive",
       });
     }
   };
@@ -741,25 +816,26 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     try {
       const token = getAuthToken();
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/shipments/errors/${shipmentId}`, {
-        method: 'GET',
-        headers: {
-          Authorization: 'Bearer ' + token,
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(
+        `https://ship-orders.vpa.com.au/api/shipments/errors/${shipmentId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       const data: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        const message = (
-          data &&
-          typeof data === 'object' &&
-          data !== null &&
-          'message' in data
-            ? String((data as { message?: unknown }).message ?? '')
-            : undefined
+        const message =
+          data && typeof data === "object" && data !== null && "message" in data
+            ? String((data as { message?: unknown }).message ?? "")
+            : undefined;
+        throw new Error(
+          message || `Error fetching shipment errors: ${response.status}`
         );
-        throw new Error(message || `Error fetching shipment errors: ${response.status}`);
       }
 
       if (isShipmentErrorsResponse(data) && data.success) {
@@ -767,16 +843,16 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       } else {
         setShipmentErrors([]);
         toast({
-          title: 'No errors found',
-          description: 'No errors were found for this shipment.',
+          title: "No errors found",
+          description: "No errors were found for this shipment.",
         });
       }
     } catch (error) {
-      console.error('Error fetching shipment errors:', error);
+      console.error("Error fetching shipment errors:", error);
       toast({
-        title: 'Error',
-        description: getErrorMessage(error, 'Failed to fetch shipment errors'),
-        variant: 'destructive',
+        title: "Error",
+        description: getErrorMessage(error, "Failed to fetch shipment errors"),
+        variant: "destructive",
       });
       setShipmentErrors([]);
     } finally {
@@ -803,19 +879,26 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             </div>
           ) : shipmentErrors.length > 0 ? (
             <div className="max-h-[60vh] overflow-y-auto">
-              {shipmentErrors.map((error) =>{
-
+              {shipmentErrors.map((error) => {
                 const createdAt = new Date(error.createdAt * 1000);
                 return (
-                <div
-                  key={`${error.shipmentId}-${error.message}`}
-                  className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md"
-                >
-                  <p className="text-xs text-gray-500 mb-1">Time: {`${createdAt.toLocaleDateString()} ${createdAt.toLocaleTimeString()}`}</p>
-                  <p className="text-sm text-red-800 whitespace-pre-wrap">{error.message}</p>
-                  <p className="text-xs text-gray-500 mt-1">Shipment ID: {error.shipmentId}</p>
-                </div>
-              )})}
+                  <div
+                    key={`${error.shipmentId}-${error.message}`}
+                    className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md"
+                  >
+                    <p className="text-xs text-gray-500 mb-1">
+                      Time:{" "}
+                      {`${createdAt.toLocaleDateString()} ${createdAt.toLocaleTimeString()}`}
+                    </p>
+                    <p className="text-sm text-red-800 whitespace-pre-wrap">
+                      {error.message}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Shipment ID: {error.shipmentId}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="py-6 text-center text-gray-500">
@@ -824,9 +907,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
           )}
 
           <DialogFooter>
-            <Button onClick={() => setErrorDialogOpen(false)}>
-              Close
-            </Button>
+            <Button onClick={() => setErrorDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -835,7 +916,9 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
         {/* Shipping Quotes Section */}
         <Card className="col-span-1">
           <CardHeader className="">
-            <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Shipping Quotes</CardTitle>
+            <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Shipping Quotes
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <RadioGroup
@@ -844,19 +927,25 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                 if (isLabelPrinted) {
                   return;
                 }
-                const [quoteId] = value.split('-');
+                const [quoteId] = value.split("-");
                 const parsedId = Number.parseInt(quoteId, 10);
                 setSelectedQuote(Number.isNaN(parsedId) ? null : parsedId);
               }}
             >
               {quotes.map((quote) => (
-                <div key={quote.id} className="flex items-center space-x-2 mb-2">
+                <div
+                  key={quote.id}
+                  className="flex items-center space-x-2 mb-2"
+                >
                   <RadioGroupItem
                     value={getQuoteRadioValue(quote)}
                     id={`quote-${quote.id}`}
                     disabled={isLabelPrinted}
                   />
-                  <Label htmlFor={`quote-${quote.id}`} className="flex-grow text-sm">
+                  <Label
+                    htmlFor={`quote-${quote.id}`}
+                    className="flex-grow text-sm"
+                  >
                     {getQuoteLabel(quote)}
                   </Label>
                   {isLabelPrinted ? (
@@ -871,8 +960,8 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
             {selectedQuoteDetails?.carrier?.manual === true ? (
               <UploadFile
                 shipment={uploadableShipment}
-                name={'users name'}
-                title={'users title'}
+                name={"users name"}
+                title={"users title"}
                 onChangeMessage={(value) => {
                   setComments(value);
                 }}
@@ -909,7 +998,9 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       {/* Second Column - NOTES Section */}
       <Card className="col-span-1">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">NOTES</CardTitle>
+          <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            NOTES
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[200px] overflow-y-scroll">
@@ -917,14 +1008,22 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
               <p className="text-sm text-gray-500">No notes added yet.</p>
             ) : (
               comments.map((comment) => {
-                const timestampSeconds = comment.time ?? Math.floor(Date.now() / 1000);
+                const timestampSeconds =
+                  comment.time ?? Math.floor(Date.now() / 1000);
                 const timestampMs = timestampSeconds * 1000;
                 const commentKey = comment.id ?? timestampSeconds;
                 return (
-                  <div key={commentKey} className="mb-4 p-4 bg-gray-50 rounded-lg">
+                  <div
+                    key={commentKey}
+                    className="mb-4 p-4 bg-gray-50 rounded-lg"
+                  >
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="font-medium text-gray-900">{comment.name}</div>
-                      <div className="text-sm text-gray-500">{comment.title}</div>
+                      <div className="font-medium text-gray-900">
+                        {comment.name}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {comment.title}
+                      </div>
                     </div>
                     <p className="text-gray-700 mb-2">{comment.comment}</p>
                     <div className="text-xs text-gray-500">
@@ -934,10 +1033,7 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                 );
               })
             )}
-
           </div>
-
-
 
           <Textarea
             placeholder="Add your notes here..."
@@ -956,19 +1052,23 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
       {/* Third Column - Line Items Section */}
       <Card className="col-span-1">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Line Items</CardTitle>
+          <CardTitle className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Line Items
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-2">
             {orderLines.map((item) => (
               <div key={item.id} className="bg-white border rounded-lg p-3">
                 <div className="flex w-full items-center justify-between mb-2">
-
                   <div className="flex flex-col items-center">
                     <span className="text-xs text-gray-500 mb-1">In Stock</span>
                     <div className="flex gap-1">
                       {warehouses.map((warehouse) => {
-                        const isOutOfStock = isItemOutOfStockAtWarehouse(item, warehouse.code);
+                        const isOutOfStock = isItemOutOfStockAtWarehouse(
+                          item,
+                          warehouse.code
+                        );
                         return (
                           <button
                             key={warehouse.code}
@@ -979,8 +1079,8 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                             }
                             className={`px-2 py-1 ${
                               isOutOfStock
-                                ? 'bg-red-500 text-white'
-                                : 'bg-green-100 hover:bg-green-200 text-green-800'
+                                ? "bg-red-500 text-white"
+                                : "bg-green-100 hover:bg-green-200 text-green-800"
                             } text-xs font-medium rounded transition-colors`}
                           >
                             {warehouse.code.substring(0, 3).toUpperCase()}
@@ -993,7 +1093,11 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                     {item.url ? (
                       <Image
                         src={item.url}
-                        alt={item.title && item.title.trim().length > 0 ? item.title : 'Line item image'}
+                        alt={
+                          item.title && item.title.trim().length > 0
+                            ? item.title
+                            : "Line item image"
+                        }
                         width={48}
                         height={48}
                         className="w-12 h-12 rounded-lg object-cover"
@@ -1004,19 +1108,29 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                       </div>
                     )}
                     <div className="flex flex-col">
-                      <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {item.title}
+                      </p>
                       {item.variant_title && (
-                        <p className="text-xs text-gray-500">{item.variant_title}</p>
+                        <p className="text-xs text-gray-500">
+                          {item.variant_title}
+                        </p>
                       )}
                       <span className="text-gray-600">SKU: {item.sku}</span>
                       <div className="flex items-center gap-4">
-                        <span className="text-gray-900">Qty: {item.quantity}</span>
-                        <span className="text-gray-900 font-medium">{formatPrice(item.price)}</span>
+                        <span className="text-gray-900">
+                          Qty: {item.quantity}
+                        </span>
+                        <span className="text-gray-900 font-medium">
+                          {formatPrice(item.price)}
+                        </span>
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-500 mb-1">Dispatch From</span>
+                    <span className="text-xs text-gray-500 mb-1">
+                      Dispatch From
+                    </span>
                     <div className="flex gap-1">
                       {warehouses.map((warehouse) => (
                         <button
@@ -1029,8 +1143,8 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
                           }
                           className={`px-2 py-1 ${
                             selectedDispatchFrom[item.id] === warehouse.code
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-blue-100 hover:bg-blue-200 text-blue-800'
+                              ? "bg-blue-500 text-white"
+                              : "bg-blue-100 hover:bg-blue-200 text-blue-800"
                           } text-xs font-medium rounded transition-colors`}
                         >
                           {warehouse.code.substring(0, 3).toUpperCase()}
@@ -1056,8 +1170,3 @@ export function ShipmentDetailView({ shipment, setAction }: ShipmentDetailViewPr
     </div>
   );
 }
-
-
-
-
-
