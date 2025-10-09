@@ -90,11 +90,6 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
             return;
         }
 
-        if(files === null){
-            setError("You must select at least one file.")
-            return;
-        }
-
         setError("");
         setIsSubmitting(true);
         const token = localStorage.getItem('authToken');
@@ -120,7 +115,7 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
             if (data.success) {
                 if(typeof onChangeMessage === 'function'){
                     if(typeof data.comments !== 'undefined') {
-                        onChangeMessage(data.comments);
+                        onChangeMessage(data.comments.reverse());
                     }
 
                 }
@@ -130,6 +125,9 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
                 setError(data.message);
                 setIsSubmitting(false);
             }
+        }).catch(()=>{
+            setError('There was an error saving the data.');
+            setIsSubmitting(false);
         });
     }
 

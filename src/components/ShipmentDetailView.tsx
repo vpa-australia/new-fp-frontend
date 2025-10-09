@@ -108,6 +108,7 @@ type ApiSuccessResponse = {
 type StoredUserData = {
   data?: {
     name?: string | null;
+    title?: string | null;
   };
   roles?: {
     roles?: Array<string | number>;
@@ -1008,11 +1009,11 @@ export function ShipmentDetailView({
               ))}
             </RadioGroup>
 
-            {selectedQuoteDetails?.carrier?.manual === true ? (
+            {selectedQuoteDetails?.carrier?.name === 'Manual' ? (
               <UploadFile
                 shipment={uploadableShipment}
-                name={"users name"}
-                title={"users title"}
+                name={user?.data.name}
+                title={user?.data.title}
                 onChangeMessage={(value) => {
                   setComments(value);
                 }}

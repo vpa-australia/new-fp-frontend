@@ -22,6 +22,7 @@ interface User {
     id: number;
     name: string;
     email: string;
+    title: string;
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
@@ -40,6 +41,7 @@ interface UsersResponse {
 interface UpdateUserData {
   name: string;
   password: string;
+  title: string;
   confirmPassword: string;
   roles: string[];
 }
@@ -53,12 +55,14 @@ export default function UsersTab() {
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
+    title: '',
     password: '',
     roles: [] as string[]
   });
   const [editUserData, setEditUserData] = useState<UpdateUserData>({
     name: '',
     password: '',
+    title: '',
     confirmPassword: '',
     roles: [],
   });
@@ -130,6 +134,7 @@ export default function UsersTab() {
     setEditUserData({
       name: user.data.name,
       password: '',
+      title: user.data.title ?  user.data.title : '',
       confirmPassword: '',
       roles: user.roles.roles || [],
     });
@@ -142,7 +147,9 @@ export default function UsersTab() {
     setIsSubmitting(true);
 
     const trimmedName = editUserData.name.trim();
+    const trimmedTitle = editUserData.title.trim();
     const hasNameChange = Boolean(trimmedName && trimmedName !== selectedUser.data.name);
+    const hasTitleChange = Boolean(trimmedTitle && trimmedTitle!== selectedUser.data.title);
     const hasPasswordChange = Boolean(editUserData.password);
 
     if (hasPasswordChange && editUserData.password !== editUserData.confirmPassword) {
@@ -172,7 +179,7 @@ export default function UsersTab() {
       return;
     }
 
-    if (!hasNameChange && !hasPasswordChange && !rolesChanged) {
+    if (!hasNameChange && !hasPasswordChange && !rolesChanged && !hasTitleChange) {
       setIsSubmitting(false);
       toast({
         title: 'No changes detected',
@@ -189,6 +196,10 @@ export default function UsersTab() {
 
       if (hasNameChange) {
         params.append('name', trimmedName);
+      }
+
+      if (hasTitleChange) {
+        params.append('title', trimmedTitle);
       }
 
       if (hasPasswordChange) {
@@ -233,6 +244,7 @@ export default function UsersTab() {
       });
 
       const updatedName = hasNameChange ? trimmedName : selectedUser.data.name;
+      const updatedTitle = hasTitleChange ? trimmedTitle: selectedUser.data.title;
       const updatedRoles = rolesChanged ? [...editUserData.roles] : existingRoles;
 
       const updatedUsers = users.map((user) => {
@@ -262,6 +274,7 @@ export default function UsersTab() {
       setEditUserData({
         name: updatedName,
         password: '',
+        title: updatedTitle,
         confirmPassword: '',
         roles: updatedRoles,
       });
@@ -292,6 +305,7 @@ export default function UsersTab() {
         },
         body: JSON.stringify({
           name: newUser.name,
+          title:newUser.title,
           email: newUser.email,
           password: newUser.password,
           roles: newUser.roles.filter(role => role !== '')
@@ -321,6 +335,7 @@ export default function UsersTab() {
         name: '',
         email: '',
         password: '',
+        title: '',
         roles: []
       });
       setIsAddUserDialogOpen(false);
@@ -370,6 +385,18 @@ export default function UsersTab() {
                       onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                       className="col-span-3"
                       required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="title" className="text-right">
+                      Title
+                    </Label>
+                    <Input
+                        id="name"
+                        value={newUser.title}
+                        onChange={(e) => setNewUser({ ...newUser, title: e.target.value })}
+                        className="col-span-3"
+
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
@@ -491,6 +518,17 @@ export default function UsersTab() {
                   value={editUserData.name}
                   onChange={(e) => setEditUserData({ ...editUserData, name: e.target.value })}
                   className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-title" className="text-right">
+                  Title
+                </Label>
+                <Input
+                    id="edit-title"
+                    value={editUserData.title ? editUserData.title : ''}
+                    onChange={(e) => setEditUserData({ ...editUserData, title: e.target.value })}
+                    className="col-span-3"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">

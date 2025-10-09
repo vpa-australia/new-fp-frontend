@@ -24,6 +24,7 @@ export interface AuthUserRolesInfo {
 export interface AuthUserProfile {
   id: number;
   name: string;
+  title: string;
   email: string;
   email_verified_at: string | null;
   created_at: string;
@@ -104,6 +105,7 @@ const normalizeProfile = (input: unknown): AuthUserProfile => {
     return {
       id: 0,
       name: "",
+      title: "",
       email: "",
       email_verified_at: null,
       created_at: "",
@@ -116,6 +118,7 @@ const normalizeProfile = (input: unknown): AuthUserProfile => {
   return {
     id: typeof source.id === "number" ? source.id : Number(source.id ?? 0),
     name: typeof source.name === "string" ? source.name : "",
+    title: typeof source.title === "string" ? source.title : "",
     email: typeof source.email === "string" ? source.email : "",
     email_verified_at:
       typeof source.email_verified_at === "string" ||
