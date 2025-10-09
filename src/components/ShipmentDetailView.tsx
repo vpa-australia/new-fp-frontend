@@ -958,7 +958,7 @@ export function ShipmentDetailView({
               ))}
             </RadioGroup>
 
-            {selectedQuoteDetails?.carrier?.manual === true ? (
+            {selectedQuoteDetails?.carrier?.name === 'Manual' ? (
               <UploadFile
                 shipment={uploadableShipment}
                 name={user?.data.name}
