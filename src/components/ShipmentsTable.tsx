@@ -47,6 +47,7 @@ import {
   FaTrashRestore,
   FaUser,
   FaCalendarDay,
+  FaBuilding,
 } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
 import { Input } from "./ui/input";
@@ -71,6 +72,7 @@ interface Shipment {
   shopifyId: number;
   shopifyOrderNumber: string;
   orderName: string;
+  company: string;
   email: string;
   address1: string;
   suburb: string;
@@ -94,6 +96,13 @@ interface Shipment {
     carrierCode: string;
     serviceCode: string;
     costIncludingTax: string;
+    carrier?: {
+      name?: string | null;
+      manual?: boolean;
+      code?: string | null;
+      color?: string | null;
+    };
+    color?: string | null;
   }>;
   orderDate: number;
   totalPrice: string;
@@ -107,6 +116,18 @@ interface StatusOption {
   allowShipped: boolean;
   greenTick: boolean;
 }
+
+interface CarrierSummary {
+  id: number;
+  code: string;
+  name: string;
+  color: string | null;
+}
+
+type CarriersResponse = {
+  success: boolean;
+  carriers?: Record<string, CarrierSummary>;
+};
 
 type SearchParameter = {
   name: string;
@@ -361,6 +382,9 @@ export function ShipmentsTable({
   const [statusOptions, setStatusOptions] =
     useState<StatusOption[]>(defaultStatusOptions);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
+  const [carrierColors, setCarrierColors] = useState<Record<string, string>>(
+    {}
+  );
   const [loadingSearchParams, setLoadingSearchParams] = useState(false);
   const [searchFields, setSearchFields] = useState<
     Record<string, SearchParameter>
@@ -1173,7 +1197,8 @@ export function ShipmentsTable({
           const findMatchingKeys = (keywords: string[]) =>
             parameterEntries
               .filter(([key, field]) => {
-                const haystack = `${key} ${field.name} ${field.column}`.toLowerCase();
+                const haystack =
+                  `${key} ${field.name} ${field.column}`.toLowerCase();
                 return keywords.some((keyword) => haystack.includes(keyword));
               })
               .map(([key]) => key);
@@ -1182,7 +1207,9 @@ export function ShipmentsTable({
             findMatchingKeys(essentialFieldKeywords)
           );
 
-          const defaultFieldKeys = new Set(findMatchingKeys(defaultFieldKeywords));
+          const defaultFieldKeys = new Set(
+            findMatchingKeys(defaultFieldKeywords)
+          );
 
           const topWeightedKeys = parameterEntries
             .slice()
@@ -1215,13 +1242,10 @@ export function ShipmentsTable({
             try {
               // Parse saved fields and validate they still exist in the API response
               const parsedFields = JSON.parse(savedVisibleFields);
-              initialVisibleFields = parameterEntries.reduce(
-                (acc, [key]) => {
-                  acc[key] = parsedFields[key] === true;
-                  return acc;
-                },
-                {} as Record<string, boolean>
-              );
+              initialVisibleFields = parameterEntries.reduce((acc, [key]) => {
+                acc[key] = parsedFields[key] === true;
+                return acc;
+              }, {} as Record<string, boolean>);
 
               // If no fields are visible (all false), show defaults
               if (
@@ -1229,9 +1253,8 @@ export function ShipmentsTable({
                   (value) => value === true
                 )
               ) {
-                initialVisibleFields = applyDefaultVisibility(
-                  initialVisibleFields
-                );
+                initialVisibleFields =
+                  applyDefaultVisibility(initialVisibleFields);
               }
             } catch (error: unknown) {
               console.error("Error parsing saved search fields:", error);
@@ -1316,6 +1339,47 @@ export function ShipmentsTable({
     };
 
     fetchStatusOptions();
+
+    const fetchCarrierSummaries = async () => {
+      try {
+        const token = getAuthToken();
+
+        const response = await fetch(
+          "https://ship-orders.vpa.com.au/api/platform/carriers",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch carriers");
+        }
+
+        const data = (await response.json()) as CarriersResponse;
+        if (data.success && data.carriers) {
+          const mapped = Object.values(data.carriers).reduce<
+            Record<string, string>
+          >((acc, carrier) => {
+            if (carrier.code) {
+              acc[carrier.code.toLowerCase()] =
+                carrier.color?.trim() ?? acc[carrier.code.toLowerCase()] ?? "";
+            }
+            return acc;
+          }, {});
+
+          console.log("Fetched carrier colors:", mapped);
+          setCarrierColors(mapped);
+        }
+      } catch (error) {
+        console.error("Error fetching carriers:", error);
+        setCarrierColors({});
+      }
+    };
+
+    fetchCarrierSummaries();
   }, [getAuthToken, toast]);
 
   // Calculate which edge is closest and snap to it
@@ -1985,10 +2049,88 @@ export function ShipmentsTable({
     [getAuthToken, setAction, toast]
   );
 
+  type QuickPrintOptions = {
+    suppressSuccessToast?: boolean;
+    title?: string;
+    incrementAction?: boolean;
+  };
+
+  const quickPrintShipments = useCallback(
+    async (
+      shipmentIds: number[],
+      {
+        suppressSuccessToast = false,
+        title,
+        incrementAction = true,
+      }: QuickPrintOptions = {}
+    ) => {
+      if (shipmentIds.length === 0) {
+        return;
+      }
+
+      const token = getAuthToken();
+
+      try {
+        const response = await fetch(
+          `https://ship-orders.vpa.com.au/api/pdf/labels/quickPrint?shipment_ids=${shipmentIds.join(
+            ","
+          )}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/pdf",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(
+            (errorData && errorData.message) ||
+              `Failed to quick print: ${response.statusText}`
+          );
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        setPdfUrl((previous) => {
+          if (previous) {
+            window.URL.revokeObjectURL(previous);
+          }
+          return url;
+        });
+        setIsPdfOpen(true);
+        setPdfTitle(title ?? "Quick Print Labels Preview");
+
+        if (!suppressSuccessToast) {
+          toast({
+            variant: "success",
+            title: "Quick Print Ready",
+            description: "Labels are ready for printing.",
+          });
+        }
+
+        if (incrementAction) {
+          setAction((prev) => prev + 1);
+        }
+      } catch (error: unknown) {
+        console.error("Error during quick print:", error);
+        toast({
+          variant: "destructive",
+          title: "Quick Print Failed",
+          description: getErrorMessage(error, "Failed to quick print labels."),
+        });
+        throw error;
+      }
+    },
+    [getAuthToken, setAction, toast]
+  );
+
   const handleQuickPrint = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
       .filter(([, isChecked]) => isChecked)
-      .map(([id]) => id);
+      .map(([id]) => Number(id));
 
     if (selectedIds.length === 0) {
       toast({
@@ -1999,50 +2141,12 @@ export function ShipmentsTable({
       return;
     }
 
-    const token = getAuthToken();
-
     try {
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/pdf/labels/quickPrint?shipment_ids=${selectedIds.join(
-          ","
-        )}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/pdf",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || `Failed to quick print: ${response.statusText}`
-        );
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setPdfUrl(url);
-      setIsPdfOpen(true);
-      setPdfTitle("Quick Print Labels Preview");
-
-      toast({
-        variant: "success",
-        title: "Quick Print Ready",
-        description: "Labels are ready for printing.",
-      });
-      setAction((prev) => prev + 1);
-    } catch (error: unknown) {
-      console.error("Error during quick print:", error);
-      toast({
-        variant: "destructive",
-        title: "Quick Print Failed",
-        description: getErrorMessage(error, "Failed to quick print labels."),
-      });
+      await quickPrintShipments(selectedIds);
+    } catch {
+      // quickPrintShipments already reports the failure
     }
-  }, [getAuthToken, selectedRows, setAction, toast]);
+  }, [quickPrintShipments, selectedRows, toast]);
 
   const handleInvoicePrint = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
@@ -2239,9 +2343,9 @@ export function ShipmentsTable({
           const errorData = await response.json().catch(() => null);
           const message =
             (errorData &&
-              typeof errorData === "object" &&
-              errorData !== null &&
-              "message" in errorData
+            typeof errorData === "object" &&
+            errorData !== null &&
+            "message" in errorData
               ? String(
                   (errorData as { message?: unknown }).message ??
                     "Failed to generate labels."
@@ -2270,7 +2374,9 @@ export function ShipmentsTable({
 
       if (
         !result.ok &&
-        (result.status === null || result.status === 405 || result.status === 404)
+        (result.status === null ||
+          result.status === 405 ||
+          result.status === 404)
       ) {
         result = await performRequest("PUT");
       }
@@ -2307,6 +2413,16 @@ export function ShipmentsTable({
       });
       setAction((prev) => prev + 1);
       setSelectedRows({});
+
+      try {
+        await quickPrintShipments(selectedIds, {
+          suppressSuccessToast: true,
+          incrementAction: false,
+          title: "Generated Labels Preview",
+        });
+      } catch {
+        // quick print helper already handles error reporting
+      }
     } catch (error: unknown) {
       console.error("Error generating labels:", error);
       toast({
@@ -2317,7 +2433,14 @@ export function ShipmentsTable({
     } finally {
       setStillInProgress(false);
     }
-  }, [generateLabelsForShipments, selectedRows, setAction, setStillInProgress, toast]);
+  }, [
+    generateLabelsForShipments,
+    quickPrintShipments,
+    selectedRows,
+    setAction,
+    setStillInProgress,
+    toast,
+  ]);
 
   const handlePrintLabel = useCallback(
     async (shipmentId: number) => {
@@ -2340,6 +2463,30 @@ export function ShipmentsTable({
       }
     },
     [generateLabelsForShipments, setAction, toast]
+  );
+
+  const resolveShipmentRowColor = useCallback(
+    (shipment: Shipment): string => {
+      const fallbackColor = "#9370db";
+      const effectiveCode = (
+        shipment.carrierCode?.trim() ??
+        shipment.carrierCodeDesired?.trim() ??
+        ""
+      ).toLowerCase();
+
+      if (!effectiveCode) {
+        return fallbackColor;
+      }
+
+      const mappedColor = carrierColors[effectiveCode];
+      console.log("Mapped color for", effectiveCode, ":", mappedColor);
+      if (mappedColor && mappedColor.trim().length > 0) {
+        return mappedColor.trim();
+      }
+
+      return fallbackColor;
+    },
+    [carrierColors]
   );
 
   if (shipmentsAreLoading) {
@@ -2956,11 +3103,8 @@ export function ShipmentsTable({
               >
                 <TableCell
                   id={`select-row-${shipment.id}`}
-                  className={`text-white ${
-                    shipment.carrierCode === "auspost"
-                      ? "bg-[#F46E6B]"
-                      : "bg-[#9370db]"
-                  } py-0`}
+                  className="text-white py-0"
+                  style={{ backgroundColor: resolveShipmentRowColor(shipment) }}
                 >
                   <div className="flex flex-row gap-x-3 items-center">
                     <Checkbox
@@ -3405,7 +3549,11 @@ export function ShipmentsTable({
                     </Tooltip>
 
                     <div className="ml-5 w-56 flex items-center gap-x-1">
-                      <FaUser className="w-4 h-4" />
+                      {shipment.company ? (
+                        <FaBuilding className="w-4 h-4" />
+                      ) : (
+                        <FaUser className="w-4 h-4" />
+                      )}
                       <span className="font-medium">
                         {shipment.orderName.length > 45
                           ? `${shipment.orderName.substring(0, 45)}...`

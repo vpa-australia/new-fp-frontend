@@ -58,6 +58,8 @@ interface ShipmentQuote {
   carrier?: {
     manual?: boolean;
     name: string;
+    code?: string | null;
+    color?: string | null;
   };
   isExpress?: boolean;
 }
@@ -279,7 +281,56 @@ export function ShipmentDetailView({
   const detail = shipment?.shipment ?? null;
   const quotes = useMemo(() => detail?.quotes ?? [], [detail]);
   const orderLines = detail?.orderLines ?? [];
-  const isLabelPrinted = detail?.labelPrinted === true;
+  const normalizeLabelPrinted = useCallback((value: unknown): boolean | null => {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value > 0;
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'printed') {
+        return true;
+      }
+      if (
+        normalized === 'false' ||
+        normalized === '0' ||
+        normalized === 'no' ||
+        normalized === 'not printed'
+      ) {
+        return false;
+      }
+    }
+    return null;
+  }, []);
+
+  const isLabelPrinted = useMemo(() => {
+    const detailRecord =
+      detail && typeof detail === "object"
+        ? (detail as unknown as Record<string, unknown>)
+        : null;
+    const rootRecord =
+      shipment && typeof shipment === "object"
+        ? (shipment as unknown as Record<string, unknown>)
+        : null;
+
+    const candidates: unknown[] = [
+      detailRecord?.labelPrinted,
+      detailRecord?.label_printed,
+      rootRecord?.labelPrinted,
+      rootRecord?.label_printed,
+    ];
+
+    for (const candidate of candidates) {
+      const normalized = normalizeLabelPrinted(candidate);
+      if (normalized !== null) {
+        return normalized;
+      }
+    }
+
+    return false;
+  }, [detail, shipment, normalizeLabelPrinted]);
 
   useEffect(() => {
     if (quotes.length === 0) {
@@ -355,7 +406,7 @@ export function ShipmentDetailView({
     if (match && match.id !== selectedQuote) {
       setSelectedQuote(match.id);
     }
-  }, [detail, quotes, selectedQuote]);
+  }, [detail, quotes]);
 
   const getQuoteRadioValue = useCallback(
     (quote: ShipmentQuote) =>
