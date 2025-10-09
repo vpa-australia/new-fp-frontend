@@ -988,7 +988,6 @@ export function ShipmentDetailView({
                   key={quote.id}
                   className="flex items-center space-x-2 mb-2"
                 >
-                  <p>Is Disable: {isLabelPrinted ? "Yes" : "No"}</p>
                   <RadioGroupItem
                     value={getQuoteRadioValue(quote)}
                     id={`quote-${quote.id}`}

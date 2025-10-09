@@ -1370,6 +1370,7 @@ export function ShipmentsTable({
             return acc;
           }, {});
 
+          console.log("Fetched carrier colors:", mapped);
           setCarrierColors(mapped);
         }
       } catch (error) {
@@ -2468,7 +2469,9 @@ export function ShipmentsTable({
     (shipment: Shipment): string => {
       const fallbackColor = "#9370db";
       const effectiveCode = (
-        shipment.carrierCode?.trim() ?? shipment.carrierCodeDesired?.trim() ?? ""
+        shipment.carrierCode?.trim() ??
+        shipment.carrierCodeDesired?.trim() ??
+        ""
       ).toLowerCase();
 
       if (!effectiveCode) {
@@ -2476,6 +2479,7 @@ export function ShipmentsTable({
       }
 
       const mappedColor = carrierColors[effectiveCode];
+      console.log("Mapped color for", effectiveCode, ":", mappedColor);
       if (mappedColor && mappedColor.trim().length > 0) {
         return mappedColor.trim();
       }
