@@ -12,11 +12,11 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-/*import {
+import {
     Alert,
     AlertDescription,
     AlertTitle,
-} from "@/components/ui/alert"*/
+} from "@/components/ui/alert"
 import { AlertCircleIcon } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
@@ -93,15 +93,17 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
 
     const saveFile = (): void => {
 
+
         if(typeof manualUpload === 'undefined' || typeof shipment === 'undefined') {
             return;
         }
 
         if(files === null){
+            setError("You must select at least one file.")
             return;
         }
 
-
+        setError("");
         setIsSubmitting(true);
         const token = localStorage.getItem('authToken');
         const formData = new FormData();
@@ -156,13 +158,13 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
                             Upload a label manually to this order.
                         </DialogDescription>
                     </DialogHeader>
-                    {error.length > 0 ? <><div>{error}</div>{/*<Alert variant="destructive">
+                    {error.length > 0 ? <><Alert variant="destructive">
                         <AlertCircleIcon />
                         <AlertTitle>There was an error uploading the PDF/s</AlertTitle>
                         <AlertDescription>
                             <p>{error}</p>
                         </AlertDescription>
-                    </Alert>*/}</> : ''}
+                    </Alert></> : ''}
                     <div className="grid gap-4">
                         <div className="grid gap-3">
                             <Label htmlFor="tracking_code">Tracking Code</Label>
