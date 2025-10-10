@@ -170,6 +170,38 @@ export default function UsersTab() {
     setIsEditUserDialogOpen(true);
   };
 
+  const handleDeleteUser = async (user: User) => {
+       if(confirm('Are you sure you want to delete this user?')) {
+
+         const token = requireAuthToken();
+         const response = await fetch(`https://ship-orders.vpa.com.au/api/users/${user.data.id}`, {
+           method: 'DELETE',
+           headers: {
+             'Authorization': `Bearer ${token}`
+           }
+         });
+
+         if (!response.ok) {
+           throw new Error('Failed to delete user');
+         }
+
+         const updatedResponse = await fetch('https://ship-orders.vpa.com.au/api/users', {
+           headers: {
+             'Authorization': `Bearer ${token}`,
+           },
+         });
+
+         if (!updatedResponse.ok) {
+           throw new Error('Failed to refresh user list');
+         }
+
+         const updatedData: UsersResponse = await updatedResponse.json();
+         setUsers(updatedData.users);
+
+       }
+
+  };
+
   const handleSubmitUpdate = async () => {
     if (!selectedUser) return;
 
@@ -570,12 +602,12 @@ export default function UsersTab() {
               </TableRow>
             ) : users.map((user) => (
               <TableRow key={user.data.id}>
-                <TableCell>{user.data.name}</TableCell>
+                <TableCell>{user.data.name + (user.data.title && user.data.title.length > 0 ? ' ('+user.data.title+')' : '')}</TableCell>
                 <TableCell>{user.data.email}</TableCell>
                 <TableCell>{user.roles.roles.join(', ') || 'No roles assigned'}</TableCell>
                 <TableCell>
                   <Button variant="ghost" size="sm" onClick={() => handleUpdateUser(user)}>Edit</Button>
-                  {/* <Button variant="ghost" size="sm" className="text-red-600">Delete</Button> */}
+                  <Button variant="ghost" size="sm" className="text-red-600" onClick={()=>{handleDeleteUser(user)}}>Delete</Button>
                 </TableCell>
               </TableRow>
             ))}

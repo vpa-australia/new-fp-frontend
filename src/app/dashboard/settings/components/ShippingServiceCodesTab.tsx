@@ -192,7 +192,7 @@ export default function ShippingServiceCodesTab() {
                             <TableCell className="w-1/3">
                                 <Button variant="ghost" size="sm" onClick={() => handleUpdateServiceCode(sc)}>Edit</Button>
 
-                                <Button variant="ghost" size="sm" onClick={()=> { if(confirm('Do you really want to delete the service: ' + sc.name + ' ('+sc.service_code+').')){ handleDelete(sc.id); }}} >
+                                <Button variant="ghost" size="sm" className="text-red-600" onClick={()=> { if(confirm('Do you really want to delete the service: ' + sc.name + ' ('+sc.service_code+').')){ handleDelete(sc.id); }}} >
                                     Delete
                                 </Button>
                             </TableCell>
