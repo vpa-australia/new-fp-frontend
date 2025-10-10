@@ -354,13 +354,25 @@ export default function UsersTab() {
           title:newUser.title,
           email: newUser.email,
           password: newUser.password,
-          roles: newUser.roles.filter(role => role !== '')
+          roles: newUser.roles.filter(role => role !== ''),
+          warehouses: newUser.warehouses.filter(warehouse => warehouse !== '')
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create user');
+
+        const errorMessage : string[] = [];
+        if (errorData.errors) {
+          Object.keys(errorData.errors).forEach((key) => {
+            errorMessage.push(errorData.errors[key].join(" "));
+          })
+        }
+        let errmess = '';
+        if(errorMessage.length > 0) {
+          errmess = errorData.message + ': ' + errorMessage.join(',')
+        }
+        throw new Error(errmess || 'Failed to create user');
       }
 
       const updatedResponse = await fetch('https://ship-orders.vpa.com.au/api/users', {
