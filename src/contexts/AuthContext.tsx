@@ -38,6 +38,8 @@ export interface AuthUser {
   data: AuthUserProfile;
   roles: AuthUserRolesInfo;
   availableRoles?: AuthUserRolesInfo;
+  hasRole: (role: string) => boolean;
+  hasWarehouse: (warehouse: string) => boolean;
   [key: string]: unknown;
 }
 
@@ -150,6 +152,40 @@ const normalizeAuthUser = (input: unknown): AuthUser | null => {
   const availableRoles = normalizeRoles(candidate.availableRoles);
   if (availableRoles.roles.length > 0 || availableRoles.warehouses.length > 0) {
     normalized.availableRoles = availableRoles;
+  }
+
+  normalized.hasRole = function(role: string){
+      let has = false;
+
+      if(typeof this.roles === 'undefined' || this.roles.roles.length === 0){
+        return false;
+      }
+
+      this.roles.roles.forEach((r)=>
+      {
+        if(r === role){
+          has = true;
+        }
+      });
+
+      return has;
+  }
+
+  normalized.hasWarehouse = function(warehouse: string){
+    let has = false;
+
+    if(typeof this.roles === 'undefined' || this.roles.warehouses.length === 0){
+      return false;
+    }
+
+    this.roles.warehouses.forEach((w)=>
+    {
+      if(w === warehouse){
+        has = true;
+      }
+    });
+
+    return has;
   }
 
   return normalized;
