@@ -44,6 +44,7 @@ interface UpdateUserData {
   title: string;
   confirmPassword: string;
   roles: string[];
+  warehouses: string[]
 }
 
 export default function UsersTab() {
@@ -57,7 +58,8 @@ export default function UsersTab() {
     email: '',
     title: '',
     password: '',
-    roles: [] as string[]
+    roles: [] as string[],
+    warehouses: [] as string[]
   });
   const [editUserData, setEditUserData] = useState<UpdateUserData>({
     name: '',
@@ -65,9 +67,11 @@ export default function UsersTab() {
     title: '',
     confirmPassword: '',
     roles: [],
+    warehouses: []
   });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
+  const [availableWarehouses, setAvailableWarehouses] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { requireAuthToken } = useAuth();
@@ -92,6 +96,7 @@ export default function UsersTab() {
         // Extract available roles from the first user's availableRoles
         if (data.users.length > 0 && data.users[0].availableRoles) {
           setAvailableRoles(data.users[0].availableRoles.roles);
+          setAvailableWarehouses(data.users[0].availableRoles.warehouses);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -120,12 +125,35 @@ export default function UsersTab() {
     }
   };
 
+  const handleWarehouseChange = (warehouse: string, checked: boolean) => {
+    if (checked) {
+      setNewUser(prev => ({
+        ...prev,
+        warehouses: [...prev.warehouses, warehouse]
+      }));
+    } else {
+      setNewUser(prev => ({
+        ...prev,
+        warehouses: prev.warehouses.filter(r => r !== warehouse)
+      }));
+    }
+  };
+
   const handleEditRoleChange = (role: string, checked: boolean) => {
     setEditUserData((prev) => ({
       ...prev,
       roles: checked
         ? Array.from(new Set([...prev.roles, role]))
         : prev.roles.filter((r) => r !== role),
+    }));
+  };
+
+  const handleEditWarehouseChange = (warehouse: string, checked: boolean) => {
+    setEditUserData((prev) => ({
+      ...prev,
+      warehouses: checked
+          ? Array.from(new Set([...prev.warehouses, warehouse]))
+          : prev.warehouses.filter((r) => r !== warehouse),
     }));
   };
 
@@ -137,6 +165,7 @@ export default function UsersTab() {
       title: user.data.title ?  user.data.title : '',
       confirmPassword: '',
       roles: user.roles.roles || [],
+      warehouses: user.roles.warehouses || []
     });
     setIsEditUserDialogOpen(true);
   };
@@ -163,11 +192,17 @@ export default function UsersTab() {
     }
 
     const existingRoles = selectedUser.roles?.roles ?? [];
+    const existingWarehouses = selectedUser.roles?.warehouses ?? [];
     const sortedExistingRoles = [...existingRoles].sort();
+    const sortedExistingWarehouses = [...existingWarehouses].sort();
     const sortedNewRoles = [...editUserData.roles].sort();
+    const sortedNewWarehouses = [...editUserData.warehouses].sort();
     const rolesChanged =
       sortedExistingRoles.length !== sortedNewRoles.length ||
       sortedExistingRoles.some((role, index) => role !== sortedNewRoles[index]);
+    const warehousesChanged =
+        sortedExistingWarehouses.length !== sortedNewWarehouses.length ||
+        sortedExistingWarehouses.some((role, index) => role !== sortedNewWarehouses[index]);
 
     if (rolesChanged && editUserData.roles.length === 0) {
       setIsSubmitting(false);
@@ -179,7 +214,7 @@ export default function UsersTab() {
       return;
     }
 
-    if (!hasNameChange && !hasPasswordChange && !rolesChanged && !hasTitleChange) {
+    if (!hasNameChange && !hasPasswordChange && !rolesChanged && !hasTitleChange && !warehousesChanged) {
       setIsSubmitting(false);
       toast({
         title: 'No changes detected',
@@ -218,6 +253,15 @@ export default function UsersTab() {
           });
       }
 
+      if (warehousesChanged) {
+
+        editUserData.warehouses
+            .filter((role) => role.trim() !== '')
+            .forEach((role, index) => {
+              params.append(`warehouses[${index}]`, role);
+            });
+      }
+
       const response = await fetch(`https://ship-orders.vpa.com.au/api/users/${selectedUser.data.id}`, {
         method: 'PUT',
         headers: {
@@ -245,7 +289,8 @@ export default function UsersTab() {
 
       const updatedName = hasNameChange ? trimmedName : selectedUser.data.name;
       const updatedTitle = hasTitleChange ? trimmedTitle: selectedUser.data.title;
-      const updatedRoles = rolesChanged ? [...editUserData.roles] : existingRoles;
+      const updatedRoles = rolesChanged  || warehousesChanged ? [...editUserData.roles] : existingRoles;
+      const updatedWarehouses = warehousesChanged ? [...editUserData.warehouses] : existingWarehouses;
 
       const updatedUsers = users.map((user) => {
         if (user.data.id === selectedUser.data.id) {
@@ -255,7 +300,7 @@ export default function UsersTab() {
               ...user.data,
               name: updatedName,
             },
-            roles: rolesChanged ? { ...user.roles, roles: updatedRoles } : user.roles,
+            roles: rolesChanged || warehousesChanged ? { ...user.roles, roles: updatedRoles, warehouses: updatedWarehouses } : user.roles,
           };
         }
         return user;
@@ -277,6 +322,7 @@ export default function UsersTab() {
         title: updatedTitle,
         confirmPassword: '',
         roles: updatedRoles,
+        warehouses: updatedWarehouses
       });
       setIsEditUserDialogOpen(false);
     } catch (err) {
@@ -336,7 +382,8 @@ export default function UsersTab() {
         email: '',
         password: '',
         title: '',
-        roles: []
+        roles: [],
+        warehouses: []
       });
       setIsAddUserDialogOpen(false);
 
@@ -443,6 +490,27 @@ export default function UsersTab() {
                         ))
                       ) : (
                         <p className="text-sm text-gray-500">No roles available</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-start gap-4">
+                    <Label className="text-right pt-2">
+                      Warehouses
+                    </Label>
+                    <div className="col-span-3 space-y-2">
+                      {availableWarehouses.length > 0 ? (
+                          availableWarehouses.map((warehouse) => (
+                              <div key={warehouse} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`role-${warehouse}`}
+                                    checked={newUser.warehouses.includes(warehouse)}
+                                    onCheckedChange={(checked) => handleWarehouseChange(warehouse, checked === true)}
+                                />
+                                <Label htmlFor={`role-${warehouse}`}>{warehouse}</Label>
+                              </div>
+                          ))
+                      ) : (
+                          <p className="text-sm text-gray-500">No warehouses available</p>
                       )}
                     </div>
                   </div>
@@ -574,6 +642,27 @@ export default function UsersTab() {
                     ))
                   ) : (
                     <p className="text-sm text-gray-500">No roles available</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label className="text-right pt-2">Warehouses</Label>
+                <div className="col-span-3 space-y-2">
+                  {availableWarehouses.length > 0 ? (
+                      availableWarehouses.map((warehouse) => (
+                          <div key={`edit-wh-${warehouse}`} className="flex items-center space-x-2">
+                            <Checkbox
+                                id={`edit-wh-${warehouse}`}
+                                checked={editUserData.warehouses.includes(warehouse)}
+                                onCheckedChange={(checked) =>
+                                    handleEditWarehouseChange(warehouse, checked === true)
+                                }
+                            />
+                            <Label htmlFor={`edit-wh-${warehouse}`}>{warehouse}</Label>
+                          </div>
+                      ))
+                  ) : (
+                      <p className="text-sm text-gray-500">No warehouses available</p>
                   )}
                 </div>
               </div>
