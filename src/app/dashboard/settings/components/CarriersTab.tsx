@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
+import {Checkbox} from "@/components/ui/checkbox";
 
 interface Carrier {
   id: number;
@@ -24,20 +25,41 @@ interface Carrier {
   warehouses: string[];
 }
 
+interface Warehouse {
+  id: number;
+  code: string;
+  name: string;
+  country: string | null;
+  description: string | null;
+  international: number;
+  international_rank: number;
+  domestic_rank: number;
+  active: number;
+}
+
 interface CarriersResponse {
   success: boolean;
   carriers: Record<string, Carrier>;
+}
+
+interface WarehouseResponse {
+  success: boolean;
+  warehouses: Record<string, Warehouse>;
 }
 
 interface UpdateCarrierData {
   carrier_code: string;
   description: string;
   max_parcel_weight: number;
+  color: string;
+  warehouses: string[];
   active: number;
+  manual: number;
 }
 
 export default function CarriersTab() {
   const [carriers, setCarriers] = useState<Carrier[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCarrierDetailsOpen, setIsCarrierDetailsOpen] = useState(false);
@@ -48,7 +70,10 @@ export default function CarriersTab() {
     carrier_code: '',
     description: '',
     max_parcel_weight: 0,
-    active: 0
+    color: '',
+    warehouses:[],
+    active: 0,
+    manual: 0
   });
   const { toast } = useToast();
   const { requireAuthToken } = useAuth();
@@ -83,9 +108,39 @@ export default function CarriersTab() {
       }
     };
 
+    const fetchWarehouses = async () => {
+      try {
+        const token = requireAuthToken();
+        const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch warehouses');
+        }
+
+        const data: WarehouseResponse = await response.json();
+
+        if (!data.success) {
+          throw new Error('API returned unsuccessful response');
+        }
+
+        // Convert the carriers object to an array
+        const warehouseArray = Object.values(data.warehouses);
+        setWarehouses(warehouseArray);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     // Only run on the client side
     if (typeof window !== 'undefined') {
       fetchCarriers();
+      fetchWarehouses();
     }
   }, [requireAuthToken]);
 
@@ -100,9 +155,26 @@ export default function CarriersTab() {
       carrier_code: carrier.code,
       description: carrier.description || '',
       max_parcel_weight: carrier.maxParcelWeight || 0,
-      active: carrier.active ? 1 : 0
+      color: carrier.color || '',
+      warehouses: carrier.warehouses || [],
+      active: carrier.active ? 1 : 0,
+      manual: carrier.manual ? 1 : 0,
     });
     setIsEditCarrierOpen(true);
+  };
+
+  const handleWarehouseChange = (warehouse: string, checked: boolean) => {
+    if (checked) {
+      setEditCarrierData({
+        ...editCarrierData,
+        warehouses: [...editCarrierData.warehouses, warehouse]
+      });
+    } else {
+      setEditCarrierData({
+        ...editCarrierData,
+        warehouses: editCarrierData.warehouses.filter(r => r !== warehouse)
+      });
+    }
   };
 
   const handleSubmitUpdate = async () => {
@@ -113,13 +185,44 @@ export default function CarriersTab() {
     try {
       const token = requireAuthToken();
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/platform/carriers/address_only`, {
+      const formData = new FormData();
+
+      let json = {description: '', max_parcel_weight: '', active: 0, manual: 0, color: '', warehouses: []};
+
+      json.description = editCarrierData.description;
+
+      if(!isNaN(editCarrierData.max_parcel_weight)) {
+        json.max_parcel_weight = editCarrierData.max_parcel_weight.toString();
+      } else {
+        delete json['max_parcel_weight'];
+      }
+
+      if(editCarrierData.active == 1){
+        json.active = 1;
+      } else {
+        json.active = 0;
+      }
+
+      if(editCarrierData.manual == 1){
+        json.manual = 1;
+      } else {
+        json.manual = 0;
+      }
+
+
+      if(editCarrierData.color.trim().length > 1){
+        json.color = editCarrierData.color.trim();
+      }
+
+      json.warehouses = editCarrierData.warehouses;
+
+      const response = await fetch(`https://ship-orders.vpa.com.au/api/platform/carriers/`+ editCarrierData.carrier_code, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(editCarrierData)
+        body: JSON.stringify(json)
       });
 
       if (!response.ok) {
@@ -144,7 +247,9 @@ export default function CarriersTab() {
             ...carrier,
             description: editCarrierData.description,
             maxParcelWeight: editCarrierData.max_parcel_weight,
-            active: editCarrierData.active === 1
+            active: editCarrierData.active == 1,
+            manual: editCarrierData.manual == 1,
+            warehouses:editCarrierData.warehouses
           };
         }
         return carrier;
@@ -332,6 +437,17 @@ export default function CarriersTab() {
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="color" className="text-right">
+                  Color
+                </Label>
+                <Input
+                    id="description"
+                    value={editCarrierData.color}
+                    onChange={(e) => setEditCarrierData({ ...editCarrierData, color: e.target.value })}
+                    className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="max-parcel-weight" className="text-right">
                   Max Parcel Weight (kg)
                 </Label>
@@ -359,6 +475,44 @@ export default function CarriersTab() {
                     <SelectItem value="0">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="manual-status" className="text-right">
+                  Manual or API Driven
+                </Label>
+                <Select
+                    value={editCarrierData.manual.toString()}
+                    onValueChange={(value) => setEditCarrierData({ ...editCarrierData, manual: parseInt(value) })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Manual</SelectItem>
+                    <SelectItem value="0">Uses API</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label className="text-right pt-2">
+                  Warehouses
+                </Label>
+                <div className="col-span-3 space-y-2">
+                  {warehouses.length > 0 ? (
+                      warehouses.map((warehouse) => (
+                          <div key={warehouse.code} className="flex items-center space-x-2">
+                            <Checkbox
+                                id={`wh-${warehouse.code}`}
+                                checked={editCarrierData.warehouses.includes(warehouse.code)}
+                                onCheckedChange={(checked) => handleWarehouseChange(warehouse.code, checked === true)}
+                            />
+                            <Label htmlFor={`wh-${warehouse.code}`}>{warehouse.name}</Label>
+                          </div>
+                      ))
+                  ) : (
+                      <p className="text-sm text-gray-500">No warehouses available</p>
+                  )}
+                </div>
               </div>
             </div>
             <DialogFooter>
