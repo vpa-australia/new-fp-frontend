@@ -927,22 +927,22 @@ export function ShipmentDetailView({
     }
   };
 
-  const getQuoteLabel = (quote: ShipmentQuote): string => {
+  const getQuoteLabel = (quote: ShipmentQuote) => {
     const costPrefix =
         quote.carrier?.manual === true
             ? ""
             : `${formatQuoteCost(quote.costIncludingTax)} `;
     const carrierName = quote.carrier?.name ?? quote.carrierCode;
     const expressSuffix = quote.isExpress ? " - Express" : "";
-    let service_code = '';
+    let service_code = <></>;
     if( typeof quote.carrier !== 'undefined' && quote.carrier?.code !== null && typeof quote.carrier.code !== 'undefined' && typeof serviceCodes[quote.carrier.code] !== 'undefined') {
       serviceCodes[quote.carrier.code].forEach((sc: ShippingServiceCode) => {
         if (sc.service_code == quote.serviceCode) {
-          service_code = ' ('+sc.name + ') ';
+          service_code = <span className="text-gray-500"> ({sc.name}) </span>;
         }
       })
     }
-    return `${costPrefix}${carrierName}${service_code}${expressSuffix}`;
+    return <>{`${costPrefix}${carrierName}`}{service_code}{`${expressSuffix}`}</>;
   };
 
   return (
