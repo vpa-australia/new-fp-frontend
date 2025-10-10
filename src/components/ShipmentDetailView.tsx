@@ -19,7 +19,14 @@ import {
 } from "./ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { UploadFile, UploadableShipment } from "@/components/UploadFile";
+import {ShippingServiceCodesSuccess} from "@/app/dashboard/settings/components/ShippingServiceCodesTab.types";
 
+interface ShippingServiceCode {
+  id: number | string;
+  carrier_code: string;
+  service_code: string;
+  name: string;
+}
 interface OutOfStockWarehouse {
   id: number;
   variantId: string | number;
@@ -203,15 +210,7 @@ const formatQuoteCost = (cost: ShipmentQuote["costIncludingTax"]): string => {
   return `$${numericCost.toFixed(2)}`;
 };
 
-const getQuoteLabel = (quote: ShipmentQuote): string => {
-  const costPrefix =
-    quote.carrier?.manual === true
-      ? ""
-      : `${formatQuoteCost(quote.costIncludingTax)} `;
-  const carrierName = quote.carrier?.name ?? quote.carrierCode;
-  const expressSuffix = quote.isExpress ? " (Express)" : "";
-  return `${costPrefix}${carrierName}${expressSuffix}`;
-};
+
 
 const isItemOutOfStockAtWarehouse = (
   item: LineItem,
@@ -276,6 +275,7 @@ export function ShipmentDetailView({
     Record<number, string>
   >({});
   const [selectedQuote, setSelectedQuote] = useState<number | null>(null);
+  const [serviceCodes, setServiceCodes] = useState<Record<string, ShippingServiceCode[]>>({});
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<ShipmentComment[]>([]);
   const detail = shipment?.shipment ?? null;
@@ -331,6 +331,21 @@ export function ShipmentDetailView({
 
     return false;
   }, [detail, shipment, normalizeLabelPrinted]);
+
+  const loadAllServiceCodes = (callback?: () => void) =>{
+    const token = localStorage.getItem('authToken');
+    fetch('https://ship-orders.vpa.com.au/api/platform/carrier_service_codes', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    }).then(res => res.json()).then( (data : ShippingServiceCodesSuccess) =>{
+      if(data.success) {
+        setServiceCodes(data['carriers']);
+        callback?.();
+      }
+    });
+  }
 
   useEffect(() => {
     if (quotes.length === 0) {
@@ -518,7 +533,7 @@ export function ShipmentDetailView({
         });
       }
     };
-
+    loadAllServiceCodes();
     fetchWarehouses();
   }, [getAuthToken, toast]);
 
@@ -910,6 +925,24 @@ export function ShipmentDetailView({
     } finally {
       setIsLoadingErrors(false);
     }
+  };
+
+  const getQuoteLabel = (quote: ShipmentQuote): string => {
+    const costPrefix =
+        quote.carrier?.manual === true
+            ? ""
+            : `${formatQuoteCost(quote.costIncludingTax)} `;
+    const carrierName = quote.carrier?.name ?? quote.carrierCode;
+    const expressSuffix = quote.isExpress ? " - Express" : "";
+    let service_code = '';
+    if( typeof quote.carrier !== 'undefined' && quote.carrier?.code !== null && typeof quote.carrier.code !== 'undefined' && typeof serviceCodes[quote.carrier.code] !== 'undefined') {
+      serviceCodes[quote.carrier.code].forEach((sc: ShippingServiceCode) => {
+        if (sc.service_code == quote.serviceCode) {
+          service_code = ' ('+sc.name + ') ';
+        }
+      })
+    }
+    return `${costPrefix}${carrierName}${service_code}${expressSuffix}`;
   };
 
   return (
