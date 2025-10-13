@@ -1,4 +1,4 @@
-const baseUrl = 'https://ship-orders.vpa.com.au/api';
+import { apiFetch } from "./client";
 
 const getToken = (): string => {
   if (typeof window === 'undefined') {
@@ -32,7 +32,7 @@ export type UpdateUserPayload = {
 };
 
 export async function fetchCurrentUser() {
-  const res = await fetch(`${baseUrl}/users/auth/me`, {
+  const res = await apiFetch("/users/auth/me", {
     method: 'GET',
     headers: authHeaders(),
   });
@@ -45,7 +45,7 @@ export async function fetchCurrentUser() {
 }
 
 export async function updateUser(id: number, payload: UpdateUserPayload) {
-  const res = await fetch(`${baseUrl}/users/${id}`, {
+  const res = await apiFetch(`/users/${id}`, {
     method: 'PUT',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),

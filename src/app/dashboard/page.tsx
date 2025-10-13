@@ -25,6 +25,7 @@ import {
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
 import { ShipmentsTable } from "@/components/ShipmentsTable";
+import { apiFetch, buildApiUrl } from "@/lib/api/client";
 
 // Define Warehouse interface
 interface Warehouse {
@@ -43,6 +44,7 @@ interface Shipment {
   shopifyId: number;
   shopifyOrderNumber: string;
   orderName: string;
+  company: string;
   email: string;
   address1: string;
   suburb: string;
@@ -196,7 +198,7 @@ export default function DashboardPage() {
       try {
         const token = requireAuthToken();
 
-        const response = await fetch('https://ship-orders.vpa.com.au/api/shipments/search/parameters', {
+        const response = await apiFetch('/shipments/search/parameters', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
@@ -220,7 +222,7 @@ export default function DashboardPage() {
       try {
         const token = requireAuthToken();
 
-        const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
+        const response = await apiFetch('/platform/warehouses', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
@@ -290,7 +292,7 @@ export default function DashboardPage() {
           return 'all';
         })();
 
-        const shipmentsUrl = new URL(`https://ship-orders.vpa.com.au/api/shipments/warehouse/${warehouseSegment}`);
+        const shipmentsUrl = new URL(buildApiUrl(`/shipments/warehouse/${warehouseSegment}`));
         shipmentsUrl.searchParams.set('perPage', String(itemsPerPage));
         shipmentsUrl.searchParams.set('page', String(currentPage));
         shipmentsUrl.searchParams.set('archive', isArchived ? '1' : '0');
@@ -306,7 +308,7 @@ export default function DashboardPage() {
 
         const finalUrl = shipmentsUrl.toString();
 
-        const response = await fetch(finalUrl, {
+        const response = await apiFetch(finalUrl, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',

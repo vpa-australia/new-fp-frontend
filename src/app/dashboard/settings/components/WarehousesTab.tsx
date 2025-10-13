@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { apiFetch } from "@/lib/api/client";
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,7 +56,7 @@ export default function WarehousesTab() {
     const fetchWarehouses = async () => {
       try {
         const token = requireAuthToken();
-        const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
+        const response = await apiFetch('/platform/warehouses', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -107,7 +108,7 @@ export default function WarehousesTab() {
     try {
       const token = requireAuthToken();
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/platform/warehouses/address_only`, {
+      const response = await apiFetch(`/platform/warehouses/address_only`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { apiFetch } from "@/lib/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -82,7 +83,7 @@ export default function CarriersTab() {
     const fetchCarriers = async () => {
       try {
         const token = requireAuthToken();
-        const response = await fetch('https://ship-orders.vpa.com.au/api/platform/carriers', {
+        const response = await apiFetch('/platform/carriers', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -111,7 +112,7 @@ export default function CarriersTab() {
     const fetchWarehouses = async () => {
       try {
         const token = requireAuthToken();
-        const response = await fetch('https://ship-orders.vpa.com.au/api/platform/warehouses', {
+        const response = await apiFetch('/platform/warehouses', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -185,44 +186,36 @@ export default function CarriersTab() {
     try {
       const token = requireAuthToken();
 
-      const formData = new FormData();
+      const payload: {
+        description: string;
+        max_parcel_weight?: string;
+        active: number;
+        manual: number;
+        color?: string;
+        warehouses: string[];
+      } = {
+        description: editCarrierData.description,
+        active: editCarrierData.active === 1 ? 1 : 0,
+        manual: editCarrierData.manual === 1 ? 1 : 0,
+        warehouses: editCarrierData.warehouses,
+      };
 
-      let json = {description: '', max_parcel_weight: '', active: 0, manual: 0, color: '', warehouses: []};
-
-      json.description = editCarrierData.description;
-
-      if(!isNaN(editCarrierData.max_parcel_weight)) {
-        json.max_parcel_weight = editCarrierData.max_parcel_weight.toString();
-      } else {
-        delete json['max_parcel_weight'];
+      if (!isNaN(editCarrierData.max_parcel_weight)) {
+        payload.max_parcel_weight = editCarrierData.max_parcel_weight.toString();
       }
 
-      if(editCarrierData.active == 1){
-        json.active = 1;
-      } else {
-        json.active = 0;
+      const trimmedColor = editCarrierData.color.trim();
+      if (trimmedColor.length > 1) {
+        payload.color = trimmedColor;
       }
 
-      if(editCarrierData.manual == 1){
-        json.manual = 1;
-      } else {
-        json.manual = 0;
-      }
-
-
-      if(editCarrierData.color.trim().length > 1){
-        json.color = editCarrierData.color.trim();
-      }
-
-      json.warehouses = editCarrierData.warehouses;
-
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/platform/carriers/`+ editCarrierData.carrier_code, {
+      const response = await apiFetch(`/platform/carriers/`+ editCarrierData.carrier_code, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(json)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {

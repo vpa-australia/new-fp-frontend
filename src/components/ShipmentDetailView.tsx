@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { UploadFile, UploadableShipment } from "@/components/UploadFile";
 import {ShippingServiceCodesSuccess} from "@/app/dashboard/settings/components/ShippingServiceCodesTab.types";
+import { apiFetch } from "@/lib/api/client";
 
 interface ShippingServiceCode {
   id: number | string;
@@ -334,7 +335,7 @@ export function ShipmentDetailView({
 
   const loadAllServiceCodes = (callback?: () => void) =>{
     const token = localStorage.getItem('authToken');
-    fetch('https://ship-orders.vpa.com.au/api/platform/carrier_service_codes', {
+    apiFetch('/platform/carrier_service_codes', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -421,7 +422,7 @@ export function ShipmentDetailView({
     if (match && match.id !== selectedQuote) {
       setSelectedQuote(match.id);
     }
-  }, [detail, quotes]);
+  }, [detail, quotes, selectedQuote]);
 
   const getQuoteRadioValue = useCallback(
     (quote: ShipmentQuote) =>
@@ -499,8 +500,8 @@ export function ShipmentDetailView({
       try {
         const token = getAuthToken();
 
-        const response = await fetch(
-          "https://ship-orders.vpa.com.au/api/platform/warehouses",
+        const response = await apiFetch(
+          "/platform/warehouses",
           {
             headers: {
               Authorization: "Bearer " + token,
@@ -561,8 +562,8 @@ export function ShipmentDetailView({
     try {
       const token = getAuthToken();
 
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/shipments/quote/${detail.id}?quote_id=${selectedQuote}`,
+      const response = await apiFetch(
+        `/shipments/quote/${detail.id}?quote_id=${selectedQuote}`,
         {
           method: "PATCH",
           headers: {
@@ -607,8 +608,8 @@ export function ShipmentDetailView({
     try {
       const token = getAuthToken();
 
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/product/oos?sku=${item.sku}&warehouse_code=${code}`,
+      const response = await apiFetch(
+        `/product/oos?sku=${item.sku}&warehouse_code=${code}`,
         {
           method: "DELETE",
           headers: {
@@ -649,8 +650,8 @@ export function ShipmentDetailView({
     try {
       const token = getAuthToken();
 
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/product/oos?sku=${item.sku}&warehouse_code=${code}`,
+      const response = await apiFetch(
+        `/product/oos?sku=${item.sku}&warehouse_code=${code}`,
         {
           method: "POST",
           headers: {
@@ -738,8 +739,8 @@ export function ShipmentDetailView({
           ? String(storedUserData.roles.roles[0])
           : "User";
 
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/shipments/comment/${detail.id}`,
+        const response = await apiFetch(
+          `/shipments/comment/${detail.id}`,
         {
           method: "POST",
           headers: {
@@ -839,10 +840,10 @@ export function ShipmentDetailView({
       )
       .join("&");
 
-    const url = `https://ship-orders.vpa.com.au/api/shipments/move/${detail.id}?${queryString}`;
+    const url = `/shipments/move/${detail.id}?${queryString}`;
 
     try {
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: "PATCH",
         headers: {
           Authorization: "Bearer " + token,
@@ -883,8 +884,8 @@ export function ShipmentDetailView({
     try {
       const token = getAuthToken();
 
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/shipments/errors/${shipmentId}`,
+      const response = await apiFetch(
+        `/shipments/errors/${shipmentId}`,
         {
           method: "GET",
           headers: {

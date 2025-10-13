@@ -10,8 +10,7 @@ import {
   useState,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-
-const API_BASE_URL = 'https://ship-orders.vpa.com.au/api';
+import { apiFetch } from '@/lib/api/client';
 const AUTH_TOKEN_KEY = 'authToken';
 const USER_EMAIL_KEY = 'userEmail';
 const USER_DATA_KEY = 'userData';
@@ -141,51 +140,22 @@ const normalizeAuthUser = (input: unknown): AuthUser | null => {
 
   const candidate = input as Record<string, unknown>;
 
+  const roles = normalizeRoles(candidate.roles);
+
   const normalized: AuthUser = {
     status: Boolean(candidate.status),
     message:
       typeof candidate.message === "string" ? candidate.message : undefined,
     data: normalizeProfile(candidate.data),
-    roles: normalizeRoles(candidate.roles),
+    roles,
+    hasRole: (role: string) => roles.roles.includes(role),
+    hasWarehouse: (warehouse: string) =>
+      roles.warehouses.includes(warehouse),
   };
 
   const availableRoles = normalizeRoles(candidate.availableRoles);
   if (availableRoles.roles.length > 0 || availableRoles.warehouses.length > 0) {
     normalized.availableRoles = availableRoles;
-  }
-
-  normalized.hasRole = function(role: string){
-      let has = false;
-
-      if(typeof this.roles === 'undefined' || this.roles.roles.length === 0){
-        return false;
-      }
-
-      this.roles.roles.forEach((r)=>
-      {
-        if(r === role){
-          has = true;
-        }
-      });
-
-      return has;
-  }
-
-  normalized.hasWarehouse = function(warehouse: string){
-    let has = false;
-
-    if(typeof this.roles === 'undefined' || this.roles.warehouses.length === 0){
-      return false;
-    }
-
-    this.roles.warehouses.forEach((w)=>
-    {
-      if(w === warehouse){
-        has = true;
-      }
-    });
-
-    return has;
   }
 
   return normalized;
@@ -240,7 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (authToken: string) => {
       setLoadingUser(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/users/auth/me`, {
+        const response = await apiFetch(`/users/auth/me`, {
           method: "GET",
           headers: {
             Accept: "application/json",

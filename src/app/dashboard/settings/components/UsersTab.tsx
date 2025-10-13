@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { apiFetch } from "@/lib/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -80,7 +81,7 @@ export default function UsersTab() {
     const fetchUsers = async () => {
       try {
         const token = requireAuthToken();
-        const response = await fetch('https://ship-orders.vpa.com.au/api/users', {
+        const response = await apiFetch('/users', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -174,7 +175,7 @@ export default function UsersTab() {
        if(confirm('Are you sure you want to delete this user?')) {
 
          const token = requireAuthToken();
-         const response = await fetch(`https://ship-orders.vpa.com.au/api/users/${user.data.id}`, {
+         const response = await apiFetch(`/users/${user.data.id}`, {
            method: 'DELETE',
            headers: {
              'Authorization': `Bearer ${token}`
@@ -185,7 +186,7 @@ export default function UsersTab() {
            throw new Error('Failed to delete user');
          }
 
-         const updatedResponse = await fetch('https://ship-orders.vpa.com.au/api/users', {
+         const updatedResponse = await apiFetch('/users', {
            headers: {
              'Authorization': `Bearer ${token}`,
            },
@@ -294,7 +295,7 @@ export default function UsersTab() {
             });
       }
 
-      const response = await fetch(`https://ship-orders.vpa.com.au/api/users/${selectedUser.data.id}`, {
+      const response = await apiFetch(`/users/${selectedUser.data.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -374,7 +375,7 @@ export default function UsersTab() {
 
     try {
       const token = requireAuthToken();
-      const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/register', {
+      const response = await apiFetch('/users/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -407,7 +408,7 @@ export default function UsersTab() {
         throw new Error(errmess || 'Failed to create user');
       }
 
-      const updatedResponse = await fetch('https://ship-orders.vpa.com.au/api/users', {
+      const updatedResponse = await apiFetch('/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

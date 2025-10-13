@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { apiFetch } from "@/lib/api/client";
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -32,7 +33,7 @@ export default function ActionsTab() {
     const fetchStatuses = async () => {
       try {
         const token = requireAuthToken();
-        const response = await fetch('https://ship-orders.vpa.com.au/api/platform/statuses', {
+        const response = await apiFetch('/platform/statuses', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },

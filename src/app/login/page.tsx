@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api/client';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,7 +22,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/login', {
+      const response = await apiFetch('/users/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -36,7 +37,7 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
-      const userResponse = await fetch('https://ship-orders.vpa.com.au/api/users/auth/me', {
+      const userResponse = await apiFetch('/users/auth/me', {
         headers: {
           'Authorization': `Bearer ${data.token}`,
           'Accept': 'application/json',

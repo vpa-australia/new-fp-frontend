@@ -21,6 +21,7 @@ import { AlertCircleIcon } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { apiFetch } from "@/lib/api/client";
 
 interface ManualUpload{
     tracking_code: string;
@@ -43,7 +44,7 @@ export interface UploadableShipment {
 }
 interface UploadFileProps {
     shipment?: UploadableShipment;
-    onChangeMessage?: (comments: ShipmentComment[]) => void;
+    onChangeMessage?: (comments: ShipmentComment[] ) => void;
     name?: string;
     title?: string;
 }
@@ -64,7 +65,7 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
     const [isOpen, setIsOpen] = useState<boolean>(false);
     const [files, setFiles] = useState<FileList | null>(null);
     const [error, setError] = useState<string>('');
-    useEffect(() => {
+    useEffect(( ) => {
         if (!shipment) {
             setManualUpload(undefined);
             lastShipmentIdRef.current = null;
@@ -105,17 +106,17 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
             }
         }
         console.log('The shipment', shipment)
-        fetch('https://ship-orders.vpa.com.au/api/shipments/pdf/'+shipment.id, {
+        apiFetch('/shipments/pdf/'+shipment.id, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
             },
             body: formData,
-        }).then(res => res.json()).then( (data : {success: boolean, message: string} | {success: boolean, message: string, comments: ShipmentComment[]}) =>{
+        }).then(res => res.json()).then((data: { success: boolean; message: string; comments?: ShipmentComment[] }) => {
             if (data.success) {
-                if(typeof onChangeMessage === 'function'){
-                    if(typeof data.comments !== 'undefined') {
-                        onChangeMessage(data.comments.reverse());
+                if (typeof onChangeMessage === 'function') {
+                    if (Array.isArray(data.comments)) {
+                        onChangeMessage([...data.comments].reverse());
                     }
 
                 }
@@ -167,7 +168,7 @@ export function UploadFile({ shipment, onChangeMessage, name, title }: UploadFil
                         <div className="grid gap-3">
                             <Label htmlFor="files">PDF File/s</Label>
                             <Input id="files" multiple={true} type="file" accept="application/pdf"
-                                   onChange={(e) => setFiles(e.target.files)} name="files[]"  />
+                                   onChange={(e ) => setFiles(e.target.files)} name="files[]"  />
                         </div>
                     </div>
                     <DialogFooter>

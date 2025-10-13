@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { apiFetch } from '@/lib/api/client';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -26,7 +27,7 @@ export default function RegisterPage() {
     }
 
     try {
-      const response = await fetch('https://ship-orders.vpa.com.au/api/users/auth/register', {
+      const response = await apiFetch('/users/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

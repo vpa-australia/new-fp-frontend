@@ -77,6 +77,7 @@ import { GrStatusGood } from "react-icons/gr";
 import { PdfViewer } from "./ui/pdf-viewer";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiFetch } from "@/lib/api/client";
 
 interface Shipment {
   id: number;
@@ -351,8 +352,8 @@ export function ShipmentsTable({
       formData.append("tracking_code", trackingCode || "");
       formData.append("manual_carrier_code", carrierCode || "");
 
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/shipments/pdf/${shipmentId}`,
+      const response = await apiFetch(
+        `/shipments/pdf/${shipmentId}`,
         {
           method: "POST",
           headers: {
@@ -1168,8 +1169,8 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await fetch(
-          "https://ship-orders.vpa.com.au/api/shipments/search/parameters",
+        const response = await apiFetch(
+          "/shipments/search/parameters",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -1321,8 +1322,8 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await fetch(
-          "https://ship-orders.vpa.com.au/api/platform/statuses",
+        const response = await apiFetch(
+          "/platform/statuses",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -1360,8 +1361,8 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await fetch(
-          "https://ship-orders.vpa.com.au/api/platform/carriers",
+        const response = await apiFetch(
+          "/platform/carriers",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -1584,10 +1585,10 @@ export function ShipmentsTable({
       const shipmentIdsString = Array.isArray(shipmentId)
         ? shipmentId.join(",")
         : String(shipmentId);
-      const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/status/${newStatusId}?shipment_ids=${shipmentIdsString}`;
+      const apiUrl = `/shipments/status/${newStatusId}?shipment_ids=${shipmentIdsString}`;
 
       try {
-        const response = await fetch(apiUrl, {
+        const response = await apiFetch(apiUrl, {
           method: "PATCH",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1650,7 +1651,7 @@ export function ShipmentsTable({
     async (shipmentId: number) => {
       const token = getAuthToken();
 
-      const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/refresh/${shipmentId}`;
+      const apiUrl = `/shipments/refresh/${shipmentId}`;
 
       setRefreshingShipmentIds((prev) => {
         const next = new Set(prev);
@@ -1659,7 +1660,7 @@ export function ShipmentsTable({
       });
 
       try {
-        const response = await fetch(apiUrl, {
+        const response = await apiFetch(apiUrl, {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1718,8 +1719,8 @@ export function ShipmentsTable({
     const token = getAuthToken();
 
     try {
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/shipments/shipped/1?shipment_ids=${checkedIds.join(
+      const response = await apiFetch(
+        `/shipments/shipped/1?shipment_ids=${checkedIds.join(
           ","
         )}`,
         {
@@ -1785,8 +1786,8 @@ export function ShipmentsTable({
     const token = getAuthToken();
 
     try {
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/shipments/shipped/0?shipment_ids=${checkedIds.join(
+      const response = await apiFetch(
+        `/shipments/shipped/0?shipment_ids=${checkedIds.join(
           ","
         )}`,
         {
@@ -1843,8 +1844,8 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/shipments/${selectedShipmentId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`,
+        const response = await apiFetch(
+          `/shipments/${selectedShipmentId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -1923,8 +1924,8 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/shipments/unlDone/${
+        const response = await apiFetch(
+          `/shipments/unlDone/${
             shipment.unlDone ? 0 : 1
           }?shipment_ids=${shipment.id}`,
           {
@@ -1970,8 +1971,8 @@ export function ShipmentsTable({
         const token = getAuthToken();
 
         const endpoint = shipment.locked ? "unlock" : "lock";
-        const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/shipments/${endpoint}/${shipment.id}`,
+        const response = await apiFetch(
+          `/shipments/${endpoint}/${shipment.id}`,
           {
             method: "PATCH",
             headers: {
@@ -2017,10 +2018,10 @@ export function ShipmentsTable({
     async (shipmentId: number) => {
       const token = getAuthToken();
 
-      const apiUrl = `https://ship-orders.vpa.com.au/api/shipments/archive/${shipmentId}`;
+      const apiUrl = `/shipments/archive/${shipmentId}`;
 
       try {
-        const response = await fetch(apiUrl, {
+        const response = await apiFetch(apiUrl, {
           method: "PATCH",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -2087,8 +2088,8 @@ export function ShipmentsTable({
       const token = getAuthToken();
 
       try {
-        const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/pdf/labels/quickPrint?shipment_ids=${shipmentIds.join(
+        const response = await apiFetch(
+          `/pdf/labels/quickPrint?shipment_ids=${shipmentIds.join(
             ","
           )}`,
           {
@@ -2192,8 +2193,8 @@ export function ShipmentsTable({
       const token = getAuthToken();
 
       try {
-        const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/pdf/invoices?shipment_ids=${shipmentIds.join(
+        const response = await apiFetch(
+          `/pdf/invoices?shipment_ids=${shipmentIds.join(
             ","
           )}`,
           {
@@ -2312,8 +2313,8 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/shipments/unarchive/${shipmentId}`,
+        const response = await apiFetch(
+          `/shipments/unarchive/${shipmentId}`,
           {
             method: "PATCH",
             headers: {
@@ -2354,8 +2355,8 @@ export function ShipmentsTable({
       const token = getAuthToken();
 
       try {
-        const response = await fetch(
-          `https://ship-orders.vpa.com.au/api/pdf/labels?shipment_ids=${shipmentId}`,
+        const response = await apiFetch(
+          `/pdf/labels?shipment_ids=${shipmentId}`,
           {
             method: "DELETE",
             headers: {
@@ -2398,7 +2399,7 @@ export function ShipmentsTable({
 
       const token = getAuthToken();
       const baseUrl =
-        "https://ship-orders.vpa.com.au/api/pdf/labels/generateLabels";
+        "/pdf/labels/generateLabels";
       const query = `shipment_ids=${shipmentIds.join(",")}`;
 
       const performRequest = async (
@@ -2425,7 +2426,7 @@ export function ShipmentsTable({
             init.body = JSON.stringify({ shipment_ids: shipmentIds });
           }
 
-          const response = await fetch(`${baseUrl}?${query}`, init);
+          const response = await apiFetch(`${baseUrl}?${query}`, init);
 
           if (response.ok) {
             return { ok: true, status: response.status };

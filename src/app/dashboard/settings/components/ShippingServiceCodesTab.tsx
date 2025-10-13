@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from "@/lib/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from "react";
 import {
@@ -58,7 +59,7 @@ export default function ShippingServiceCodesTab() {
 
             const token = localStorage.getItem('authToken');
 
-            fetch('https://ship-orders.vpa.com.au/api/platform/carriers', {
+            apiFetch('/platform/carriers', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
@@ -78,7 +79,7 @@ export default function ShippingServiceCodesTab() {
 
     const loadAll = (callback?: () => void) =>{
         const token = localStorage.getItem('authToken');
-        fetch('https://ship-orders.vpa.com.au/api/platform/carrier_service_codes', {
+        apiFetch('/platform/carrier_service_codes', {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -108,7 +109,7 @@ export default function ShippingServiceCodesTab() {
             })
 
 
-            fetch('https://ship-orders.vpa.com.au/api/platform/carrier_service_code', {
+            apiFetch('/platform/carrier_service_code', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -133,7 +134,7 @@ export default function ShippingServiceCodesTab() {
 
         const token = localStorage.getItem('authToken');
 
-        fetch('https://ship-orders.vpa.com.au/api/platform/carrier_service_code/'+id, {
+        apiFetch('/platform/carrier_service_code/'+id, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`,
