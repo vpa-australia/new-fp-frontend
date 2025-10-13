@@ -172,8 +172,8 @@ export default function DashboardPage() {
         return;
       }
 
+      const normalizedValue = value.trim().toLowerCase();
       const matchingWarehouse = warehouses.find((warehouse) => {
-        const normalizedValue = value.toLowerCase();
         return (
           warehouse.code.toLowerCase() === normalizedValue ||
           warehouse.name.toLowerCase() === normalizedValue
@@ -181,8 +181,13 @@ export default function DashboardPage() {
       });
 
       if (matchingWarehouse) {
+        const isBrisbaneSelection =
+          normalizedValue === "bri" || normalizedValue === "brisbane";
+        const treatAsLocal =
+          !matchingWarehouse.international || isBrisbaneSelection;
+
         setSelectedWarehouseCategory(
-          matchingWarehouse.international ? 'International' : 'Local'
+          treatAsLocal ? "Local" : "International"
         );
         setSelectedWarehouse(matchingWarehouse.code);
         return;

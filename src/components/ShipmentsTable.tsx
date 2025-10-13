@@ -2070,6 +2070,7 @@ export function ShipmentsTable({
     suppressSuccessToast?: boolean;
     title?: string;
     incrementAction?: boolean;
+    includeAlreadyPrinted?: boolean;
   };
 
   const quickPrintShipments = useCallback(
@@ -2079,6 +2080,7 @@ export function ShipmentsTable({
         suppressSuccessToast = false,
         title,
         incrementAction = true,
+        includeAlreadyPrinted = false,
       }: QuickPrintOptions = {}
     ) => {
       if (shipmentIds.length === 0) {
@@ -2087,11 +2089,17 @@ export function ShipmentsTable({
 
       const token = getAuthToken();
 
+      const params = new URLSearchParams({
+        shipment_ids: shipmentIds.join(","),
+      });
+
+      if (includeAlreadyPrinted) {
+        params.set("include_already_printed", "true");
+      }
+
       try {
         const response = await apiFetch(
-          `/pdf/labels/quickPrint?shipment_ids=${shipmentIds.join(
-            ","
-          )}`,
+          `/pdf/labels/quickPrint?${params.toString()}`,
           {
             method: "GET",
             headers: {
@@ -2171,6 +2179,7 @@ export function ShipmentsTable({
     };
     suppressSuccessToast?: boolean;
     incrementAction?: boolean;
+    allowReprint?: boolean;
   };
 
   const printInvoicesForShipments = useCallback(
@@ -2184,6 +2193,7 @@ export function ShipmentsTable({
         },
         suppressSuccessToast = false,
         incrementAction = true,
+        allowReprint = false,
       }: InvoicePrintOptions = {}
     ) => {
       if (shipmentIds.length === 0) {
@@ -2192,11 +2202,17 @@ export function ShipmentsTable({
 
       const token = getAuthToken();
 
+      const params = new URLSearchParams({
+        shipment_ids: shipmentIds.join(","),
+      });
+
+      if (allowReprint) {
+        params.set("only_if_printed", "0");
+      }
+
       try {
         const response = await apiFetch(
-          `/pdf/invoices?shipment_ids=${shipmentIds.join(
-            ","
-          )}`,
+          `/pdf/invoices?${params.toString()}`,
           {
             method: "GET",
             headers: {
@@ -2291,6 +2307,7 @@ export function ShipmentsTable({
               description: "Invoice reopened for printing.",
             },
             incrementAction: false,
+            allowReprint: true,
           }
         );
       } catch {
@@ -2561,6 +2578,7 @@ export function ShipmentsTable({
         await quickPrintShipments([shipmentId], {
           title: "Label Reprint Preview",
           incrementAction: false,
+          includeAlreadyPrinted: true,
         });
       } catch {
         // quickPrintShipments already reports the failure
