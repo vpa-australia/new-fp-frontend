@@ -20,6 +20,9 @@ import {
   Truck,
   X,
   Zap,
+  Printer,
+  RotateCcw,
+  Trash2,
   Lock,
   Unlock,
   Loader,
@@ -60,6 +63,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
@@ -295,6 +306,11 @@ export function ShipmentsTable({
   const [pdfUrl, setPdfUrl] = useState<string>("");
   const { toast } = useToast();
   const { requireAuthToken } = useAuth();
+  const getSelectedShipmentIds = useCallback(() => {
+    return Object.entries(selectedRows)
+      .filter(([, isChecked]) => isChecked)
+      .map(([id]) => Number(id));
+  }, [selectedRows]);
   const getAuthToken = useCallback(() => {
     try {
       return requireAuthToken();
@@ -2128,9 +2144,7 @@ export function ShipmentsTable({
   );
 
   const handleQuickPrint = useCallback(async () => {
-    const selectedIds = Object.entries(selectedRows)
-      .filter(([, isChecked]) => isChecked)
-      .map(([id]) => Number(id));
+    const selectedIds = getSelectedShipmentIds();
 
     if (selectedIds.length === 0) {
       toast({
@@ -2146,12 +2160,96 @@ export function ShipmentsTable({
     } catch {
       // quickPrintShipments already reports the failure
     }
-  }, [quickPrintShipments, selectedRows, toast]);
+  }, [getSelectedShipmentIds, quickPrintShipments, toast]);
+
+  type InvoicePrintOptions = {
+    previewTitle?: string;
+    successToast?: {
+      title: string;
+      description?: string;
+    };
+    suppressSuccessToast?: boolean;
+    incrementAction?: boolean;
+  };
+
+  const printInvoicesForShipments = useCallback(
+    async (
+      shipmentIds: number[],
+      {
+        previewTitle = "Invoice Preview",
+        successToast: successToastContent = {
+          title: "Invoice Generated",
+          description: "The invoice PDF has been generated successfully.",
+        },
+        suppressSuccessToast = false,
+        incrementAction = true,
+      }: InvoicePrintOptions = {}
+    ) => {
+      if (shipmentIds.length === 0) {
+        throw new Error("No shipment ids provided for invoice printing.");
+      }
+
+      const token = getAuthToken();
+
+      try {
+        const response = await fetch(
+          `https://ship-orders.vpa.com.au/api/pdf/invoices?shipment_ids=${shipmentIds.join(
+            ","
+          )}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/pdf",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(
+            (errorData && errorData.message) ||
+              `Failed to print Invoices: ${response.statusText}`
+          );
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        setPdfUrl((previous) => {
+          if (previous) {
+            window.URL.revokeObjectURL(previous);
+          }
+          return url;
+        });
+        setIsPdfOpen(true);
+        setPdfTitle(previewTitle);
+
+        if (!suppressSuccessToast) {
+          toast({
+            variant: "success",
+            title: successToastContent.title,
+            description: successToastContent.description,
+          });
+        }
+
+        if (incrementAction) {
+          setAction((prev) => prev + 1);
+        }
+      } catch (error: unknown) {
+        console.error("Error during Invoices print:", error);
+        toast({
+          variant: "destructive",
+          title: "Invoice Generation Failed",
+          description: getErrorMessage(error, "Failed to generate invoice PDF."),
+        });
+        throw error;
+      }
+    },
+    [getAuthToken, setAction, setIsPdfOpen, setPdfTitle, setPdfUrl, toast]
+  );
 
   const handleInvoicePrint = useCallback(async () => {
-    const selectedIds = Object.entries(selectedRows)
-      .filter(([, isChecked]) => isChecked)
-      .map(([id]) => id);
+    const selectedIds = getSelectedShipmentIds();
 
     if (selectedIds.length === 0) {
       toast({
@@ -2162,51 +2260,44 @@ export function ShipmentsTable({
       return;
     }
 
-    const token = getAuthToken();
-
     try {
-      const response = await fetch(
-        `https://ship-orders.vpa.com.au/api/pdf/invoices?shipment_ids=${selectedIds.join(
-          ","
-        )}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/pdf",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message ||
-            `Failed to print Invoices: ${response.statusText}`
-        );
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setPdfUrl(url);
-      setIsPdfOpen(true);
-      setPdfTitle("Invoice Preview");
-
-      toast({
-        variant: "success",
-        title: "Invoice Generated",
-        description: "The invoice PDF has been generated successfully.",
-      });
-      setAction((prev) => prev + 1);
-    } catch (error: unknown) {
-      console.error("Error during Invoices print:", error);
-      toast({
-        variant: "destructive",
-        title: "Invoice Generation Failed",
-        description: getErrorMessage(error, "Failed to generate invoice PDF."),
-      });
+      await printInvoicesForShipments(selectedIds);
+    } catch {
+      // printInvoicesForShipments already reports the failure
     }
-  }, [getAuthToken, selectedRows, setAction, toast]);
+  }, [getSelectedShipmentIds, printInvoicesForShipments, toast]);
+
+  const handleSingleInvoicePrint = useCallback(
+    async (shipmentId: number) => {
+      try {
+        await printInvoicesForShipments([shipmentId]);
+      } catch {
+        // printInvoicesForShipments already reports the failure
+      }
+    },
+    [printInvoicesForShipments]
+  );
+
+  const handleSingleInvoiceReprint = useCallback(
+    async (shipmentId: number) => {
+      try {
+        await printInvoicesForShipments(
+          [shipmentId],
+          {
+            previewTitle: "Invoice Reprint",
+            successToast: {
+              title: "Invoice Ready",
+              description: "Invoice reopened for printing.",
+            },
+            incrementAction: false,
+          }
+        );
+      } catch {
+        // printInvoicesForShipments already reports the failure
+      }
+    },
+    [printInvoicesForShipments]
+  );
 
   const handlePdfClose = useCallback(() => {
     setIsPdfOpen(false);
@@ -2389,9 +2480,7 @@ export function ShipmentsTable({
   );
 
   const handleGenerateLabels = useCallback(async () => {
-    const selectedIds = Object.entries(selectedRows)
-      .filter(([, isChecked]) => isChecked)
-      .map(([id]) => Number(id));
+    const selectedIds = getSelectedShipmentIds();
 
     if (selectedIds.length === 0) {
       toast({
@@ -2435,8 +2524,8 @@ export function ShipmentsTable({
     }
   }, [
     generateLabelsForShipments,
+    getSelectedShipmentIds,
     quickPrintShipments,
-    selectedRows,
     setAction,
     setStillInProgress,
     toast,
@@ -2463,6 +2552,20 @@ export function ShipmentsTable({
       }
     },
     [generateLabelsForShipments, setAction, toast]
+  );
+
+  const handleReprintLabel = useCallback(
+    async (shipmentId: number) => {
+      try {
+        await quickPrintShipments([shipmentId], {
+          title: "Label Reprint Preview",
+          incrementAction: false,
+        });
+      } catch {
+        // quickPrintShipments already reports the failure
+      }
+    },
+    [quickPrintShipments]
   );
 
   const resolveShipmentRowColor = useCallback(
@@ -3126,64 +3229,123 @@ export function ShipmentsTable({
                       <TooltipContent>View in Shopify</TooltipContent>
                     </Tooltip>
 
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          {shipment.invoicePrinted ? (
-                            <Image
-                              alt="invoice print"
-                              width={21}
-                              height={21}
-                              src={"/invoice-green.avif"}
-                            />
-                          ) : (
-                            <Image
-                              alt="invoice print"
-                              width={21}
-                              height={21}
-                              src={"/invoice.avif"}
-                            />
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Invoice{" "}
-                        {shipment.invoicePrinted ? "Printed" : "Not Printed"}
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className="cursor-pointer"
-                          onClick={() =>
-                            shipment.labelPrinted
-                              ? handleDeleteLabel(shipment.id)
-                              : handlePrintLabel(shipment.id)
-                          }
+                    <DropdownMenu>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Invoice actions"
+                              className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
+                            >
+                              {shipment.invoicePrinted ? (
+                                <Image
+                                  alt="invoice printed"
+                                  width={21}
+                                  height={21}
+                                  src={"/invoice-green.avif"}
+                                />
+                              ) : (
+                                <Image
+                                  alt="invoice not printed"
+                                  width={21}
+                                  height={21}
+                                  src={"/invoice.avif"}
+                                />
+                              )}
+                            </button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Invoice{" "}
+                          {shipment.invoicePrinted ? "Printed" : "Not Printed"}
+                        </TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Invoice Options</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            void handleSingleInvoicePrint(shipment.id);
+                          }}
                         >
-                          {shipment.labelPrinted ? (
-                            <Image
-                              alt="label print"
-                              width={20}
-                              height={20}
-                              src={"/label-green.avif"}
-                            />
-                          ) : (
-                            <Image
-                              alt="label"
-                              width={20}
-                              height={20}
-                              src={"/label.avif"}
-                            />
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Label{" "}
-                        {shipment.labelPrinted ? "Printed" : "Not Printed"}
-                      </TooltipContent>
-                    </Tooltip>
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print Invoice
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!shipment.invoicePrinted}
+                          onSelect={() => {
+                            void handleSingleInvoiceReprint(shipment.id);
+                          }}
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Reprint Invoice
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <DropdownMenu>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Label actions"
+                              className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
+                            >
+                              {shipment.labelPrinted ? (
+                                <Image
+                                  alt="label printed"
+                                  width={20}
+                                  height={20}
+                                  src={"/label-green.avif"}
+                                />
+                              ) : (
+                                <Image
+                                  alt="label not printed"
+                                  width={20}
+                                  height={20}
+                                  src={"/label.avif"}
+                                />
+                              )}
+                            </button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Label{" "}
+                          {shipment.labelPrinted ? "Printed" : "Not Printed"}
+                        </TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuLabel>Label Options</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            void handlePrintLabel(shipment.id);
+                          }}
+                        >
+                          <Printer className="mr-2 h-4 w-4" />
+                          Generate Label
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!shipment.labelPrinted}
+                          onSelect={() => {
+                            void handleReprintLabel(shipment.id);
+                          }}
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Reprint Label
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          disabled={!shipment.labelPrinted}
+                          onSelect={() => {
+                            void handleDeleteLabel(shipment.id);
+                          }}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+                          Delete Label
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
 
                     <Tooltip>
                       <TooltipTrigger asChild>
