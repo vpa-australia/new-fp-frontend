@@ -168,6 +168,9 @@ export function DateRangePicker({ value, onChange, disabled, className }: DateRa
 
     if (orderedFrom && !orderedTo && hoverDate) {
       const { from, to } = ensureRangeOrder(orderedFrom, hoverDate);
+      if (!from || !to) {
+        return false;
+      }
       return date >= from && date <= to;
     }
 
@@ -187,6 +190,9 @@ export function DateRangePicker({ value, onChange, disabled, className }: DateRa
     }
     if (hoverDate) {
       const { from, to } = ensureRangeOrder(orderedFrom, hoverDate);
+      if (!from || !to) {
+        return false;
+      }
       return isSameDay(date, from) || isSameDay(date, to);
     }
     return isSameDay(date, orderedFrom);
