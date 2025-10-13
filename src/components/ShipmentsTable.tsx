@@ -2479,7 +2479,6 @@ export function ShipmentsTable({
       }
 
       const mappedColor = carrierColors[effectiveCode];
-      console.log("Mapped color for", effectiveCode, ":", mappedColor);
       if (mappedColor && mappedColor.trim().length > 0) {
         return mappedColor.trim();
       }

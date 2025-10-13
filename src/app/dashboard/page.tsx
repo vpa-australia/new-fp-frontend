@@ -101,10 +101,95 @@ export default function DashboardPage() {
     return typeof dataEmail === 'string' ? dataEmail : '';
   }, [user]);
 
+  const orderedLocalWarehouses = useMemo(() => {
+    const preferredOrder = ["BRI", "MEL", "TEX"];
+
+    const matchesPreferredCode = (warehouse: Warehouse, target: string) => {
+      const normalizedTarget = target.toUpperCase();
+      const normalizedCode = warehouse.code.trim().toUpperCase();
+      const normalizedName = warehouse.name.trim().toUpperCase();
+      return (
+        normalizedCode === normalizedTarget ||
+        normalizedName === normalizedTarget ||
+        normalizedCode.startsWith(normalizedTarget) ||
+        normalizedName.startsWith(normalizedTarget)
+      );
+    };
+
+    const isConsideredLocal = (warehouse: Warehouse) =>
+      !warehouse.international || matchesPreferredCode(warehouse, "BRI");
+
+    const locals = warehouses.filter(isConsideredLocal);
+    const available = [...locals];
+
+    const prioritized: Warehouse[] = [];
+    preferredOrder.forEach((targetCode) => {
+      const matchIndex = available.findIndex((warehouse) =>
+        matchesPreferredCode(warehouse, targetCode)
+      );
+      if (matchIndex !== -1) {
+        prioritized.push(available[matchIndex]);
+        available.splice(matchIndex, 1);
+      }
+    });
+
+    return [...prioritized, ...available];
+  }, [warehouses]);
+
   // Logout handler function
   const handleLogout = useCallback(() => {
     logout({ redirectTo: '/login' });
   }, [logout]);
+
+  const handleTopLevelTabChange = useCallback(
+    (value: string) => {
+      if (value === 'archived') {
+        setIsArchived(true);
+        setSelectedWarehouse('Archived');
+        setSelectedWarehouseCategory('');
+        return;
+      }
+
+      setIsArchived(false);
+
+      if (value === 'All') {
+        setSelectedWarehouse('All');
+        setSelectedWarehouseCategory('');
+        return;
+      }
+
+      if (value === 'International') {
+        setSelectedWarehouseCategory('International');
+        setSelectedWarehouse('Int');
+        return;
+      }
+
+      if (value === 'Local') {
+        setSelectedWarehouseCategory('Local');
+        setSelectedWarehouse('Local');
+        return;
+      }
+
+      const matchingWarehouse = warehouses.find((warehouse) => {
+        const normalizedValue = value.toLowerCase();
+        return (
+          warehouse.code.toLowerCase() === normalizedValue ||
+          warehouse.name.toLowerCase() === normalizedValue
+        );
+      });
+
+      if (matchingWarehouse) {
+        setSelectedWarehouseCategory(
+          matchingWarehouse.international ? 'International' : 'Local'
+        );
+        setSelectedWarehouse(matchingWarehouse.code);
+        return;
+      }
+
+      setSelectedWarehouse(value);
+    },
+    [warehouses]
+  );
 
   useEffect(() => {
     const fetchSearchParams = async () => {
@@ -287,23 +372,11 @@ export default function DashboardPage() {
         </DropdownMenu>
       </header>
       {/* Tabs and Table */}
-      <Tabs defaultValue="All" className="w-full" onValueChange={(value) => {
-        if (value === 'archived') {
-          setIsArchived(true);
-          setSelectedWarehouse('Archived');
-        } else {
-          setIsArchived(false);
-          setSelectedWarehouse(value);
-        }
-      }}>
+      <Tabs defaultValue="All" className="w-full" onValueChange={handleTopLevelTabChange}>
         <div>
         <TabsList className={`${selectedWarehouseCategory === "Local" ? 'mb-5' : ''} flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit`}>
             <TabsTrigger
               value="All"
-              onClick={() => {
-                setSelectedWarehouseCategory("");
-                setSelectedWarehouse("All")
-              }}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <GripVertical className="h-5 w-5 mb-0.5" />
@@ -312,7 +385,6 @@ export default function DashboardPage() {
             
             <TabsTrigger
               value="Local"
-              onClick={() => setSelectedWarehouseCategory("Local")}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <MapPin className="h-5 w-5 mb-0.5" />
@@ -320,7 +392,6 @@ export default function DashboardPage() {
             </TabsTrigger>
             <TabsTrigger
               value="International"
-              onClick={() => setSelectedWarehouseCategory("International")}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <Globe className="h-5 w-5 mb-0.5" />
@@ -328,11 +399,6 @@ export default function DashboardPage() {
             </TabsTrigger>
             <TabsTrigger
               value="archived"
-              onClick={() => {
-                setIsArchived(true);
-                setSelectedWarehouse('Archived');
-                setSelectedWarehouseCategory("");
-              }}
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
             >
               <DeleteIcon className="h-5 w-5 mb-0.5" />
@@ -340,32 +406,64 @@ export default function DashboardPage() {
             </TabsTrigger>
           </TabsList>
         </div>
-        <div className='flex flex-row justify-between items-center mt-3 mb-3  '>
-          <TabsList className="mb-1 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit">
-            {selectedWarehouseCategory === "Local" ? warehouses.filter(wh => !wh.international).map((warehouse) => (
-              <TabsTrigger
-                key={warehouse.id}
-                value={warehouse.code}
-                onClick={() => setSelectedWarehouse(warehouse.code)}
-                className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
-              >
-                <MapPin className="h-5 w-5 mb-0.5" />
-                <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
-              </TabsTrigger>
-            )) : selectedWarehouseCategory === "International" ? warehouses.filter(wh => wh.international).map((warehouse) => (
-              <TabsTrigger
-                key={warehouse.id}
-                value={warehouse.code} // Or a generic 'INT' value if preferred for all international
-                onClick={() => setSelectedWarehouse(warehouse.code)} // Or handle international selection differently
-                className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
-              >
-                <Globe className="h-5 w-5 mb-0.5" />
-                <span className="text-xs font-medium">{warehouse.code.substring(0, 3).toUpperCase()}</span>
-              </TabsTrigger>
-            )) : null}
-          </TabsList>
-        </div>
+        {selectedWarehouseCategory === "Local" && (
+          <div className="flex flex-row justify-between items-center mt-3 mb-3">
+            <TabsList className="mb-1 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit">
+              {orderedLocalWarehouses.map((warehouse) => (
+                  <TabsTrigger
+                    key={warehouse.id}
+                    value={warehouse.code}
+                    onClick={() => setSelectedWarehouse(warehouse.code)}
+                    className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
+                  >
+                    <MapPin className="h-5 w-5 mb-0.5" />
+                    <span className="text-xs font-medium">
+                      {warehouse.code.substring(0, 3).toUpperCase()}
+                    </span>
+                  </TabsTrigger>
+                ))}
+            </TabsList>
+          </div>
+        )}
         <TabsContent value="All">
+          <Card className="shadow-sm w-full">
+            <CardContent className="p-0">
+              <ShipmentsTable
+                setSearchParams={setSearchParams}
+                selectedWarehouse={selectedWarehouse}
+                setAction={setAction}
+                lastPage={lastPage}
+                shipments={shipments}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                totalItems={totalItems}
+                setItemsPerPage={setItemsPerPage}
+                setCurrentPage={setCurrentPage}
+                shipmentsAreLoading={shipmentsAreLoading}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="Local">
+          <Card className="shadow-sm w-full">
+            <CardContent className="p-0">
+              <ShipmentsTable
+                setSearchParams={setSearchParams}
+                selectedWarehouse={selectedWarehouse}
+                setAction={setAction}
+                lastPage={lastPage}
+                shipments={shipments}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                totalItems={totalItems}
+                setItemsPerPage={setItemsPerPage}
+                setCurrentPage={setCurrentPage}
+                shipmentsAreLoading={shipmentsAreLoading}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="International">
           <Card className="shadow-sm w-full">
             <CardContent className="p-0">
               <ShipmentsTable
