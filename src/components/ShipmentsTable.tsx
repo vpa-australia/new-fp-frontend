@@ -103,15 +103,17 @@ interface Shipment {
   manifested: boolean;
   status: string | null;
   carrierCodeDesired: string;
-  store: {
-    id: number;
-    shop: string;
-    name: string | null;
-    countryCode: string | null;
-    weightId: string | null;
-    measurementId: string | null;
-    active: number;
-  };
+  store?:
+    | {
+        id: number;
+        shop: string;
+        name: string | null;
+        countryCode: string | null;
+        weightId: string | null;
+        measurementId: string | null;
+        active: number;
+      }
+    | null;
   quotes: Array<{
     carrierCodeDesired: string;
     carrierCode: string;
@@ -3226,7 +3228,7 @@ export function ShipmentsTable({
                       <TooltipTrigger asChild>
                         <a
                           target="_blank"
-                          href={`https://admin.shopify.com/store/${shipment.store.shop}/orders/${shipment.shopifyId}`}
+                          href={`https://admin.shopify.com/store/${shipment.store?.shop ?? "vpa-australia"}/orders/${shipment.shopifyId}`}
                         >
                           <FaLink className="w-5 h-5" />
                         </a>
