@@ -78,7 +78,7 @@ import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api/client";
 
-interface Shipment {
+export interface Shipment {
   id: number;
   shopifyId: number;
   shopifyOrderNumber: string;
@@ -274,6 +274,7 @@ const defaultStatusOptions: StatusOption[] = [];
 
 type ShipmentsTableProps = {
   setAction: React.Dispatch<React.SetStateAction<number>>; // ADDED ACTION TRACKER FOR ACTIONS ON SHIPMENTS DAT
+  updateShipments: React.Dispatch<React.SetStateAction<Shipment[]>>;
   shipments: Shipment[];
   currentPage: number;
   itemsPerPage: number;
@@ -296,11 +297,17 @@ type PdfFormState = {
   carrierCode: string;
 };
 
+type RefreshShipmentsResult = {
+  successes: number[];
+  failures: Array<{ id: number; message: string }>;
+};
+
 const MemoizedShipmentDetailView = React.memo(ShipmentDetailView);
 
 export function ShipmentsTable({
   setSearchParams,
   setAction,
+  updateShipments,
   shipments,
   currentPage,
   itemsPerPage,
@@ -336,6 +343,21 @@ export function ShipmentsTable({
         : new Error("User is not authenticated.");
     }
   }, [requireAuthToken, toast]);
+
+  const updateShipmentsByIds = useCallback(
+    (ids: number[], updater: (shipment: Shipment) => Shipment) => {
+      if (ids.length === 0) {
+        return;
+      }
+      const idSet = new Set(ids);
+      updateShipments((previous) =>
+        previous.map((shipment) =>
+          idSet.has(shipment.id) ? updater(shipment) : shipment
+        )
+      );
+    },
+    [updateShipments]
+  );
 
   const handlePdfUpload = useCallback(
     async ({
@@ -429,7 +451,6 @@ export function ShipmentsTable({
     {}
   );
   const [detailAction, setDetailAction] = useState(0);
-  const [stillInProgress, setStillInProgress] = useState(false);
   const [openPdfDialogId, setOpenPdfDialogId] = useState<number | null>(null);
   const [pdfFormState, setPdfFormState] = useState<PdfFormState>({
     file: null,
@@ -756,6 +777,10 @@ export function ShipmentsTable({
   const [refreshingShipmentIds, setRefreshingShipmentIds] = useState<
     Set<number>
   >(new Set());
+  const [invoiceProcessingShipmentIds, setInvoiceProcessingShipmentIds] =
+    useState<Set<number>>(new Set());
+  const [labelProcessingShipmentIds, setLabelProcessingShipmentIds] =
+    useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (orderDateFromKey && orderDateToKey) {
@@ -1608,8 +1633,16 @@ export function ShipmentsTable({
           title: "Status Updated",
           description: "Shipment status has been updated successfully.",
         });
-
-        setAction((prev) => prev + 1);
+        const normalizedStatus =
+          newStatusId === "-" || newStatusId === "" ? null : newStatusId;
+        const ids = (Array.isArray(shipmentId)
+          ? shipmentId
+          : [shipmentId]
+        ).map((id) => Number(id));
+        updateShipmentsByIds(ids, (shipment) => ({
+          ...shipment,
+          status: normalizedStatus,
+        }));
       } catch (error: unknown) {
         //
         console.error("Error updating shipment status:", error);
@@ -1623,7 +1656,7 @@ export function ShipmentsTable({
         });
       }
     },
-    [getAuthToken, setAction, toast]
+    [getAuthToken, toast, updateShipmentsByIds]
   );
 
   const handleBulkStatusChange = useCallback(
@@ -1645,67 +1678,189 @@ export function ShipmentsTable({
     [selectedRows, toast, handleStatusChange]
   );
 
-  const handleRefreshShipment = useCallback(
-    async (shipmentId: number) => {
-      const token = getAuthToken();
+  const refreshShipmentsByIds = useCallback(
+    async (shipmentIds: number[]): Promise<RefreshShipmentsResult> => {
+      if (shipmentIds.length === 0) {
+        return { successes: [], failures: [] };
+      }
 
-      const apiUrl = `/shipments/refresh/${shipmentId}`;
+      let token: string;
+      try {
+        token = getAuthToken();
+      } catch (error: unknown) {
+        const message = getErrorMessage(
+          error,
+          "Authentication failed. Please log in again."
+        );
+        return {
+          successes: [],
+          failures: shipmentIds.map((id) => ({ id, message })),
+        };
+      }
 
       setRefreshingShipmentIds((prev) => {
         const next = new Set(prev);
-        next.add(shipmentId);
+        shipmentIds.forEach((id) => next.add(id));
         return next;
       });
 
-      try {
-        const response = await apiFetch(apiUrl, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        });
+      const successes: number[] = [];
+      const failures: Array<{ id: number; message: string }> = [];
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.message ||
-              `Failed to refresh shipment: ${response.statusText}`
-          );
+      for (const shipmentId of shipmentIds) {
+        try {
+          const response = await apiFetch(`/shipments/refresh/${shipmentId}`, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            let message = `Failed to refresh shipment: ${response.statusText}`;
+            try {
+              const errorData = await response.json();
+              if (
+                errorData &&
+                typeof errorData === "object" &&
+                "message" in errorData
+              ) {
+                const extracted = (errorData as { message?: unknown }).message;
+                if (
+                  typeof extracted === "string" &&
+                  extracted.trim().length > 0
+                ) {
+                  message = extracted;
+                }
+              }
+            } catch {
+              // ignore non-JSON error bodies
+            }
+            console.error(
+              `Failed to refresh shipment ${shipmentId}:`,
+              message
+            );
+            failures.push({ id: shipmentId, message });
+            continue;
+          }
+
+          await response.json().catch(() => null);
+          successes.push(shipmentId);
+        } catch (error: unknown) {
+          console.error(`Error refreshing shipment ${shipmentId}:`, error);
+          failures.push({
+            id: shipmentId,
+            message: getErrorMessage(
+              error,
+              "Failed to refresh shipment."
+            ),
+          });
         }
+      }
 
-        await response.json();
+      setRefreshingShipmentIds((prev) => {
+        const next = new Set(prev);
+        shipmentIds.forEach((id) => next.delete(id));
+        return next;
+      });
+
+      return { successes, failures };
+    },
+    [getAuthToken, setRefreshingShipmentIds]
+  );
+
+  const handleRefreshShipment = useCallback(
+    async (shipmentId: number) => {
+      const { successes, failures } = await refreshShipmentsByIds([
+        shipmentId,
+      ]);
+
+      if (failures.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Refresh Failed",
+          description:
+            failures[0]?.message ?? "Failed to refresh shipment.",
+        });
+        return;
+      }
+
+      if (successes.length > 0) {
         toast({
           variant: "success",
           title: "Shipment Refreshed",
           description: "Shipment data has been refreshed successfully.",
         });
-
         setAction((prev) => prev + 1);
-      } catch (error: unknown) {
-        console.error("Error refreshing shipment:", error);
-        toast({
-          variant: "destructive",
-          title: "Refresh Failed",
-          description: getErrorMessage(error, "Failed to refresh shipment."),
-        });
-      } finally {
-        setRefreshingShipmentIds((prev) => {
-          const next = new Set(prev);
-          next.delete(shipmentId);
-          return next;
-        });
       }
     },
-    [getAuthToken, setAction, toast]
+    [refreshShipmentsByIds, setAction, toast]
   );
 
-  const handleMarkShipmentsAsShipped = useCallback(async () => {
-    const checkedIds = Object.entries(selectedRows)
-      .filter(([, isChecked]) => isChecked)
-      .map(([id]) => id.toString());
+  const handleRefreshSelectedShipments = useCallback(async () => {
+    const selectedIds = getSelectedShipmentIds();
 
-    if (checkedIds.length === 0) {
+    if (selectedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Please select at least one shipment to refresh.",
+      });
+      return;
+    }
+
+    const { successes, failures } = await refreshShipmentsByIds(selectedIds);
+
+    if (successes.length > 0) {
+      toast({
+        variant: "success",
+        title: "Shipments Refreshed",
+        description: `${successes.length} shipment${
+          successes.length === 1 ? "" : "s"
+        } refreshed successfully.`,
+      });
+      setAction((prev) => prev + 1);
+
+      if (failures.length === 0) {
+        setSelectedRows({});
+      } else {
+        const nextSelection: Record<number, boolean> = {};
+        failures.forEach(({ id }) => {
+          nextSelection[id] = true;
+        });
+        setSelectedRows(nextSelection);
+      }
+    }
+
+    if (failures.length > 0) {
+      const [firstFailure] = failures;
+      const failureCount = failures.length;
+      const description =
+        failureCount === 1
+          ? firstFailure.message
+          : `${failureCount} shipments failed to refresh. ${firstFailure.message}`;
+
+      toast({
+        variant: "destructive",
+        title: "Refresh Issues",
+        description,
+      });
+    }
+  }, [
+    getSelectedShipmentIds,
+    refreshShipmentsByIds,
+    setAction,
+    setSelectedRows,
+    toast,
+  ]);
+
+  const handleMarkShipmentsAsShipped = useCallback(async () => {
+    const selectedIds = Object.entries(selectedRows)
+      .filter(([, isChecked]) => isChecked)
+      .map(([id]) => Number(id));
+
+    if (selectedIds.length === 0) {
       toast({
         variant: "destructive",
         title: "No Shipments Selected",
@@ -1718,7 +1873,7 @@ export function ShipmentsTable({
 
     try {
       const response = await apiFetch(
-        `/shipments/shipped/1?shipment_ids=${checkedIds.join(",")}`,
+        `/shipments/shipped/1?shipment_ids=${selectedIds.join(",")}`,
         {
           method: "PATCH",
           headers: {
@@ -1742,7 +1897,11 @@ export function ShipmentsTable({
         title: "Success",
         description: "Selected shipments have been marked as shipped.",
       });
-      setAction((prev) => prev + 1);
+
+      updateShipmentsByIds(selectedIds, (shipment) => ({
+        ...shipment,
+        sent: true,
+      }));
 
       // Clear selected rows after successful update
       setSelectedRows({});
@@ -1762,14 +1921,14 @@ export function ShipmentsTable({
         ),
       });
     }
-  }, [getAuthToken, selectedRows, setAction, setSelectedRows, toast]);
+  }, [getAuthToken, selectedRows, setSelectedRows, toast, updateShipmentsByIds]);
 
   const handleMarkShipmentsAsNotShipped = useCallback(async () => {
-    const checkedIds = Object.entries(selectedRows)
+    const selectedIds = Object.entries(selectedRows)
       .filter(([, isChecked]) => isChecked)
-      .map(([id]) => id.toString());
+      .map(([id]) => Number(id));
 
-    if (checkedIds.length === 0) {
+    if (selectedIds.length === 0) {
       toast({
         variant: "destructive",
         title: "No Shipments Selected",
@@ -1783,7 +1942,7 @@ export function ShipmentsTable({
 
     try {
       const response = await apiFetch(
-        `/shipments/shipped/0?shipment_ids=${checkedIds.join(",")}`,
+        `/shipments/shipped/0?shipment_ids=${selectedIds.join(",")}`,
         {
           method: "PATCH",
           headers: {
@@ -1807,7 +1966,10 @@ export function ShipmentsTable({
         description: "Selected shipments have been marked as not shipped.",
       });
 
-      setAction((prev) => prev + 1);
+      updateShipmentsByIds(selectedIds, (shipment) => ({
+        ...shipment,
+        sent: false,
+      }));
 
       // Clear selected rows
       setSelectedRows({});
@@ -1822,7 +1984,7 @@ export function ShipmentsTable({
         ),
       });
     }
-  }, [getAuthToken, selectedRows, setAction, setSelectedRows, toast]);
+  }, [getAuthToken, selectedRows, setSelectedRows, toast, updateShipmentsByIds]);
 
   useEffect(() => {
     if (!selectedShipmentId) {
@@ -2073,7 +2235,7 @@ export function ShipmentsTable({
       {
         suppressSuccessToast = false,
         title,
-        incrementAction = true,
+        incrementAction = false,
         includeAlreadyPrinted = false,
       }: QuickPrintOptions = {}
     ) => {
@@ -2146,6 +2308,26 @@ export function ShipmentsTable({
     [getAuthToken, setAction, toast]
   );
 
+  const markLabelProcessing = useCallback(
+    (shipmentIds: number[], isProcessing: boolean) => {
+      if (shipmentIds.length === 0) {
+        return;
+      }
+      setLabelProcessingShipmentIds((previous) => {
+        const next = new Set(previous);
+        shipmentIds.forEach((id) => {
+          if (isProcessing) {
+            next.add(id);
+          } else {
+            next.delete(id);
+          }
+        });
+        return next;
+      });
+    },
+    []
+  );
+
   const handleLabelReprint = useCallback(async () => {
     const selectedIds = getSelectedShipmentIds();
 
@@ -2159,15 +2341,28 @@ export function ShipmentsTable({
     }
 
     try {
+      markLabelProcessing(selectedIds, true);
       await quickPrintShipments(selectedIds, {
         title: "Label Reprint Preview",
         incrementAction: false,
         includeAlreadyPrinted: true,
       });
+      updateShipmentsByIds(selectedIds, (shipment) => ({
+        ...shipment,
+        labelPrinted: true,
+      }));
     } catch {
       // quickPrintShipments already reports the failure
+    } finally {
+      markLabelProcessing(selectedIds, false);
     }
-  }, [getSelectedShipmentIds, quickPrintShipments, toast]);
+  }, [
+    getSelectedShipmentIds,
+    markLabelProcessing,
+    quickPrintShipments,
+    toast,
+    updateShipmentsByIds,
+  ]);
 
   type InvoicePrintOptions = {
     previewTitle?: string;
@@ -2180,6 +2375,26 @@ export function ShipmentsTable({
     allowReprint?: boolean;
   };
 
+  const markInvoiceProcessing = useCallback(
+    (shipmentIds: number[], isProcessing: boolean) => {
+      if (shipmentIds.length === 0) {
+        return;
+      }
+      setInvoiceProcessingShipmentIds((previous) => {
+        const next = new Set(previous);
+        shipmentIds.forEach((id) => {
+          if (isProcessing) {
+            next.add(id);
+          } else {
+            next.delete(id);
+          }
+        });
+        return next;
+      });
+    },
+    []
+  );
+
   const printInvoicesForShipments = useCallback(
     async (
       shipmentIds: number[],
@@ -2190,7 +2405,7 @@ export function ShipmentsTable({
           description: "The invoice PDF has been generated successfully.",
         },
         suppressSuccessToast = false,
-        incrementAction = true,
+        incrementAction = false,
         allowReprint = false,
       }: InvoicePrintOptions = {}
     ) => {
@@ -2207,6 +2422,8 @@ export function ShipmentsTable({
       if (allowReprint) {
         params.set("only_if_printed", "0");
       }
+
+      markInvoiceProcessing(shipmentIds, true);
 
       try {
         const response = await apiFetch(`/pdf/invoices?${params.toString()}`, {
@@ -2236,6 +2453,11 @@ export function ShipmentsTable({
         setIsPdfOpen(true);
         setPdfTitle(previewTitle);
 
+        updateShipmentsByIds(shipmentIds, (shipment) => ({
+          ...shipment,
+          invoicePrinted: true,
+        }));
+
         if (!suppressSuccessToast) {
           toast({
             variant: "success",
@@ -2258,9 +2480,20 @@ export function ShipmentsTable({
           ),
         });
         throw error;
+      } finally {
+        markInvoiceProcessing(shipmentIds, false);
       }
     },
-    [getAuthToken, setAction, setIsPdfOpen, setPdfTitle, setPdfUrl, toast]
+    [
+      getAuthToken,
+      markInvoiceProcessing,
+      setAction,
+      setIsPdfOpen,
+      setPdfTitle,
+      setPdfUrl,
+      toast,
+      updateShipmentsByIds,
+    ]
   );
 
   const handleInvoicePrint = useCallback(async () => {
@@ -2528,15 +2761,18 @@ export function ShipmentsTable({
     }
 
     try {
-      setStillInProgress(true);
+      markLabelProcessing(selectedIds, true);
       await generateLabelsForShipments(selectedIds);
+      updateShipmentsByIds(selectedIds, (shipment) => ({
+        ...shipment,
+        labelPrinted: true,
+      }));
 
       toast({
         variant: "success",
         title: "Labels Generated",
         description: "Labels have been generated successfully.",
       });
-      setAction((prev) => prev + 1);
       setSelectedRows({});
 
       try {
@@ -2545,6 +2781,10 @@ export function ShipmentsTable({
           incrementAction: false,
           title: "Generated Labels Preview",
         });
+        updateShipmentsByIds(selectedIds, (shipment) => ({
+          ...shipment,
+          labelPrinted: true,
+        }));
       } catch {
         // quick print helper already handles error reporting
       }
@@ -2556,28 +2796,31 @@ export function ShipmentsTable({
         description: getErrorMessage(error, "Failed to generate labels."),
       });
     } finally {
-      setStillInProgress(false);
+      markLabelProcessing(selectedIds, false);
     }
   }, [
     generateLabelsForShipments,
     getSelectedShipmentIds,
+    markLabelProcessing,
     quickPrintShipments,
-    setAction,
-    setStillInProgress,
     toast,
+    updateShipmentsByIds,
   ]);
 
   const handlePrintLabel = useCallback(
     async (shipmentId: number) => {
       try {
+        markLabelProcessing([shipmentId], true);
         await generateLabelsForShipments([shipmentId]);
-
+        updateShipmentsByIds([shipmentId], (shipment) => ({
+          ...shipment,
+          labelPrinted: true,
+        }));
         toast({
           variant: "success",
           title: "Labels Generated",
           description: "Labels have been generated successfully.",
         });
-        setAction((prev) => prev + 1);
       } catch (error: unknown) {
         console.error("Error generating labels:", error);
         toast({
@@ -2585,24 +2828,33 @@ export function ShipmentsTable({
           title: "Generation Failed",
           description: getErrorMessage(error, "Failed to generate labels."),
         });
+      } finally {
+        markLabelProcessing([shipmentId], false);
       }
     },
-    [generateLabelsForShipments, setAction, toast]
+    [generateLabelsForShipments, markLabelProcessing, toast, updateShipmentsByIds]
   );
 
   const handleReprintLabel = useCallback(
     async (shipmentId: number) => {
       try {
+        markLabelProcessing([shipmentId], true);
         await quickPrintShipments([shipmentId], {
           title: "Label Reprint Preview",
           incrementAction: false,
           includeAlreadyPrinted: true,
         });
+        updateShipmentsByIds([shipmentId], (shipment) => ({
+          ...shipment,
+          labelPrinted: true,
+        }));
       } catch {
         // quickPrintShipments already reports the failure
+      } finally {
+        markLabelProcessing([shipmentId], false);
       }
     },
-    [quickPrintShipments]
+    [markLabelProcessing, quickPrintShipments, updateShipmentsByIds]
   );
 
   const resolveShipmentRowColor = useCallback(
@@ -2632,17 +2884,6 @@ export function ShipmentsTable({
     return (
       <div className="flex flex-1 justify-center items-center h-[90vh] w-full">
         <Loader className="animate-spin" />
-      </div>
-    );
-  }
-
-  if (stillInProgress) {
-    return (
-      <div className="flex flex-1 justify-center items-center h-[90vh] w-full">
-        <p>
-          <Loader className="animate-spin" />
-        </p>
-        <p>Still in progress...</p>
       </div>
     );
   }
@@ -2791,6 +3032,21 @@ export function ShipmentsTable({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleRefreshSelectedShipments}
+              >
+                <MdRefresh className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side={getTooltipSide()}>
+              <p>Refresh Selected</p>
+            </TooltipContent>
+          </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -3260,12 +3516,17 @@ export function ShipmentsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {shipments?.map((shipment) => (
-            <React.Fragment key={shipment.id}>
-              <TableRow
-                key={shipment.id}
-                className="py-1" // Add vertical padding reduction
-              >
+          {shipments?.map((shipment) => {
+            const isInvoiceProcessing =
+              invoiceProcessingShipmentIds.has(shipment.id);
+            const isLabelProcessing =
+              labelProcessingShipmentIds.has(shipment.id);
+            return (
+              <React.Fragment key={shipment.id}>
+                <TableRow
+                  key={shipment.id}
+                  className="py-1" // Add vertical padding reduction
+                >
                 <TableCell
                   id={`select-row-${shipment.id}`}
                   className="text-white py-0"
@@ -3296,27 +3557,31 @@ export function ShipmentsTable({
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Invoice actions"
-                              className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
-                            >
-                              {shipment.invoicePrinted ? (
-                                <Image
-                                  alt="invoice printed"
-                                  width={21}
-                                  height={21}
-                                  src={"/invoice-green.avif"}
-                                />
-                              ) : (
-                                <Image
-                                  alt="invoice not printed"
-                                  width={21}
-                                  height={21}
-                                  src={"/invoice.avif"}
-                                />
-                              )}
-                            </button>
+                              <button
+                                type="button"
+                                aria-label="Invoice actions"
+                                aria-busy={isInvoiceProcessing}
+                                className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
+                                disabled={isInvoiceProcessing}
+                              >
+                                  {isInvoiceProcessing ? (
+                                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                                  ) : shipment.invoicePrinted ? (
+                                    <Image
+                                      alt="invoice printed"
+                                      width={21}
+                                      height={21}
+                                      src={"/invoice-green.avif"}
+                                    />
+                                  ) : (
+                                    <Image
+                                      alt="invoice not printed"
+                                      width={21}
+                                      height={21}
+                                      src={"/invoice.avif"}
+                                    />
+                                  )}
+                              </button>
                           </DropdownMenuTrigger>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -3353,9 +3618,13 @@ export function ShipmentsTable({
                             <button
                               type="button"
                               aria-label="Label actions"
+                              aria-busy={isLabelProcessing}
                               className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
+                              disabled={isLabelProcessing}
                             >
-                              {shipment.labelPrinted ? (
+                              {isLabelProcessing ? (
+                                <Loader2 className="h-5 w-5 animate-spin text-white" />
+                              ) : shipment.labelPrinted ? (
                                 <Image
                                   alt="label printed"
                                   width={20}
@@ -3374,8 +3643,11 @@ export function ShipmentsTable({
                           </DropdownMenuTrigger>
                         </TooltipTrigger>
                         <TooltipContent>
-                          Label{" "}
-                          {shipment.labelPrinted ? "Printed" : "Not Printed"}
+                          {isLabelProcessing
+                            ? "Processing Labels..."
+                            : `Label ${
+                                shipment.labelPrinted ? "Printed" : "Not Printed"
+                              }`}
                         </TooltipContent>
                       </Tooltip>
                       <DropdownMenuContent align="end" className="w-52">
@@ -3934,8 +4206,9 @@ export function ShipmentsTable({
                   </TableCell>
                 </TableRow>
               )}
-            </React.Fragment>
-          ))}
+              </React.Fragment>
+            );
+          })}
         </TableBody>
       </Table>
       <div className="flex items-center justify-between pt-3 px-4 border-t">
