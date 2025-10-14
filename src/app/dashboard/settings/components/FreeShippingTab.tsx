@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import {apiFetch} from "@/lib/api/client";
 import {useAuth} from "@/contexts/AuthContext";
 import {toMySQLDateTime} from "@/lib/utils";
+import {Button} from "@/components/ui/button";
 
 
 interface Store{
@@ -82,27 +83,26 @@ export default function FreeShippingTab() {
                 const end :string[] = end_datetime.split(' ');
 
                 //set time string
-                let fromT = {...fromTime};
+                const fromT = {...fromTime};
                 fromT[currentStore] = start[1];
                 setFromTime(fromT);
 
-                let toT = {...toTime};
+                const toT = {...toTime};
                 toT[currentStore] =end[1];
                 setToTime(toT);
 
                 //set date string
-                let toD = {...toDate};
+                const toD = {...toDate};
                 toD[currentStore] = end[0];
                 setToDate(toD);
 
-                let fromD = {...fromDate};
+                const fromD = {...fromDate};
                 fromD[currentStore] = start[0];
                 setFromDate(fromD);
 
-                setLoading(false);
 
             }
-        })
+        }).finally(() => { setLoading(false); });
     }
 
     useEffect(()=>{
@@ -111,7 +111,69 @@ export default function FreeShippingTab() {
         } else {
             getCurrentDates();
         }
-    }, [currentStore]);
+    }, [currentStore, getCurrentDates, getStores]);
+
+    const saveDates = () => {
+
+        if(currentStore === null){
+            return;
+        }
+
+        const token = requireAuthToken();
+
+        const formData = new FormData();
+
+        formData.append('free_shipping_start', fromDate[currentStore] + ' ' + fromTime[currentStore]);
+        formData.append('free_shipping_end', toDate[currentStore] + ' ' + toTime[currentStore]);
+
+        apiFetch('platform/free_shipping/'+currentStore, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+            body: formData
+        }).then(response => { return response.json(); }).then((json)=>{
+            if (json.success && currentStore !== null) {
+
+                let start_datetime = json['data']['free_shipping_start'];
+                let end_datetime = json['data']['free_shipping_end'];
+
+                const today = new Date();
+                if(start_datetime === null){
+                    start_datetime = toMySQLDateTime(today);
+                }
+                if(end_datetime === null){
+
+                    const twoDaysLater = new Date(today);
+                    twoDaysLater.setDate(today.getDate() + 2);
+                    end_datetime = toMySQLDateTime(twoDaysLater);
+                }
+
+                const start : string[] = start_datetime.split(' ');
+                const end :string[] = end_datetime.split(' ');
+
+                //set time string
+                const fromT = {...fromTime};
+                fromT[currentStore] = start[1];
+                setFromTime(fromT);
+
+                const toT = {...toTime};
+                toT[currentStore] =end[1];
+                setToTime(toT);
+
+                //set date string
+                const toD = {...toDate};
+                toD[currentStore] = end[0];
+                setToDate(toD);
+
+                const fromD = {...fromDate};
+                fromD[currentStore] = start[0];
+                setFromDate(fromD);
+
+
+            }
+        }).finally(() => { setLoading(false); });
+    }
 
   return (
     <Card>
@@ -125,7 +187,7 @@ export default function FreeShippingTab() {
               return <div key={store.shop} onClick={()=>{ setCurrentStore(store.shop)}} className={"inline-block rounded-full border text-sm m-2 px-2 py-2 " + ((currentStore === store.shop) ? "bg-gray-500 text-white" : "")}>{store.name}</div>
               })}
 
-              <div className="flex gap-4">
+              <div className="flex gap-4 mt-6">
 
 
 
@@ -183,7 +245,8 @@ export default function FreeShippingTab() {
 
                   />
               </div>
-          </div></>}
+
+          </div><Button variant="default" className="mt-6" onClick={()=>{ saveDates(); }}>Save Dates</Button></>}
       </CardContent>
     </Card>
   );
