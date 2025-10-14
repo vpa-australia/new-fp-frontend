@@ -439,7 +439,6 @@ export function ShipmentsTable({
   const [initialSearchValues, setInitialSearchValues] = useState<
     Record<string, string>
   >({});
-  const pendingSearchValuesRef = useRef<Record<string, string> | null>(null);
   const [selectedOrderDateRange, setSelectedOrderDateRange] = useState<
     "all" | "custom" | OrderDatePresetKey
   >("all");
@@ -865,36 +864,31 @@ export function ShipmentsTable({
     [fetchShipments, searchFields, setCurrentPage, setSearchParams]
   );
 
-  const applyAndExecute = useCallback(
-    (updater: (current: Record<string, string>) => Record<string, string>) => {
+  const updateSearchState = useCallback(
+    (
+      updater: (current: Record<string, string>) => Record<string, string>,
+      options: { execute?: boolean } = {}
+    ) => {
+      let nextValues: Record<string, string> = {};
       setSearchValues((current) => {
-        const next = updater(current);
-        pendingSearchValuesRef.current = next;
-        return next;
+        nextValues = updater({ ...current });
+        return nextValues;
       });
+      if (options.execute) {
+        executeSearch(nextValues);
+      }
     },
-    [setSearchValues]
+    [executeSearch]
   );
 
   const updateSearchValue = useCallback(
     (fieldKey: string, value: string) =>
-      applyAndExecute((current) => ({
+      updateSearchState((current) => ({
         ...current,
         [fieldKey]: value,
       })),
-    [applyAndExecute]
+    [updateSearchState]
   );
-
-  // Run searches after state updates commit to avoid parent updates during render
-  useEffect(() => {
-    if (!pendingSearchValuesRef.current) {
-      return;
-    }
-
-    const nextValues = pendingSearchValuesRef.current;
-    pendingSearchValuesRef.current = null;
-    executeSearch(nextValues);
-  }, [searchValues, executeSearch]);
 
   const handleClearFilters = useCallback(() => {
     const template =
@@ -913,8 +907,8 @@ export function ShipmentsTable({
     setSelectedManifestFilter("all");
     setSelectedStateFilter("all");
 
-    applyAndExecute(() => ({ ...clearedValues }));
-  }, [applyAndExecute, initialSearchValues, searchValues]);
+    updateSearchState(() => ({ ...clearedValues }), { execute: true });
+  }, [initialSearchValues, searchValues, updateSearchState]);
 
   const handleOrderDateFilterChange = useCallback(
     (value: string) => {
@@ -936,7 +930,7 @@ export function ShipmentsTable({
         return;
       }
 
-      applyAndExecute((current) => {
+      updateSearchState((current) => {
         const next = { ...current };
 
         if (orderDateFieldConfig.from) {
@@ -964,9 +958,9 @@ export function ShipmentsTable({
         }
 
         return next;
-      });
+      }, { execute: true });
     },
-    [applyAndExecute, orderDateFieldConfig]
+    [orderDateFieldConfig, updateSearchState]
   );
 
   const handleOrderDateInputChange = useCallback(
@@ -988,24 +982,24 @@ export function ShipmentsTable({
     if (orderDateFromKey && orderDateToKey) {
       const hasValues = Boolean(orderDateDraftFrom || orderDateDraftTo);
       setSelectedOrderDateRange(hasValues ? "custom" : "all");
-      applyAndExecute((current) => ({
+      updateSearchState((current) => ({
         ...current,
         [orderDateFromKey]: orderDateDraftFrom,
         [orderDateToKey]: orderDateDraftTo,
-      }));
+      }), { execute: true });
       return;
     }
 
     if (orderDateSingleKey) {
       const hasValue = Boolean(orderDateDraftSingle);
       setSelectedOrderDateRange(hasValue ? "custom" : "all");
-      applyAndExecute((current) => ({
+      updateSearchState((current) => ({
         ...current,
         [orderDateSingleKey]: orderDateDraftSingle,
-      }));
+      }), { execute: true });
     }
   }, [
-    applyAndExecute,
+    updateSearchState,
     orderDateDraftFrom,
     orderDateDraftSingle,
     orderDateDraftTo,
@@ -1021,12 +1015,12 @@ export function ShipmentsTable({
         return;
       }
 
-      applyAndExecute((current) => ({
+      updateSearchState((current) => ({
         ...current,
         [statusField.key]: value === "all" ? "" : value,
-      }));
+      }), { execute: true });
     },
-    [applyAndExecute, statusField]
+    [statusField, updateSearchState]
   );
 
   const handleCarrierFilterChange = useCallback(
@@ -1036,12 +1030,12 @@ export function ShipmentsTable({
         return;
       }
 
-      applyAndExecute((current) => ({
+      updateSearchState((current) => ({
         ...current,
         [carrierField.key]: value === "all" ? "" : value,
-      }));
+      }), { execute: true });
     },
-    [applyAndExecute, carrierField]
+    [carrierField, updateSearchState]
   );
 
   const handleManifestFilterChange = useCallback(
@@ -1051,12 +1045,12 @@ export function ShipmentsTable({
         return;
       }
 
-      applyAndExecute((current) => ({
+      updateSearchState((current) => ({
         ...current,
         [manifestField.key]: value === "all" ? "" : value,
-      }));
+      }), { execute: true });
     },
-    [applyAndExecute, manifestField]
+    [manifestField, updateSearchState]
   );
 
   const handleStateFilterChange = useCallback(
@@ -1066,12 +1060,12 @@ export function ShipmentsTable({
         return;
       }
 
-      applyAndExecute((current) => ({
+      updateSearchState((current) => ({
         ...current,
         [stateField.key]: value === "all" ? "" : value,
-      }));
+      }), { execute: true });
     },
-    [applyAndExecute, stateField]
+    [stateField, updateSearchState]
   );
 
   useEffect(() => {
@@ -3172,10 +3166,10 @@ export function ShipmentsTable({
                                           "searchVisibleFields",
                                           JSON.stringify(updatedFields)
                                         );
-                                        applyAndExecute((current) => ({
+                                        updateSearchState((current) => ({
                                           ...current,
                                           [key]: "",
-                                        }));
+                                        }), { execute: true });
                                       }}
                                       className="h-6 w-6 p-0"
                                     >
@@ -3527,36 +3521,40 @@ export function ShipmentsTable({
                   key={shipment.id}
                   className="py-1" // Add vertical padding reduction
                 >
-                <TableCell
-                  id={`select-row-${shipment.id}`}
-                  className="text-white py-0"
-                  style={{ backgroundColor: resolveShipmentRowColor(shipment) }}
-                >
-                  <div className="flex flex-row gap-x-3 items-center">
-                    <Checkbox
-                      checked={selectedRows[shipment.id] || false}
-                      onCheckedChange={(checked) =>
-                        handleSelectRow(shipment.id, Boolean(checked))
-                      }
-                      aria-labelledby={`select-row-${shipment.id}`}
-                    />
-                    <p className="w-16">{shipment.shopifyOrderNumber}</p>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <a
-                          target="_blank"
-                          href={`https://admin.shopify.com/store/${shipment.store?.shop ?? "vpa-australia"}/orders/${shipment.shopifyId}`}
-                        >
-                          <FaLink className="w-5 h-5" />
-                        </a>
-                      </TooltipTrigger>
-                      <TooltipContent>View in Shopify</TooltipContent>
-                    </Tooltip>
-
-                    <DropdownMenu>
+                  <TableCell
+                    id={`select-row-${shipment.id}`}
+                    className="text-white py-0"
+                    style={{
+                      backgroundColor: resolveShipmentRowColor(shipment),
+                    }}
+                  >
+                    <div className="flex flex-row gap-x-3 items-center">
+                      <Checkbox
+                        checked={selectedRows[shipment.id] || false}
+                        onCheckedChange={(checked) =>
+                          handleSelectRow(shipment.id, Boolean(checked))
+                        }
+                        aria-labelledby={`select-row-${shipment.id}`}
+                      />
+                      <p className="w-16">{shipment.shopifyOrderNumber}</p>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <DropdownMenuTrigger asChild>
+                          <a
+                            target="_blank"
+                            href={`https://admin.shopify.com/store/${
+                              shipment.store?.shop ?? "vpa-australia"
+                            }/orders/${shipment.shopifyId}`}
+                          >
+                            <FaLink className="w-5 h-5" />
+                          </a>
+                        </TooltipTrigger>
+                        <TooltipContent>View in Shopify</TooltipContent>
+                      </Tooltip>
+
+                      <DropdownMenu>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuTrigger asChild>
                               <button
                                 type="button"
                                 aria-label="Invoice actions"
@@ -3564,252 +3562,258 @@ export function ShipmentsTable({
                                 className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
                                 disabled={isInvoiceProcessing}
                               >
-                                  {isInvoiceProcessing ? (
-                                    <Loader2 className="h-5 w-5 animate-spin text-white" />
-                                  ) : shipment.invoicePrinted ? (
-                                    <Image
-                                      alt="invoice printed"
-                                      width={21}
-                                      height={21}
-                                      src={"/invoice-green.avif"}
-                                    />
-                                  ) : (
-                                    <Image
-                                      alt="invoice not printed"
-                                      width={21}
-                                      height={21}
-                                      src={"/invoice.avif"}
-                                    />
-                                  )}
+                                {isInvoiceProcessing ? (
+                                  <Loader2 className="h-5 w-5 animate-spin text-white" />
+                                ) : shipment.invoicePrinted ? (
+                                  <Image
+                                    alt="invoice printed"
+                                    width={21}
+                                    height={21}
+                                    src={"/invoice-green.avif"}
+                                  />
+                                ) : (
+                                  <Image
+                                    alt="invoice not printed"
+                                    width={21}
+                                    height={21}
+                                    src={"/invoice.avif"}
+                                  />
+                                )}
                               </button>
-                          </DropdownMenuTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Invoice{" "}
-                          {shipment.invoicePrinted ? "Printed" : "Not Printed"}
-                        </TooltipContent>
-                      </Tooltip>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuLabel>Invoice Options</DropdownMenuLabel>
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            void handleSingleInvoicePrint(shipment.id);
-                          }}
-                        >
-                          <Printer className="mr-2 h-4 w-4" />
-                          Print Invoice
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={!shipment.invoicePrinted}
-                          onSelect={() => {
-                            void handleSingleInvoiceReprint(shipment.id);
-                          }}
-                        >
-                          <RotateCcw className="mr-2 h-4 w-4" />
-                          Reprint Invoice
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                            </DropdownMenuTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Invoice{" "}
+                            {shipment.invoicePrinted
+                              ? "Printed"
+                              : "Not Printed"}
+                          </TooltipContent>
+                        </Tooltip>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuLabel>Invoice Options</DropdownMenuLabel>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              void handleSingleInvoicePrint(shipment.id);
+                            }}
+                          >
+                            <Printer className="mr-2 h-4 w-4" />
+                            Print Invoice
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={!shipment.invoicePrinted}
+                            onSelect={() => {
+                              void handleSingleInvoiceReprint(shipment.id);
+                            }}
+                          >
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            Reprint Invoice
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
 
-                    <DropdownMenu>
+                      <DropdownMenu>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Label actions"
+                                aria-busy={isLabelProcessing}
+                                className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
+                                disabled={isLabelProcessing}
+                              >
+                                {isLabelProcessing ? (
+                                  <Loader2 className="h-5 w-5 animate-spin text-white" />
+                                ) : shipment.labelPrinted ? (
+                                  <Image
+                                    alt="label printed"
+                                    width={20}
+                                    height={20}
+                                    src={"/label-green.avif"}
+                                  />
+                                ) : (
+                                  <Image
+                                    alt="label not printed"
+                                    width={20}
+                                    height={20}
+                                    src={"/label.avif"}
+                                  />
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {isLabelProcessing
+                              ? "Processing Labels..."
+                              : `Label ${
+                                  shipment.labelPrinted
+                                    ? "Printed"
+                                    : "Not Printed"
+                                }`}
+                          </TooltipContent>
+                        </Tooltip>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuLabel>Label Options</DropdownMenuLabel>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              void handlePrintLabel(shipment.id);
+                            }}
+                          >
+                            <Printer className="mr-2 h-4 w-4" />
+                            Generate Label
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={!shipment.labelPrinted}
+                            onSelect={() => {
+                              void handleReprintLabel(shipment.id);
+                            }}
+                          >
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            Reprint Label
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            disabled={!shipment.labelPrinted}
+                            onSelect={() => {
+                              void handleDeleteLabel(shipment.id);
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+                            Delete Label
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <DropdownMenuTrigger asChild>
+                          <div>
+                            {shipment.manifested ? (
+                              <Image
+                                alt="manifest icon"
+                                width={21}
+                                height={21}
+                                src={"/manifest-green.avif"}
+                              />
+                            ) : (
+                              <Image
+                                alt="maniffest icon"
+                                width={21}
+                                height={21}
+                                src={"/manifest.avif"}
+                              />
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {shipment.manifested
+                            ? "Manifested"
+                            : "Not Manifested"}
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            {shipment.sent ? (
+                              // <FaTruck className="w-5 h-5 text-green-500" />
+                              <Image
+                                alt="truck"
+                                width={21}
+                                height={21}
+                                src={"/truck-green.avif"}
+                              />
+                            ) : (
+                              <Image
+                                alt="truck"
+                                width={21}
+                                height={21}
+                                src={"/truck.avif"}
+                              />
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {shipment.sent ? "Sent" : "Not Sent"}
+                        </TooltipContent>
+                      </Tooltip>
+
+                      {selectedWarehouse !== "Archived" ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
                             <button
                               type="button"
-                              aria-label="Label actions"
-                              aria-busy={isLabelProcessing}
-                              className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
-                              disabled={isLabelProcessing}
+                              className="h-8 w-8 flex items-center justify-center rounded-full text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                              onClick={() => handleRefreshShipment(shipment.id)}
+                              disabled={refreshingShipmentIds.has(shipment.id)}
+                              aria-busy={refreshingShipmentIds.has(shipment.id)}
                             >
-                              {isLabelProcessing ? (
-                                <Loader2 className="h-5 w-5 animate-spin text-white" />
-                              ) : shipment.labelPrinted ? (
-                                <Image
-                                  alt="label printed"
-                                  width={20}
-                                  height={20}
-                                  src={"/label-green.avif"}
-                                />
+                              {refreshingShipmentIds.has(shipment.id) ? (
+                                <Loader2 className="h-6 w-6 animate-spin" />
                               ) : (
-                                <Image
-                                  alt="label not printed"
-                                  width={20}
-                                  height={20}
-                                  src={"/label.avif"}
-                                />
+                                <MdRefresh className="h-6 w-6" />
                               )}
                             </button>
-                          </DropdownMenuTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {isLabelProcessing
-                            ? "Processing Labels..."
-                            : `Label ${
-                                shipment.labelPrinted ? "Printed" : "Not Printed"
-                              }`}
-                        </TooltipContent>
-                      </Tooltip>
-                      <DropdownMenuContent align="end" className="w-52">
-                        <DropdownMenuLabel>Label Options</DropdownMenuLabel>
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            void handlePrintLabel(shipment.id);
-                          }}
-                        >
-                          <Printer className="mr-2 h-4 w-4" />
-                          Generate Label
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={!shipment.labelPrinted}
-                          onSelect={() => {
-                            void handleReprintLabel(shipment.id);
-                          }}
-                        >
-                          <RotateCcw className="mr-2 h-4 w-4" />
-                          Reprint Label
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          disabled={!shipment.labelPrinted}
-                          onSelect={() => {
-                            void handleDeleteLabel(shipment.id);
-                          }}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4 text-destructive" />
-                          Delete Label
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {refreshingShipmentIds.has(shipment.id)
+                              ? "Refreshing..."
+                              : "Refresh Shipment"}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
 
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          {shipment.manifested ? (
-                            <Image
-                              alt="manifest icon"
-                              width={21}
-                              height={21}
-                              src={"/manifest-green.avif"}
-                            />
-                          ) : (
-                            <Image
-                              alt="maniffest icon"
-                              width={21}
-                              height={21}
-                              src={"/manifest.avif"}
-                            />
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {shipment.manifested ? "Manifested" : "Not Manifested"}
-                      </TooltipContent>
-                    </Tooltip>
+                      {selectedWarehouse !== "Archived" ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className="cursor-pointer"
+                              onClick={() => handleDeleteShipment(shipment.id)}
+                            >
+                              <FaTimes className="w-5 h-5 text-white" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete Shipment</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className="cursor-pointer"
+                              onClick={() => handleRestoreShipment(shipment.id)}
+                            >
+                              <FaTrashRestore className="w-5 h-5 text-white" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>Restore Shipment</TooltipContent>
+                        </Tooltip>
+                      )}
 
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          {shipment.sent ? (
-                            // <FaTruck className="w-5 h-5 text-green-500" />
-                            <Image
-                              alt="truck"
-                              width={21}
-                              height={21}
-                              src={"/truck-green.avif"}
-                            />
-                          ) : (
-                            <Image
-                              alt="truck"
-                              width={21}
-                              height={21}
-                              src={"/truck.avif"}
-                            />
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {shipment.sent ? "Sent" : "Not Sent"}
-                      </TooltipContent>
-                    </Tooltip>
-
-                    {selectedWarehouse !== "Archived" ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            className="h-8 w-8 flex items-center justify-center rounded-full text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                            onClick={() => handleRefreshShipment(shipment.id)}
-                            disabled={refreshingShipmentIds.has(shipment.id)}
-                            aria-busy={refreshingShipmentIds.has(shipment.id)}
-                          >
-                            {refreshingShipmentIds.has(shipment.id) ? (
-                              <Loader2 className="h-6 w-6 animate-spin" />
+                          <div>
+                            {statusOptions.filter(
+                              (option) => option.value == shipment.status
+                            )[0]?.greenTick == true ? (
+                              <Image
+                                alt="sent"
+                                width={22}
+                                height={22}
+                                src={"/sent-green.avif"}
+                              />
                             ) : (
-                              <MdRefresh className="h-6 w-6" />
+                              <Image
+                                alt="sent"
+                                width={22}
+                                height={22}
+                                src={"/sent.avif"}
+                              />
                             )}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {refreshingShipmentIds.has(shipment.id)
-                            ? "Refreshing..."
-                            : "Refresh Shipment"}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : null}
-
-                    {selectedWarehouse !== "Archived" ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div
-                            className="cursor-pointer"
-                            onClick={() => handleDeleteShipment(shipment.id)}
-                          >
-                            <FaTimes className="w-5 h-5 text-white" />
                           </div>
                         </TooltipTrigger>
-                        <TooltipContent>Delete Shipment</TooltipContent>
+                        <TooltipContent>Status Check</TooltipContent>
                       </Tooltip>
-                    ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div
-                            className="cursor-pointer"
-                            onClick={() => handleRestoreShipment(shipment.id)}
-                          >
-                            <FaTrashRestore className="w-5 h-5 text-white" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>Restore Shipment</TooltipContent>
-                      </Tooltip>
-                    )}
 
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          {statusOptions.filter(
-                            (option) => option.value == shipment.status
-                          )[0]?.greenTick == true ? (
-                            <Image
-                              alt="sent"
-                              width={22}
-                              height={22}
-                              src={"/sent-green.avif"}
-                            />
-                          ) : (
-                            <Image
-                              alt="sent"
-                              width={22}
-                              height={22}
-                              src={"/sent.avif"}
-                            />
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>Status Check</TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
+                      {/* <Tooltip>
                       <TooltipTrigger asChild>
                         <Dialog
                           open={openPdfDialogId === shipment.id}
@@ -4042,170 +4046,177 @@ export function ShipmentsTable({
                         </Dialog>
                       </TooltipTrigger>
                       <TooltipContent>Upload PDF</TooltipContent>
-                    </Tooltip>
+                    </Tooltip> */}
 
-                    <div className="ml-5 w-56 flex items-center gap-x-1">
-                      {shipment.company ? (
-                        <FaBuilding className="w-4 h-4" />
-                      ) : (
-                        <FaUser className="w-4 h-4" />
-                      )}
-                      <span className="font-medium">
-                        {shipment.orderName.length > 45
-                          ? `${shipment.orderName.substring(0, 45)}...`
-                          : shipment.orderName.substring(0, 45)}
-                      </span>
-                    </div>
-                    <div className="w-88 flex">
-                      <FaLocationDot className="w-4 h-4" />
-                      <span className="font-medium">
-                        {(shipment.address1 + ", " + shipment.suburb).length >
-                        45
-                          ? `${(
-                              shipment.address1 +
-                              ", " +
-                              shipment.suburb
-                            ).substring(0, 45)}...`
-                          : (
-                              shipment.address1 +
-                              ", " +
-                              shipment.suburb
-                            ).substring(0, 45)}
-                      </span>
-                    </div>
-                    {/* <div className="text-xs">{shipment.suburb}, {shipment.region} {shipment.postCode} {shipment.country}</div> */}
-                    <div className="w-48 flex gap-x-2">
-                      <FaCalendarDay className="w-4 h-4" />
-                      <span className="font-medium">
-                        {orderDateFormatter.format(
-                          new Date(shipment.orderDate * 1000)
+                      <div className="ml-5 w-56 flex items-center gap-x-1">
+                        {shipment.company ? (
+                          <FaBuilding className="w-4 h-4" />
+                        ) : (
+                          <FaUser className="w-4 h-4" />
                         )}
-                      </span>
-                    </div>
-                    <div className="w-28 flex items-center">
-                      <DollarSign className="w-4 h-4" />
-                      <span className="font-medium">
-                        {parseFloat(shipment.totalPrice).toFixed(2)}
-                      </span>
-                    </div>
-                    {/* <div className='flex gap-x-2 items-center w-28'>
+                        <span className="font-medium">
+                          {shipment.orderName.length > 45
+                            ? `${shipment.orderName.substring(0, 45)}...`
+                            : shipment.orderName.substring(0, 45)}
+                        </span>
+                      </div>
+                      <div className="w-88 flex">
+                        <FaLocationDot className="w-4 h-4" />
+                        <span className="font-medium">
+                          {(shipment.address1 + ", " + shipment.suburb).length >
+                          45
+                            ? `${(
+                                shipment.address1 +
+                                ", " +
+                                shipment.suburb
+                              ).substring(0, 45)}...`
+                            : (
+                                shipment.address1 +
+                                ", " +
+                                shipment.suburb
+                              ).substring(0, 45)}
+                        </span>
+                      </div>
+                      {/* <div className="text-xs">{shipment.suburb}, {shipment.region} {shipment.postCode} {shipment.country}</div> */}
+                      <div className="w-48 flex gap-x-2">
+                        <FaCalendarDay className="w-4 h-4" />
+                        <span className="font-medium">
+                          {orderDateFormatter.format(
+                            new Date(shipment.orderDate * 1000)
+                          )}
+                        </span>
+                      </div>
+                      <div className="w-28 flex items-center">
+                        <DollarSign className="w-4 h-4" />
+                        <span className="font-medium">
+                          {parseFloat(shipment.totalPrice).toFixed(2)}
+                        </span>
+                      </div>
+                      {/* <div className='flex gap-x-2 items-center w-28'>
                       <Truck className='w-4 h-4' />
                       {shipment.carrierCode ? shipment.carrierCode?.charAt(0).toUpperCase() + shipment.carrierCode?.slice(1) : shipment.carrierCodeDesired?.charAt(0).toUpperCase() + shipment.carrierCodeDesired?.slice(1)}
                     </div> */}
-                    <div className="flex gap-x-1 items-center w-16">
-                      <Clock className="w-4 h-4" />
-                      <span className="font-medium">
-                        {formatRelativeTime(shipment.lastApiUpdate)}
-                      </span>
-                    </div>
-                    {selectedWarehouse !== "Archived" ? (
-                      <>
-                        <div className="w-16 flex gap-x-3 items-center">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div
-                                className="cursor-pointer"
-                                onClick={() => handleUnlStatusUpdate(shipment)}
-                              >
-                                {shipment.unlDone ? (
-                                  <PiCubeFocusBold className="w-6 h-6 text-green-500" />
-                                ) : (
-                                  <PiCubeFocusBold
-                                    size={22}
-                                    className="text-gray-700"
-                                  />
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {shipment.unlDone
-                                ? "UNL Completed"
-                                : "UNL Pending"}
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div
-                                className={
-                                  shipment.locked ? "cursor-pointer" : ""
-                                }
-                                onClick={
-                                  shipment.locked
-                                    ? () => handleLockUnlockShipment(shipment)
-                                    : undefined
-                                }
-                              >
-                                {shipment.locked ? (
-                                  <Lock size={17} className="text-red-500" />
-                                ) : (
-                                  <Unlock size={17} className="text-gray-700" />
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {shipment.locked ? "Locked" : "Un-Locked"}
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <Select
-                          defaultValue={`${
-                            shipment.status ? shipment.status : "-"
-                          }`}
-                          onValueChange={(value) =>
-                            handleStatusChange(shipment.id, value)
-                          }
-                          disabled={isLoadingStatuses}
-                        >
-                          <SelectTrigger size="sm" className="w-[180px]">
-                            <SelectValue placeholder="Select Status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem key={"-"} value="-">
-                              Select Status
-                            </SelectItem>
-                            {statusOptions.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </>
-                    ) : null}
-                    <Button
-                      size={"icon"}
-                      variant="link"
-                      className="-p-3 ml-10 cursor-pointer"
-                      onClick={(e) => handleShipmentDetailClick(e, shipment.id)}
-                    >
-                      {selectedShipmentId === shipment.id ? (
-                        <ChevronDownIcon className="h-7 w-7 text-white rounded" />
-                      ) : (
-                        <ChevronRightIcon className="h-7 w-7 text-white rounded" />
-                      )}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-              {selectedShipmentId === shipment.id && (
-                <TableRow>
-                  <TableCell colSpan={10}>
-                    {isLoadingDetail ? (
-                      <div className="flex justify-center items-center p-4">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                      <div className="flex gap-x-1 items-center w-16">
+                        <Clock className="w-4 h-4" />
+                        <span className="font-medium">
+                          {formatRelativeTime(shipment.lastApiUpdate)}
+                        </span>
                       </div>
-                    ) : (
-                      <MemoizedShipmentDetailView
-                        setAction={setDetailAction}
-                        shipment={detailedShipment}
-                      />
-                    )}
+                      {selectedWarehouse !== "Archived" ? (
+                        <>
+                          <div className="w-16 flex gap-x-3 items-center">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className="cursor-pointer"
+                                  onClick={() =>
+                                    handleUnlStatusUpdate(shipment)
+                                  }
+                                >
+                                  {shipment.unlDone ? (
+                                    <PiCubeFocusBold className="w-6 h-6 text-green-500" />
+                                  ) : (
+                                    <PiCubeFocusBold
+                                      size={22}
+                                      className="text-gray-700"
+                                    />
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {shipment.unlDone
+                                  ? "UNL Completed"
+                                  : "UNL Pending"}
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className={
+                                    shipment.locked ? "cursor-pointer" : ""
+                                  }
+                                  onClick={
+                                    shipment.locked
+                                      ? () => handleLockUnlockShipment(shipment)
+                                      : undefined
+                                  }
+                                >
+                                  {shipment.locked ? (
+                                    <Lock size={17} className="text-red-500" />
+                                  ) : (
+                                    <Unlock
+                                      size={17}
+                                      className="text-gray-700"
+                                    />
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {shipment.locked ? "Locked" : "Un-Locked"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                          <Select
+                            defaultValue={`${
+                              shipment.status ? shipment.status : "-"
+                            }`}
+                            onValueChange={(value) =>
+                              handleStatusChange(shipment.id, value)
+                            }
+                            disabled={isLoadingStatuses}
+                          >
+                            <SelectTrigger size="sm" className="w-[180px]">
+                              <SelectValue placeholder="Select Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem key={"-"} value="-">
+                                Select Status
+                              </SelectItem>
+                              {statusOptions.map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </>
+                      ) : null}
+                      <Button
+                        size={"icon"}
+                        variant="link"
+                        className="-p-3 ml-10 cursor-pointer"
+                        onClick={(e) =>
+                          handleShipmentDetailClick(e, shipment.id)
+                        }
+                      >
+                        {selectedShipmentId === shipment.id ? (
+                          <ChevronDownIcon className="h-7 w-7 text-white rounded" />
+                        ) : (
+                          <ChevronRightIcon className="h-7 w-7 text-white rounded" />
+                        )}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
-              )}
+                {selectedShipmentId === shipment.id && (
+                  <TableRow>
+                    <TableCell colSpan={10}>
+                      {isLoadingDetail ? (
+                        <div className="flex justify-center items-center p-4">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                        </div>
+                      ) : (
+                        <MemoizedShipmentDetailView
+                          setAction={setDetailAction}
+                          shipment={detailedShipment}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )}
               </React.Fragment>
             );
           })}
