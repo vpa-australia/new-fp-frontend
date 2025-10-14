@@ -103,6 +103,15 @@ interface Shipment {
   manifested: boolean;
   status: string | null;
   carrierCodeDesired: string;
+  store: {
+    id: number;
+    shop: string;
+    name: string | null;
+    countryCode: string | null;
+    weightId: string | null;
+    measurementId: string | null;
+    active: number;
+  };
   quotes: Array<{
     carrierCodeDesired: string;
     carrierCode: string;
@@ -352,16 +361,13 @@ export function ShipmentsTable({
       formData.append("tracking_code", trackingCode || "");
       formData.append("manual_carrier_code", carrierCode || "");
 
-      const response = await apiFetch(
-        `/shipments/pdf/${shipmentId}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const response = await apiFetch(`/shipments/pdf/${shipmentId}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
       if (!response.ok) {
         let message = "Failed to upload PDF.";
@@ -1169,15 +1175,12 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await apiFetch(
-          "/shipments/search/parameters",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
+        const response = await apiFetch("/shipments/search/parameters", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
 
         if (!response.ok) {
           throw new Error("Failed to fetch search parameters");
@@ -1322,15 +1325,12 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await apiFetch(
-          "/platform/statuses",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
+        const response = await apiFetch("/platform/statuses", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
 
         if (!response.ok) {
           throw new Error("Failed to fetch status options");
@@ -1361,15 +1361,12 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await apiFetch(
-          "/platform/carriers",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
+        const response = await apiFetch("/platform/carriers", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
 
         if (!response.ok) {
           throw new Error("Failed to fetch carriers");
@@ -1720,9 +1717,7 @@ export function ShipmentsTable({
 
     try {
       const response = await apiFetch(
-        `/shipments/shipped/1?shipment_ids=${checkedIds.join(
-          ","
-        )}`,
+        `/shipments/shipped/1?shipment_ids=${checkedIds.join(",")}`,
         {
           method: "PATCH",
           headers: {
@@ -1787,9 +1782,7 @@ export function ShipmentsTable({
 
     try {
       const response = await apiFetch(
-        `/shipments/shipped/0?shipment_ids=${checkedIds.join(
-          ","
-        )}`,
+        `/shipments/shipped/0?shipment_ids=${checkedIds.join(",")}`,
         {
           method: "PATCH",
           headers: {
@@ -1925,9 +1918,9 @@ export function ShipmentsTable({
         const token = getAuthToken();
 
         const response = await apiFetch(
-          `/shipments/unlDone/${
-            shipment.unlDone ? 0 : 1
-          }?shipment_ids=${shipment.id}`,
+          `/shipments/unlDone/${shipment.unlDone ? 0 : 1}?shipment_ids=${
+            shipment.id
+          }`,
           {
             method: "PATCH",
             headers: {
@@ -2211,16 +2204,13 @@ export function ShipmentsTable({
       }
 
       try {
-        const response = await apiFetch(
-          `/pdf/invoices?${params.toString()}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/pdf",
-            },
-          }
-        );
+        const response = await apiFetch(`/pdf/invoices?${params.toString()}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/pdf",
+          },
+        });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
@@ -2257,7 +2247,10 @@ export function ShipmentsTable({
         toast({
           variant: "destructive",
           title: "Invoice Generation Failed",
-          description: getErrorMessage(error, "Failed to generate invoice PDF."),
+          description: getErrorMessage(
+            error,
+            "Failed to generate invoice PDF."
+          ),
         });
         throw error;
       }
@@ -2298,18 +2291,15 @@ export function ShipmentsTable({
   const handleSingleInvoiceReprint = useCallback(
     async (shipmentId: number) => {
       try {
-        await printInvoicesForShipments(
-          [shipmentId],
-          {
-            previewTitle: "Invoice Reprint",
-            successToast: {
-              title: "Invoice Ready",
-              description: "Invoice reopened for printing.",
-            },
-            incrementAction: false,
-            allowReprint: true,
-          }
-        );
+        await printInvoicesForShipments([shipmentId], {
+          previewTitle: "Invoice Reprint",
+          successToast: {
+            title: "Invoice Ready",
+            description: "Invoice reopened for printing.",
+          },
+          incrementAction: false,
+          allowReprint: true,
+        });
       } catch {
         // printInvoicesForShipments already reports the failure
       }
@@ -2330,16 +2320,13 @@ export function ShipmentsTable({
       try {
         const token = getAuthToken();
 
-        const response = await apiFetch(
-          `/shipments/unarchive/${shipmentId}`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        const response = await apiFetch(`/shipments/unarchive/${shipmentId}`, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -2415,8 +2402,7 @@ export function ShipmentsTable({
       }
 
       const token = getAuthToken();
-      const baseUrl =
-        "/pdf/labels/generateLabels";
+      const baseUrl = "/pdf/labels/generateLabels";
       const query = `shipment_ids=${shipmentIds.join(",")}`;
 
       const performRequest = async (
@@ -3240,7 +3226,7 @@ export function ShipmentsTable({
                       <TooltipTrigger asChild>
                         <a
                           target="_blank"
-                          href={`https://admin.shopify.com/store/vpa-australia/orders/${shipment.shopifyId}`}
+                          href={`https://admin.shopify.com/store/${shipment.store.shop}/orders/${shipment.shopifyId}`}
                         >
                           <FaLink className="w-5 h-5" />
                         </a>

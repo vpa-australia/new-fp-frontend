@@ -1,15 +1,14 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { apiFetch } from '@/lib/api/client';
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
-function LoginForm() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -22,50 +21,55 @@ function LoginForm() {
     setError(null);
 
     try {
-      const response = await apiFetch('/users/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await fetch(
+        "https://ship-orders.vpa.com.au/api/users/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
+        throw new Error(errorData.message || "Login failed");
       }
 
       const data = await response.json();
-      const userResponse = await apiFetch('/users/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${data.token}`,
-          'Accept': 'application/json',
-        },
-      });
+      const userResponse = await fetch(
+        "https://ship-orders.vpa.com.au/api/users/auth/me",
+        {
+          headers: {
+            Authorization: `Bearer ${data.token}`,
+            Accept: "application/json",
+          },
+        }
+      );
 
       if (!userResponse.ok) {
-        throw new Error('Failed to fetch user information');
+        throw new Error("Failed to fetch user information");
       }
 
       const userData = await userResponse.json();
       await login({ token: data.token, user: userData, email });
 
-      const redirectParam = searchParams?.get('redirect');
+      const redirectParam = searchParams?.get("redirect");
       const safeRedirect =
-        redirectParam && redirectParam.startsWith('/')
+        redirectParam && redirectParam.startsWith("/")
           ? redirectParam
-          : '/dashboard';
+          : "/dashboard";
 
       router.replace(safeRedirect);
-
     } catch (err: unknown) {
       const message =
         err instanceof Error
           ? err.message
-          : 'An unexpected error occurred during login.';
+          : "An unexpected error occurred during login.";
       setError(message);
-      console.error('Login error:', err);
+      console.error("Login error:", err);
     } finally {
       setLoading(false);
     }
@@ -158,14 +162,6 @@ function LoginForm() {
         </form>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-gray-100">Loading…</div>}>
-      <LoginForm />
-    </Suspense>
   );
 }
 
