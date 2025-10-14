@@ -19,7 +19,6 @@ import {
   Tag,
   Truck,
   X,
-  Zap,
   Printer,
   RotateCcw,
   Trash2,
@@ -2147,20 +2146,24 @@ export function ShipmentsTable({
     [getAuthToken, setAction, toast]
   );
 
-  const handleQuickPrint = useCallback(async () => {
+  const handleLabelReprint = useCallback(async () => {
     const selectedIds = getSelectedShipmentIds();
 
     if (selectedIds.length === 0) {
       toast({
         variant: "destructive",
         title: "No Shipments Selected",
-        description: "Please select at least one shipment to quick print.",
+        description: "Select at least one shipment to reprint labels.",
       });
       return;
     }
 
     try {
-      await quickPrintShipments(selectedIds);
+      await quickPrintShipments(selectedIds, {
+        title: "Label Reprint Preview",
+        incrementAction: false,
+        includeAlreadyPrinted: true,
+      });
     } catch {
       // quickPrintShipments already reports the failure
     }
@@ -2267,13 +2270,40 @@ export function ShipmentsTable({
       toast({
         variant: "destructive",
         title: "No Shipments Selected",
-        description: "Please select at least one shipment to quick print.",
+        description: "Please select at least one shipment to print invoices.",
       });
       return;
     }
 
     try {
       await printInvoicesForShipments(selectedIds);
+    } catch {
+      // printInvoicesForShipments already reports the failure
+    }
+  }, [getSelectedShipmentIds, printInvoicesForShipments, toast]);
+
+  const handleInvoiceReprint = useCallback(async () => {
+    const selectedIds = getSelectedShipmentIds();
+
+    if (selectedIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Shipments Selected",
+        description: "Select at least one shipment to reprint invoices.",
+      });
+      return;
+    }
+
+    try {
+      await printInvoicesForShipments(selectedIds, {
+        previewTitle: "Invoice Reprint",
+        successToast: {
+          title: "Invoice Ready",
+          description: "Invoices reopened for printing.",
+        },
+        incrementAction: false,
+        allowReprint: true,
+      });
     } catch {
       // printInvoicesForShipments already reports the failure
     }
@@ -2687,54 +2717,80 @@ export function ShipmentsTable({
               </SelectContent>
             </Select>
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                onClick={handleInvoicePrint}
-                variant="outline"
-                size="icon"
-                className="flex-grow-0"
+          <DropdownMenu>
+            <Tooltip>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  disabled={isLoadingStatuses || selectedWarehouse === "All"}
+                  variant="outline"
+                  size="icon"
+                  className="flex-grow-0"
+                >
+                  <FileText className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <TooltipContent side={getTooltipSide()}>
+                <p>Invoice Options</p>
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Invoice Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  void handleInvoicePrint();
+                }}
               >
-                <FileText className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side={getTooltipSide()}>
-              <p>Print Invoices</p>
-            </TooltipContent>
-          </Tooltip>
+                <Printer className="mr-2 h-4 w-4" />
+                Print Default
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void handleInvoiceReprint();
+                }}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reprint
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                variant="outline"
-                size="icon"
-                onClick={handleGenerateLabels}
+          <DropdownMenu>
+            <Tooltip>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  disabled={isLoadingStatuses || selectedWarehouse === "All"}
+                  variant="outline"
+                  size="icon"
+                >
+                  <Tag className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <TooltipContent side={getTooltipSide()}>
+                <p>Label Options</p>
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Label Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  void handleGenerateLabels();
+                }}
               >
-                <Tag className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side={getTooltipSide()}>
-              <p>Generate Labels</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                disabled={isLoadingStatuses || selectedWarehouse === "All"}
-                variant="outline"
-                size="icon"
-                onClick={handleQuickPrint}
+                <Printer className="mr-2 h-4 w-4" />
+                Print Default
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void handleLabelReprint();
+                }}
               >
-                <Zap className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side={getTooltipSide()}>
-              <p>Quick Print</p>
-            </TooltipContent>
-          </Tooltip>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reprint
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Tooltip>
             <TooltipTrigger asChild>

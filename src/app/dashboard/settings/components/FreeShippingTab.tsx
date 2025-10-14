@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,7 +33,7 @@ export default function FreeShippingTab() {
 
 
 
-    const getStores = () =>{
+    const getStores = useCallback(() =>{
         const token = requireAuthToken();
         apiFetch('platform/stores', {
             method: 'GET',
@@ -47,16 +47,18 @@ export default function FreeShippingTab() {
             }
             setLoading(false);
         });
-    }
+    }, [requireAuthToken]);
 
-    const getCurrentDates = () :void => {
+    const getCurrentDates = useCallback(() :void => {
 
-        if(currentStore === null){
+        const storeKey = currentStore;
+
+        if(storeKey === null){
             return;
         }
 
         const token = requireAuthToken();
-        apiFetch('platform/free_shipping/'+currentStore, {
+        apiFetch('platform/free_shipping/'+storeKey, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -82,28 +84,20 @@ export default function FreeShippingTab() {
                 const end :string[] = end_datetime.split(' ');
 
                 //set time string
-                let fromT = {...fromTime};
-                fromT[currentStore] = start[1];
-                setFromTime(fromT);
+                setFromTime((prev)=>({...prev, [storeKey]: start[1]}));
 
-                let toT = {...toTime};
-                toT[currentStore] =end[1];
-                setToTime(toT);
+                setToTime((prev)=>({...prev, [storeKey]: end[1]}));
 
                 //set date string
-                let toD = {...toDate};
-                toD[currentStore] = end[0];
-                setToDate(toD);
+                setToDate((prev)=>({...prev, [storeKey]: end[0]}));
 
-                let fromD = {...fromDate};
-                fromD[currentStore] = start[0];
-                setFromDate(fromD);
+                setFromDate((prev)=>({...prev, [storeKey]: start[0]}));
 
                 setLoading(false);
 
             }
         })
-    }
+    }, [currentStore, requireAuthToken]);
 
     useEffect(()=>{
         if(currentStore === null){
@@ -111,7 +105,7 @@ export default function FreeShippingTab() {
         } else {
             getCurrentDates();
         }
-    }, [currentStore]);
+    }, [currentStore, getCurrentDates, getStores]);
 
   return (
     <Card>
