@@ -38,92 +38,35 @@ export default function FreeShippingTab() {
   const [fromTime, setFromTime] = useState<Record<string, string>>({});
   const [toTime, setToTime] = useState<Record<string, string>>({});
 
-  const getStores = useCallback(async () => {
-    const token = requireAuthToken();
-    setLoading(true);
+  const hydrateWindowForStore = useCallback((
+    storeKey: string,
+    payload: FreeShippingResponse["data"]
+  ) => {
+    let startDatetime = payload.free_shipping_start;
+    let endDatetime = payload.free_shipping_end;
 
-    try {
-      const response = await apiFetch("platform/stores", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    const today = new Date();
 
-      const json = (await response.json()) as {
-        success: boolean;
-        stores: Store[];
-      };
-      if (
-        json.success &&
-        Array.isArray(json.stores) &&
-        json.stores.length > 0
-      ) {
-        setStores(json.stores);
-        setCurrentStore((prev) => prev ?? json.stores[0].shop);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [requireAuthToken]);
-
-  const hydrateWindowForStore = useCallback(
-    (storeKey: string, payload: FreeShippingResponse["data"]) => {
-      let startDatetime = payload.free_shipping_start;
-      let endDatetime = payload.free_shipping_end;
-
-      const today = new Date();
-
-      if (!startDatetime) {
-        startDatetime = toMySQLDateTime(today);
-      }
-
-      if (!endDatetime) {
-        const twoDaysLater = new Date(today);
-        twoDaysLater.setDate(today.getDate() + 2);
-        endDatetime = toMySQLDateTime(twoDaysLater);
-      }
-
-      const [startDate, startTime] = startDatetime.split(" ");
-      const [endDate, endTime] = endDatetime.split(" ");
-
-      setFromDate((prev) => ({ ...prev, [storeKey]: startDate }));
-      setToDate((prev) => ({ ...prev, [storeKey]: endDate }));
-      setFromTime((prev) => ({ ...prev, [storeKey]: startTime }));
-      setToTime((prev) => ({ ...prev, [storeKey]: endTime }));
-    },
-    []
-  );
-
-  const getCurrentDates = useCallback(async () => {
-    if (!currentStore) {
-      return;
+    if (!startDatetime) {
+      startDatetime = toMySQLDateTime(today);
     }
 
-    const token = requireAuthToken();
-    setLoading(true);
-
-    try {
-      const response = await apiFetch(
-        `platform/free_shipping/${currentStore}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const json = (await response.json()) as FreeShippingResponse;
-      if (json.success) {
-        hydrateWindowForStore(currentStore, json.data);
-      }
-    } finally {
-      setLoading(false);
+    if (!endDatetime) {
+      const twoDaysLater = new Date(today);
+      twoDaysLater.setDate(today.getDate() + 2);
+      endDatetime = toMySQLDateTime(twoDaysLater);
     }
-  }, [currentStore, hydrateWindowForStore, requireAuthToken]);
 
-  const saveDates = useCallback(async () => {
+    const [startDate, startTime] = startDatetime.split(" ");
+    const [endDate, endTime] = endDatetime.split(" ");
+
+    setFromDate((prev) => ({ ...prev, [storeKey]: startDate }));
+    setToDate((prev) => ({ ...prev, [storeKey]: endDate }));
+    setFromTime((prev) => ({ ...prev, [storeKey]: startTime }));
+    setToTime((prev) => ({ ...prev, [storeKey]: endTime }));
+  }, []);
+
+  const saveDates = async () => {
     if (!currentStore) {
       return;
     }
@@ -172,23 +115,67 @@ export default function FreeShippingTab() {
     } finally {
       setLoading(false);
     }
-  }, [
-    currentStore,
-    fromDate,
-    fromTime,
-    hydrateWindowForStore,
-    requireAuthToken,
-    toDate,
-    toTime,
-  ]);
+  };
 
   useEffect(() => {
-    if (currentStore === null) {
-      void getStores();
-    } else {
-      void getCurrentDates();
-    }
-  }, [currentStore, getCurrentDates, getStores]);
+    let cancelled = false;
+
+    const load = async () => {
+      const token = requireAuthToken();
+      setLoading(true);
+
+      try {
+        if (currentStore === null) {
+          const response = await apiFetch("platform/stores", {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          const json = (await response.json()) as {
+            success: boolean;
+            stores: Store[];
+          };
+
+          if (
+            !cancelled &&
+            json.success &&
+            Array.isArray(json.stores) &&
+            json.stores.length > 0
+          ) {
+            setStores(json.stores);
+            setCurrentStore((prev) => prev ?? json.stores[0].shop);
+          }
+        } else {
+          const response = await apiFetch(
+            `platform/free_shipping/${currentStore}`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          const json = (await response.json()) as FreeShippingResponse;
+          if (!cancelled && json.success) {
+            hydrateWindowForStore(currentStore, json.data);
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStore, hydrateWindowForStore, requireAuthToken]);
 
   return (
     <Card>
