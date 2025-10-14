@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toMySQLDateTime } from "@/lib/utils";
+import {Switch} from "@/components/ui/switch";
 
 interface Store {
   id: number;
@@ -24,6 +25,7 @@ type FreeShippingResponse = {
   data: {
     free_shipping_start: string | null;
     free_shipping_end: string | null;
+    api_quote_is: string
   };
 };
 
@@ -37,6 +39,7 @@ export default function FreeShippingTab() {
   const [toDate, setToDate] = useState<Record<string, string>>({});
   const [fromTime, setFromTime] = useState<Record<string, string>>({});
   const [toTime, setToTime] = useState<Record<string, string>>({});
+  const [apiStatus, setApiStatus] = useState<Record<string, boolean>>({});
 
   const hydrateWindowForStore = useCallback((
     storeKey: string,
@@ -64,7 +67,35 @@ export default function FreeShippingTab() {
     setToDate((prev) => ({ ...prev, [storeKey]: endDate }));
     setFromTime((prev) => ({ ...prev, [storeKey]: startTime }));
     setToTime((prev) => ({ ...prev, [storeKey]: endTime }));
+
+    setApiStatus((prev)=> ({...prev, [storeKey]: !!payload.api_quote_is}));
   }, []);
+
+
+  const changeApiStatus = async(value: boolean) =>{
+
+    if(!currentStore){
+      return;
+    }
+
+    const token = requireAuthToken();
+
+    const response = await apiFetch("platform/api/"+currentStore+'/status/'+(value ? "1" : "0"), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const json = (await response.json()) as {
+      success: boolean;
+      data: {api_quote_is: number } ;
+    };
+
+    setApiStatus((prev)=> ({...prev, [currentStore]: !!json.data.api_quote_is}));
+
+
+  }
 
   const saveDates = async () => {
     if (!currentStore) {
@@ -149,7 +180,7 @@ export default function FreeShippingTab() {
           }
         } else {
           const response = await apiFetch(
-            `platform/free_shipping/${currentStore}`,
+            `platform/settings/${currentStore}`,
             {
               method: "GET",
               headers: {
@@ -162,6 +193,7 @@ export default function FreeShippingTab() {
           if (!cancelled && json.success) {
             hydrateWindowForStore(currentStore, json.data);
           }
+
         }
       } finally {
         if (!cancelled) {
@@ -178,6 +210,29 @@ export default function FreeShippingTab() {
   }, [currentStore, hydrateWindowForStore, requireAuthToken]);
 
   return (
+      <>
+        {loading ? (<></>) : (<>
+
+          {stores.length > 0 ? <h4 className="text-lg font-medium ml-4">Select Store</h4> : null}
+          {stores.map((store) => (
+              <div
+                  key={store.shop}
+                  onClick={() => {
+                    setCurrentStore(store.shop);
+                  }}
+                  className={`inline-block rounded-full border text-sm m-2 px-2 py-2 ${
+                      currentStore === store.shop ? "bg-gray-500 text-white" : ""
+                  }`}
+              >
+                {store.name}
+              </div>
+          ))}
+
+
+        </>)}
+
+
+
     <Card>
       <CardHeader>
         <CardTitle>Free Shipping</CardTitle>
@@ -189,20 +244,7 @@ export default function FreeShippingTab() {
           <>Loading ...</>
         ) : (
           <>
-            {stores.length > 0 ? <h4>Stores</h4> : null}
-            {stores.map((store) => (
-              <div
-                key={store.shop}
-                onClick={() => {
-                  setCurrentStore(store.shop);
-                }}
-                className={`inline-block rounded-full border text-sm m-2 px-2 py-2 ${
-                  currentStore === store.shop ? "bg-gray-500 text-white" : ""
-                }`}
-              >
-                {store.name}
-              </div>
-            ))}
+
 
             <div className="flex gap-4 mt-6">
               <div className="flex flex-col gap-3">
@@ -289,5 +331,24 @@ export default function FreeShippingTab() {
         )}
       </CardContent>
     </Card>
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>API Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {currentStore === null ||
+            typeof fromDate[currentStore] === "undefined" ||
+            loading ? (
+                <>Loading ...</>
+            ) : (
+                <>
+
+                  <p>This sets the API to return quotes using the base platform. This should only be turned off in emergency situations; where you wish to disable all API calls.</p>
+
+<Switch className="mt-4" checked={apiStatus[currentStore]} onClick={()=>{  changeApiStatus(!apiStatus[currentStore]) }} ></Switch>
+                </>)}
+          </CardContent>
+        </Card>
+      </>
   );
 }
