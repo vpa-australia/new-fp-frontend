@@ -283,8 +283,8 @@ export default function FreeShippingTab() {
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <div className="flex flex-col gap-3">
+            <div className="flex gap-4 mt-2 ">
+              <div className="flex flex-col gap-3 ">
                 <Label htmlFor="date-picker-to" className="px-1">
                   To Date
                 </Label>
