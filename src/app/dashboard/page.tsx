@@ -24,7 +24,7 @@ import {
 } from "lucide-react"; // Assuming lucide-react for icons
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
-import { ShipmentsTable } from "@/components/ShipmentsTable";
+import { ShipmentsTable, type Shipment } from "@/components/ShipmentsTable";
 import { apiFetch, buildApiUrl } from "@/lib/api/client";
 
 // Define Warehouse interface
@@ -37,41 +37,6 @@ interface Warehouse {
   internationalRank: number;
   domesticRank: number;
   active: boolean;
-}
-
-interface Shipment {
-  id: number;
-  shopifyId: number;
-  shopifyOrderNumber: string;
-  orderName: string;
-  company: string;
-  email: string;
-  address1: string;
-  suburb: string;
-  invoicePrinted: boolean;
-  region: string;
-  postCode: string;
-  country: string;
-  locked: boolean;
-  warehouseCode: string;
-  carrierCode: string;
-  serviceCode: string;
-  tracking_code: string;
-  labelPrinted: boolean;
-  sent: boolean;
-  unlDone: boolean;
-  manifested: boolean;
-  status: string | null;
-  carrierCodeDesired: string;
-  quotes: Array<{
-    carrierCodeDesired: string;
-    carrierCode: string;
-    serviceCode: string;
-    costIncludingTax: string;
-  }>;
-  orderDate: number; // Added order date
-  totalPrice: string; // Added total price (as string based on API)
-  lastApiUpdate: number; // Added last API update time
 }
 
 export default function DashboardPage() {
@@ -439,6 +404,7 @@ export default function DashboardPage() {
                 setSearchParams={setSearchParams}
                 selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
+                updateShipments={setShipments}
                 lastPage={lastPage}
                 shipments={shipments}
                 currentPage={currentPage}
@@ -458,6 +424,7 @@ export default function DashboardPage() {
                 setSearchParams={setSearchParams}
                 selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
+                updateShipments={setShipments}
                 lastPage={lastPage}
                 shipments={shipments}
                 currentPage={currentPage}
@@ -477,6 +444,7 @@ export default function DashboardPage() {
                 setSearchParams={setSearchParams}
                 selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
+                updateShipments={setShipments}
                 lastPage={lastPage}
                 shipments={shipments}
                 currentPage={currentPage}
@@ -497,6 +465,7 @@ export default function DashboardPage() {
                 <ShipmentsTable
                   selectedWarehouse={selectedWarehouse}
                   setAction={setAction}
+                  updateShipments={setShipments}
                   lastPage={lastPage}
                   shipments={shipments}
                   currentPage={currentPage}
@@ -519,6 +488,7 @@ export default function DashboardPage() {
               <ShipmentsTable
                 selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
+                updateShipments={setShipments}
                 lastPage={lastPage}
                 shipments={shipments}
                 currentPage={currentPage}
