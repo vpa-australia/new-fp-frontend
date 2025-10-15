@@ -289,14 +289,6 @@ type ShipmentsTableProps = {
 
 type EdgePosition = "top" | "bottom" | "left" | "right";
 
-type PdfFormState = {
-  file: File | null;
-  name: string;
-  title: string;
-  trackingCode: string;
-  carrierCode: string;
-};
-
 type RefreshShipmentsResult = {
   successes: number[];
   failures: Array<{ id: number; message: string }>;
@@ -359,67 +351,6 @@ export function ShipmentsTable({
     [updateShipments]
   );
 
-  const handlePdfUpload = useCallback(
-    async ({
-      file,
-      shipmentId,
-      trackingCode,
-      carrierCode,
-      name,
-      title,
-    }: {
-      file: File;
-      shipmentId: number;
-      trackingCode: string;
-      carrierCode: string;
-      name: string;
-      title: string;
-    }): Promise<void> => {
-      const token = getAuthToken();
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("name", name || file.name);
-      formData.append("title", title || "Uploaded PDF");
-      formData.append("tracking_code", trackingCode || "");
-      formData.append("manual_carrier_code", carrierCode || "");
-
-      const response = await apiFetch(`/shipments/pdf/${shipmentId}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        let message = "Failed to upload PDF.";
-        try {
-          const errorData = await response.json();
-          if (errorData?.message) {
-            message = errorData.message;
-          }
-        } catch {
-          // ignore JSON parsing errors
-        }
-
-        toast({
-          title: "Upload Failed",
-          description: message,
-          variant: "destructive",
-        });
-
-        throw new Error(message);
-      }
-
-      toast({
-        title: "Upload Successful",
-        description: "PDF has been uploaded successfully.",
-        variant: "success",
-      });
-    },
-    [getAuthToken, toast]
-  );
   const [isPdfOpen, setIsPdfOpen] = useState(false);
   const [pdfTitle, setPdfTitle] = useState<string>("");
   const [detailedShipment, setDetailedShipment] =
@@ -450,15 +381,6 @@ export function ShipmentsTable({
     {}
   );
   const [detailAction, setDetailAction] = useState(0);
-  const [openPdfDialogId, setOpenPdfDialogId] = useState<number | null>(null);
-  const [pdfFormState, setPdfFormState] = useState<PdfFormState>({
-    file: null,
-    name: "",
-    title: "",
-    trackingCode: "",
-    carrierCode: "",
-  });
-  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null);
 
