@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
-import { AlertCircleIcon, BoxIcon, Loader } from "lucide-react";
+import { AlertCircleIcon, BoxIcon, Loader, Loader2 } from "lucide-react";
 import { AlertDialog } from "./ui/alert-dialog";
 import {
   Dialog,
@@ -19,7 +19,7 @@ import {
 } from "./ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { UploadFile, UploadableShipment } from "@/components/UploadFile";
-import {ShippingServiceCodesSuccess} from "@/app/dashboard/settings/components/ShippingServiceCodesTab.types";
+import { ShippingServiceCodesSuccess } from "@/app/dashboard/settings/components/ShippingServiceCodesTab.types";
 import { apiFetch } from "@/lib/api/client";
 
 interface ShippingServiceCode {
@@ -211,8 +211,6 @@ const formatQuoteCost = (cost: ShipmentQuote["costIncludingTax"]): string => {
   return `$${numericCost.toFixed(2)}`;
 };
 
-
-
 const isItemOutOfStockAtWarehouse = (
   item: LineItem,
   warehouseCode: string
@@ -232,13 +230,10 @@ const formatPrice = (price: LineItem["price"]): string => {
 
 interface ShipmentDetailViewProps {
   shipment: ShipmentDetailResponse | null;
-  setAction: React.Dispatch<React.SetStateAction<number>>;
+  setAction?: React.Dispatch<React.SetStateAction<number>>;
 }
 
-export function ShipmentDetailView({
-  shipment,
-  setAction,
-}: ShipmentDetailViewProps) {
+export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
   const { toast } = useToast();
   const { user, requireAuthToken } = useAuth();
   const getAuthToken = useCallback(() => {
@@ -272,39 +267,56 @@ export function ShipmentDetailView({
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [shipmentErrors, setShipmentErrors] = useState<ShipmentError[]>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(false);
+  const [isMoveInProgress, setIsMoveInProgress] = useState(false);
+  const [localShipment, setLocalShipment] =
+    useState<ShipmentDetailResponse | null>(shipment);
   const [selectedDispatchFrom, setSelectedDispatchFrom] = useState<
     Record<number, string>
   >({});
   const [selectedQuote, setSelectedQuote] = useState<number | null>(null);
-  const [serviceCodes, setServiceCodes] = useState<Record<string, ShippingServiceCode[]>>({});
+  const [serviceCodes, setServiceCodes] = useState<
+    Record<string, ShippingServiceCode[]>
+  >({});
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<ShipmentComment[]>([]);
-  const detail = shipment?.shipment ?? null;
+  const lastDetailIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    setLocalShipment(shipment);
+  }, [shipment]);
+  const detail = localShipment?.shipment ?? null;
   const quotes = useMemo(() => detail?.quotes ?? [], [detail]);
   const orderLines = detail?.orderLines ?? [];
-  const normalizeLabelPrinted = useCallback((value: unknown): boolean | null => {
-    if (typeof value === 'boolean') {
-      return value;
-    }
-    if (typeof value === 'number') {
-      return value > 0;
-    }
-    if (typeof value === 'string') {
-      const normalized = value.trim().toLowerCase();
-      if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'printed') {
-        return true;
+  const normalizeLabelPrinted = useCallback(
+    (value: unknown): boolean | null => {
+      if (typeof value === "boolean") {
+        return value;
       }
-      if (
-        normalized === 'false' ||
-        normalized === '0' ||
-        normalized === 'no' ||
-        normalized === 'not printed'
-      ) {
-        return false;
+      if (typeof value === "number") {
+        return value > 0;
       }
-    }
-    return null;
-  }, []);
+      if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (
+          normalized === "true" ||
+          normalized === "1" ||
+          normalized === "yes" ||
+          normalized === "printed"
+        ) {
+          return true;
+        }
+        if (
+          normalized === "false" ||
+          normalized === "0" ||
+          normalized === "no" ||
+          normalized === "not printed"
+        ) {
+          return false;
+        }
+      }
+      return null;
+    },
+    []
+  );
 
   const isLabelPrinted = useMemo(() => {
     const detailRecord =
@@ -312,8 +324,8 @@ export function ShipmentDetailView({
         ? (detail as unknown as Record<string, unknown>)
         : null;
     const rootRecord =
-      shipment && typeof shipment === "object"
-        ? (shipment as unknown as Record<string, unknown>)
+      localShipment && typeof localShipment === "object"
+        ? (localShipment as unknown as Record<string, unknown>)
         : null;
 
     const candidates: unknown[] = [
@@ -331,22 +343,67 @@ export function ShipmentDetailView({
     }
 
     return false;
-  }, [detail, shipment, normalizeLabelPrinted]);
+  }, [detail, localShipment, normalizeLabelPrinted]);
 
-  const loadAllServiceCodes = (callback?: () => void) =>{
-    const token = localStorage.getItem('authToken');
-    apiFetch('/platform/carrier_service_codes', {
-      method: 'GET',
+  const loadAllServiceCodes = (callback?: () => void) => {
+    const token = localStorage.getItem("authToken");
+    apiFetch("/platform/carrier_service_codes", {
+      method: "GET",
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
-    }).then(res => res.json()).then( (data : ShippingServiceCodesSuccess) =>{
-      if(data.success) {
-        setServiceCodes(data['carriers']);
-        callback?.();
+    })
+      .then((res) => res.json())
+      .then((data: ShippingServiceCodesSuccess) => {
+        if (data.success) {
+          setServiceCodes(data["carriers"]);
+          callback?.();
+        }
+      });
+  };
+
+  const refreshShipmentDetail = useCallback(async () => {
+    const shipmentId = detail?.id;
+    if (!shipmentId) {
+      return;
+    }
+
+    try {
+      const token = getAuthToken();
+      const response = await apiFetch(
+        `/shipments/${shipmentId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to refresh shipment details");
       }
-    });
-  }
+      const data = (await response.json()) as ShipmentDetailResponse;
+      setLocalShipment(data);
+    } catch (error) {
+      console.error("Failed to refresh shipment details:", error);
+    }
+  }, [detail?.id, getAuthToken]);
+
+  const updateShipmentData = useCallback(
+    (updater: (current: ShipmentDetail | null) => ShipmentDetail | null) => {
+      setLocalShipment((current) => {
+        if (!current) {
+          return current;
+        }
+        const nextShipment = updater(current.shipment ?? null);
+        if (nextShipment === current.shipment) {
+          return current;
+        }
+        return { ...current, shipment: nextShipment ?? null };
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     if (quotes.length === 0) {
@@ -474,17 +531,22 @@ export function ShipmentDetailView({
     if (!detail) {
       setSelectedDispatchFrom({});
       setComments([]);
+      lastDetailIdRef.current = null;
       return;
     }
 
-    const currentWarehouseCode = detail.warehouseCode ?? "";
-    const nextDispatch: Record<number, string> = {};
+    if (lastDetailIdRef.current !== detail.id) {
+      const currentWarehouseCode = detail.warehouseCode ?? "";
+      const nextDispatch: Record<number, string> = {};
 
-    detail.orderLines?.forEach((item) => {
-      nextDispatch[item.id] = currentWarehouseCode;
-    });
+      detail.orderLines?.forEach((item) => {
+        nextDispatch[item.id] = currentWarehouseCode;
+      });
 
-    setSelectedDispatchFrom(nextDispatch);
+      setSelectedDispatchFrom(nextDispatch);
+      lastDetailIdRef.current = detail.id;
+    }
+
     const sortedComments = (detail.comments ?? [])
       .slice()
       .sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
@@ -500,15 +562,12 @@ export function ShipmentDetailView({
       try {
         const token = getAuthToken();
 
-        const response = await apiFetch(
-          "/platform/warehouses",
-          {
-            headers: {
-              Authorization: "Bearer " + token,
-              Accept: "application/json",
-            },
-          }
-        );
+        const response = await apiFetch("/platform/warehouses", {
+          headers: {
+            Authorization: "Bearer " + token,
+            Accept: "application/json",
+          },
+        });
         if (!response.ok) {
           throw new Error("Failed to fetch warehouses");
         }
@@ -590,7 +649,27 @@ export function ShipmentDetailView({
         description: "Quote has been updated successfully",
       });
 
-      setAction((prev) => prev + 1);
+      const selectedQuoteDetails = quotes.find(
+        (quote) => quote.id === selectedQuote
+      );
+      updateShipmentData((current) => {
+        if (!current) {
+          return current;
+        }
+        const next: ShipmentDetail = {
+          ...current,
+          selectedQuoteId: selectedQuote,
+        };
+        if (selectedQuoteDetails) {
+          next.carrierCode = selectedQuoteDetails.carrierCode ?? null;
+          next.serviceCode = selectedQuoteDetails.serviceCode ?? null;
+          next.carrierCodeDesired =
+            selectedQuoteDetails.carrierCode ?? next.carrierCodeDesired ?? null;
+          next.serviceCodeDesired =
+            selectedQuoteDetails.serviceCode ?? next.serviceCodeDesired ?? null;
+        }
+        return next;
+      });
     } catch (error) {
       console.error("Failed to update shipment quote:", error);
       toast({
@@ -630,7 +709,28 @@ export function ShipmentDetailView({
         throw new Error(result.message ?? "Failed to update stock status");
       }
 
-      setAction((prev) => prev + 1);
+      updateShipmentData((current) => {
+        if (!current?.orderLines) {
+          return current;
+        }
+        const updatedOrderLines = current.orderLines.map((line) => {
+          if (line.id !== item.id) {
+            return line;
+          }
+          const filtered = (line.oosWarehouses ?? []).filter(
+            (warehouse) => warehouse.warehouseCode !== code
+          );
+          return {
+            ...line,
+            oosWarehouses: filtered,
+          };
+        });
+        return {
+          ...current,
+          orderLines: updatedOrderLines,
+        };
+      });
+
       toast({
         variant: "success",
         title: "Success",
@@ -672,7 +772,34 @@ export function ShipmentDetailView({
         throw new Error(result.message ?? "Failed to update stock status");
       }
 
-      setAction((prev) => prev + 1);
+      updateShipmentData((current) => {
+        if (!current?.orderLines) {
+          return current;
+        }
+        const updatedOrderLines = current.orderLines.map((line) => {
+          if (line.id !== item.id) {
+            return line;
+          }
+          const existing = line.oosWarehouses ?? [];
+          if (existing.some((warehouse) => warehouse.warehouseCode === code)) {
+            return line;
+          }
+          const newEntry: OutOfStockWarehouse = {
+            id: Date.now(),
+            variantId: item.variantId,
+            warehouseCode: code,
+          };
+          return {
+            ...line,
+            oosWarehouses: [...existing, newEntry],
+          };
+        });
+        return {
+          ...current,
+          orderLines: updatedOrderLines,
+        };
+      });
+
       toast({
         variant: "success",
         title: "Success",
@@ -739,22 +866,19 @@ export function ShipmentDetailView({
           ? String(storedUserData.roles.roles[0])
           : "User";
 
-        const response = await apiFetch(
-          `/shipments/comment/${detail.id}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token,
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            comment: commentText,
-            name: userName,
-            title: userRole,
-          }),
-        }
-      );
+      const response = await apiFetch(`/shipments/comment/${detail.id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          comment: commentText,
+          name: userName,
+          title: userRole,
+        }),
+      });
 
       if (!response.ok) {
         const errorData = (await response
@@ -842,6 +966,8 @@ export function ShipmentDetailView({
 
     const url = `/shipments/move/${detail.id}?${queryString}`;
 
+    setIsMoveInProgress(true);
+
     try {
       const response = await apiFetch(url, {
         method: "PATCH",
@@ -861,7 +987,9 @@ export function ShipmentDetailView({
         throw new Error(payload.message ?? "Failed to move items");
       }
 
-      setAction((prev) => prev + 1);
+      lastDetailIdRef.current = null;
+      setSelectedDispatchFrom({});
+      await refreshShipmentDetail();
       toast({
         title: "Move Successful",
         description: "Selected items have been moved.",
@@ -874,6 +1002,8 @@ export function ShipmentDetailView({
         description: getErrorMessage(error, "Failed to move items."),
         variant: "destructive",
       });
+    } finally {
+      setIsMoveInProgress(false);
     }
   };
 
@@ -884,16 +1014,13 @@ export function ShipmentDetailView({
     try {
       const token = getAuthToken();
 
-      const response = await apiFetch(
-        `/shipments/errors/${shipmentId}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer " + token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await apiFetch(`/shipments/errors/${shipmentId}`, {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+        },
+      });
 
       const data: unknown = await response.json().catch(() => null);
       if (!response.ok) {
@@ -930,20 +1057,31 @@ export function ShipmentDetailView({
 
   const getQuoteLabel = (quote: ShipmentQuote) => {
     const costPrefix =
-        quote.carrier?.manual === true
-            ? ""
-            : `${formatQuoteCost(quote.costIncludingTax)} `;
+      quote.carrier?.manual === true
+        ? ""
+        : `${formatQuoteCost(quote.costIncludingTax)} `;
     const carrierName = quote.carrier?.name ?? quote.carrierCode;
     const expressSuffix = quote.isExpress ? " - Express" : "";
     let service_code = <></>;
-    if( typeof quote.carrier !== 'undefined' && quote.carrier?.code !== null && typeof quote.carrier.code !== 'undefined' && typeof serviceCodes[quote.carrier.code] !== 'undefined') {
+    if (
+      typeof quote.carrier !== "undefined" &&
+      quote.carrier?.code !== null &&
+      typeof quote.carrier.code !== "undefined" &&
+      typeof serviceCodes[quote.carrier.code] !== "undefined"
+    ) {
       serviceCodes[quote.carrier.code].forEach((sc: ShippingServiceCode) => {
         if (sc.service_code == quote.serviceCode) {
           service_code = <span className="text-gray-500"> ({sc.name}) </span>;
         }
-      })
+      });
     }
-    return <>{`${costPrefix}${carrierName}`}{service_code}{`${expressSuffix}`}</>;
+    return (
+      <>
+        {`${costPrefix}${carrierName}`}
+        {service_code}
+        {`${expressSuffix}`}
+      </>
+    );
   };
 
   return (
@@ -1034,7 +1172,9 @@ export function ShipmentDetailView({
                   >
                     {getQuoteLabel(quote)}
                   </Label>
-                  {isLabelPrinted ? (
+                  {isLabelPrinted &&
+                  quote.id ===
+                    (selectedQuote ?? detail?.selectedQuoteId ?? null) ? (
                     <span className="inline-flex items-center px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white bg-red-600 rounded-none">
                       Printed
                     </span>
@@ -1043,7 +1183,7 @@ export function ShipmentDetailView({
               ))}
             </RadioGroup>
 
-            {selectedQuoteDetails?.carrier?.name === 'Manual' ? (
+            {selectedQuoteDetails?.carrier?.name === "Manual" ? (
               <UploadFile
                 shipment={uploadableShipment}
                 name={user?.data.name}
@@ -1245,10 +1385,14 @@ export function ShipmentDetailView({
 
           <div className="mt-4 flex justify-end">
             <Button
-              className="bg-blue-500 hover:bg-blue-600 text-white"
+              className="bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
               onClick={handleMoveShipment}
+              disabled={isMoveInProgress}
             >
-              MOVE
+              {isMoveInProgress ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              <span>{isMoveInProgress ? "Moving..." : "MOVE"}</span>
             </Button>
           </div>
         </CardContent>
