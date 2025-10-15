@@ -411,6 +411,7 @@ export function ShipmentsTable({
   const [detailAction, setDetailAction] = useState(0);
   const [sortColumn, setSortColumn] = useState<SortTarget | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("ASC");
+  const showOrderDateFilters = false;
 
   const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null);
 
@@ -3592,92 +3593,102 @@ export function ShipmentsTable({
                   </SelectContent>
                 </Select>
                 <div className="flex items-center gap-2">
-                  <Select
-                    value={selectedOrderDateRange}
-                    onValueChange={handleOrderDateFilterChange}
-                    disabled={
-                      loadingSearchParams ||
-                      (!orderDateFieldConfig.from &&
-                        !orderDateFieldConfig.to &&
-                        !orderDateFieldConfig.single)
-                    }
-                  >
-                    <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                      <div className="text-white flex items-center">
-                        <FaCalendarDay className="h-5 w-5 mr-2 text-white" />
-                        {orderDateLabel}
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Order Dates</SelectItem>
-                      {ORDER_DATE_PRESET_KEYS.map((key) => (
-                        <SelectItem key={key} value={key}>
-                          {ORDER_DATE_PRESETS[key].label}
-                        </SelectItem>
-                      ))}
-                      {selectedOrderDateRange === "custom" && (
-                        <SelectItem value="custom" disabled>
-                          Custom Range
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {orderDateFromKey && orderDateToKey ? (
+                  {showOrderDateFilters && (
                     <>
-                      <Input
-                        type="date"
-                        value={orderDateDraftFrom}
-                        onChange={(event) =>
-                          handleOrderDateInputChange("from", event.target.value)
+                      <Select
+                        value={selectedOrderDateRange}
+                        onValueChange={handleOrderDateFilterChange}
+                        disabled={
+                          loadingSearchParams ||
+                          (!orderDateFieldConfig.from &&
+                            !orderDateFieldConfig.to &&
+                            !orderDateFieldConfig.single)
                         }
-                        disabled={orderDateInputsDisabled}
-                        className="h-10 w-[150px] rounded-full border px-3 text-sm"
-                      />
-                      <span className="text-sm text-gray-500">to</span>
-                      <Input
-                        type="date"
-                        value={orderDateDraftTo}
-                        onChange={(event) =>
-                          handleOrderDateInputChange("to", event.target.value)
-                        }
-                        disabled={orderDateInputsDisabled}
-                        className="h-10 w-[150px] rounded-full border px-3 text-sm"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleApplyOrderDateInputs}
-                        disabled={orderDateDraftApplyDisabled}
-                        className="h-10 px-4"
                       >
-                        Apply
-                      </Button>
+                        <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
+                          <div className="text-white flex items-center">
+                            <FaCalendarDay className="h-5 w-5 mr-2 text-white" />
+                            {orderDateLabel}
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Order Dates</SelectItem>
+                          {ORDER_DATE_PRESET_KEYS.map((key) => (
+                            <SelectItem key={key} value={key}>
+                              {ORDER_DATE_PRESETS[key].label}
+                            </SelectItem>
+                          ))}
+                          {selectedOrderDateRange === "custom" && (
+                            <SelectItem value="custom" disabled>
+                              Custom Range
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {orderDateFromKey && orderDateToKey ? (
+                        <>
+                          <Input
+                            type="date"
+                            value={orderDateDraftFrom}
+                            onChange={(event) =>
+                              handleOrderDateInputChange(
+                                "from",
+                                event.target.value
+                              )
+                            }
+                            disabled={orderDateInputsDisabled}
+                            className="h-10 w-[150px] rounded-full border px-3 text-sm"
+                          />
+                          <span className="text-sm text-gray-500">to</span>
+                          <Input
+                            type="date"
+                            value={orderDateDraftTo}
+                            onChange={(event) =>
+                              handleOrderDateInputChange(
+                                "to",
+                                event.target.value
+                              )
+                            }
+                            disabled={orderDateInputsDisabled}
+                            className="h-10 w-[150px] rounded-full border px-3 text-sm"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleApplyOrderDateInputs}
+                            disabled={orderDateDraftApplyDisabled}
+                            className="h-10 px-4"
+                          >
+                            Apply
+                          </Button>
+                        </>
+                      ) : orderDateSingleKey ? (
+                        <>
+                          <Input
+                            type="date"
+                            value={orderDateDraftSingle}
+                            onChange={(event) =>
+                              handleOrderDateInputChange(
+                                "single",
+                                event.target.value
+                              )
+                            }
+                            disabled={orderDateInputsDisabled}
+                            className="h-10 w-[150px] rounded-full border px-3 text-sm"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleApplyOrderDateInputs}
+                            disabled={orderDateDraftApplyDisabled}
+                            className="h-10 px-4"
+                          >
+                            Apply
+                          </Button>
+                        </>
+                      ) : null}
                     </>
-                  ) : orderDateSingleKey ? (
-                    <>
-                      <Input
-                        type="date"
-                        value={orderDateDraftSingle}
-                        onChange={(event) =>
-                          handleOrderDateInputChange(
-                            "single",
-                            event.target.value
-                          )
-                        }
-                        disabled={orderDateInputsDisabled}
-                        className="h-10 w-[150px] rounded-full border px-3 text-sm"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleApplyOrderDateInputs}
-                        disabled={orderDateDraftApplyDisabled}
-                        className="h-10 px-4"
-                      >
-                        Apply
-                      </Button>
-                    </>
-                  ) : null}
+                  )}
                 </div>
                 <Select
                   value={selectedStatusFilter}
