@@ -49,7 +49,8 @@ export default function ShippingServiceCodesTab() {
         name: '',
         service_code: '',
         carrier_code: '',
-        id: ''
+        id: '',
+        group: 'Standard'
     });
     const [isEditShippingServiceCodeDialogOpen, setIsEditShippingServiceCodeDialogOpen] = useState(false);
     const [commandType, setCommandType] = useState<'add' | 'edit'>('add');
@@ -87,7 +88,19 @@ export default function ShippingServiceCodesTab() {
         }).then(res => res.json()).then( (data : ShippingServiceCodesSuccess) =>{
             if(data.success) {
                 console.log('CARRIERS ARE', data['carriers'])
-                setShippingServiceCodes(data['carriers']);
+                const ssc : Record<string, ShippingServiceCode[]> = {};
+                Object.keys(data['carriers']).forEach((k)=>{
+                    const services : ShippingServiceCode[] =  data['carriers'][k];
+                    ssc[k] = services.map((d)=>{
+                        if(d['group'] === null){
+                            d['group'] = 'Standard';
+                        }
+                        return d;
+                    })
+
+                })
+
+                setShippingServiceCodes(ssc);
                 callback?.();
             }
         });
@@ -179,18 +192,20 @@ export default function ShippingServiceCodesTab() {
 
                 <TableHeader>
                     <TableRow>
-                        <TableHead className="w-1/3">Name</TableHead>
-                        <TableHead className="w-1/3">Service Code</TableHead>
-                        <TableHead className="w-1/3">Command</TableHead>
+                        <TableHead className="w-1/4">Name</TableHead>
+                        <TableHead className="w-1/4">Service Code</TableHead>
+                        <TableHead className="w-1/4">Type</TableHead>
+                        <TableHead className="w-1/4">Command</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
 
                     {serviceCodes.map((sc: ShippingServiceCode) => {
                         return (<TableRow key={sc['id']}>
-                            <TableCell className="w-1/3">{sc['name']}</TableCell>
-                            <TableCell className="w-1/3">{sc['service_code']}</TableCell>
-                            <TableCell className="w-1/3">
+                            <TableCell className="w-1/4">{sc['name']}</TableCell>
+                            <TableCell className="w-1/4">{sc['service_code']}</TableCell>
+                            <TableCell className="w-1/4">{sc['group']}</TableCell>
+                            <TableCell className="w-1/4">
                                 <Button variant="ghost" size="sm" onClick={() => handleUpdateServiceCode(sc)}>Edit</Button>
 
                                 <Button variant="ghost" size="sm" className="text-red-600" onClick={()=> { if(confirm('Do you really want to delete the service: ' + sc.name + ' ('+sc.service_code+').')){ handleDelete(sc.id); }}} >
@@ -210,7 +225,8 @@ export default function ShippingServiceCodesTab() {
                 name: '',
                 service_code: '',
                 carrier_code: '',
-                id: ''
+                id: '',
+                group: 'Standard'
             })}}>
                 <Package2 className="mr-2 h-4 w-4" />
                 Add New Service Code
@@ -268,6 +284,23 @@ export default function ShippingServiceCodesTab() {
                                 className="col-span-3"
                                 placeholder="Enter Service Code"
                             />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="edit-group-code" className="text-right">
+                                Type
+                            </Label>
+                            <Select value={editServiceData.group} onValueChange={(value: string)=>{ setEditServiceData({ ...editServiceData, group: value }) }}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem key="Standard" value="Standard">Standard Post</SelectItem>
+                                    <SelectItem key="Express" value="Express">Express Post</SelectItem>
+                                    <SelectItem key="International" value="International">International Post</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+
                         </div>
 
                     </div>

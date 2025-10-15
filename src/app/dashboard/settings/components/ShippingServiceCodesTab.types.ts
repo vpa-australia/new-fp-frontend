@@ -3,6 +3,7 @@ export interface ShippingServiceCode {
   carrier_code: string;
   service_code: string;
   name: string;
+  group: string;
 }
 
 export interface ShippingServiceCodeSuccess {
@@ -42,6 +43,7 @@ export interface UpdateServiceData {
   service_code: string;
   name: string;
   carrier_code: string;
+  group: string;
 }
 
 export type ShippingServiceCodeMap = Record<string, ShippingServiceCode[]>;
