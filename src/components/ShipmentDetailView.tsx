@@ -405,81 +405,108 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
     []
   );
 
-  useEffect(() => {
-    if (quotes.length === 0) {
-      if (selectedQuote !== null) {
-        setSelectedQuote(null);
-      }
-      return;
+  const quoteSelectionSyncRef = useRef<{ detailId: number | null; signature: string }>({
+    detailId: null,
+    signature: "",
+  });
+
+  const findInitialSelectedQuote = useCallback(() => {
+    if (!detail || quotes.length === 0) {
+      return null;
     }
 
     const normalize = (value?: string | null) =>
       typeof value === "string" ? value.trim().toLowerCase() : null;
 
     const currentCarrier = normalize(
-      detail?.carrierCode ?? detail?.carrierCodeDesired ?? null
+      detail.carrierCode ?? detail.carrierCodeDesired ?? null
     );
     const currentService = normalize(
-      detail?.serviceCode ?? detail?.serviceCodeDesired ?? null
+      detail.serviceCode ?? detail.serviceCodeDesired ?? null
     );
-    const desiredCarrier = normalize(detail?.carrierCodeDesired ?? null);
-    const desiredService = normalize(detail?.serviceCodeDesired ?? null);
+    const desiredCarrier = normalize(detail.carrierCodeDesired ?? null);
+    const desiredService = normalize(detail.serviceCodeDesired ?? null);
     const persistedQuoteId =
-      typeof detail?.selectedQuoteId === "number" &&
+      typeof detail.selectedQuoteId === "number" &&
       !Number.isNaN(detail.selectedQuoteId)
         ? detail.selectedQuoteId
         : null;
 
-    const findMatch = () => {
-      if (persistedQuoteId !== null) {
-        const byId = quotes.find((quote) => quote.id === persistedQuoteId);
-        if (byId) {
-          return byId;
-        }
+    if (persistedQuoteId !== null) {
+      const byId = quotes.find((quote) => quote.id === persistedQuoteId);
+      if (byId) {
+        return byId;
       }
-
-      if (currentCarrier) {
-        const byCurrent = quotes.find((quote) => {
-          const quoteCarrier = normalize(quote.carrierCode);
-          const quoteService = normalize(quote.serviceCode);
-          if (quoteCarrier !== currentCarrier) {
-            return false;
-          }
-          if (currentService && quoteService !== currentService) {
-            return false;
-          }
-          return true;
-        });
-        if (byCurrent) {
-          return byCurrent;
-        }
-      }
-
-      if (desiredCarrier) {
-        const byDesired = quotes.find((quote) => {
-          const quoteCarrier = normalize(quote.carrierCode);
-          const quoteService = normalize(quote.serviceCode);
-          if (quoteCarrier !== desiredCarrier) {
-            return false;
-          }
-          if (desiredService && quoteService !== desiredService) {
-            return false;
-          }
-          return true;
-        });
-        if (byDesired) {
-          return byDesired;
-        }
-      }
-
-      return quotes[0];
-    };
-
-    const match = findMatch();
-    if (match && match.id !== selectedQuote) {
-      setSelectedQuote(match.id);
     }
-  }, [detail, quotes, selectedQuote]);
+
+    if (currentCarrier) {
+      const byCurrent = quotes.find((quote) => {
+        const quoteCarrier = normalize(quote.carrierCode);
+        const quoteService = normalize(quote.serviceCode);
+        if (quoteCarrier !== currentCarrier) {
+          return false;
+        }
+        if (currentService && quoteService !== currentService) {
+          return false;
+        }
+        return true;
+      });
+      if (byCurrent) {
+        return byCurrent;
+      }
+    }
+
+    if (desiredCarrier) {
+      const byDesired = quotes.find((quote) => {
+        const quoteCarrier = normalize(quote.carrierCode);
+        const quoteService = normalize(quote.serviceCode);
+        if (quoteCarrier !== desiredCarrier) {
+          return false;
+        }
+        if (desiredService && quoteService !== desiredService) {
+          return false;
+        }
+        return true;
+      });
+      if (byDesired) {
+        return byDesired;
+      }
+    }
+
+    return quotes[0];
+  }, [detail, quotes]);
+
+  useEffect(() => {
+    if (!detail || quotes.length === 0) {
+      if (selectedQuote !== null) {
+        setSelectedQuote(null);
+      }
+      quoteSelectionSyncRef.current = {
+        detailId: detail?.id ?? null,
+        signature: "",
+      };
+      return;
+    }
+
+    const signature = quotes.map((quote) => String(quote.id)).join(",");
+    const { detailId: syncedDetailId, signature: syncedSignature } =
+      quoteSelectionSyncRef.current;
+
+    if (syncedDetailId === detail.id && syncedSignature === signature) {
+      return;
+    }
+
+    const match = findInitialSelectedQuote();
+    const nextId = match?.id ?? null;
+    if (nextId !== selectedQuote) {
+      setSelectedQuote(nextId);
+    }
+
+    quoteSelectionSyncRef.current = {
+      detailId: detail.id,
+      signature,
+    };
+  }, [detail, quotes, findInitialSelectedQuote, selectedQuote]);
 
   const getQuoteRadioValue = useCallback(
     (quote: ShipmentQuote) =>
@@ -1164,11 +1191,12 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
                   <RadioGroupItem
                     value={getQuoteRadioValue(quote)}
                     id={`quote-${quote.id}`}
+                    className="cursor-pointer"
                     disabled={isLabelPrinted}
                   />
                   <Label
                     htmlFor={`quote-${quote.id}`}
-                    className="flex-grow text-sm"
+                    className="flex-grow text-sm cursor-pointer"
                   >
                     {getQuoteLabel(quote)}
                   </Label>
