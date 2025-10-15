@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDownIcon,
   ChevronRightIcon,
+  ChevronUpIcon,
   Clock,
   DollarSign,
   GripVertical,
@@ -261,6 +262,30 @@ const ORDER_DATE_PRESETS: Record<
 const ORDER_DATE_PRESET_KEYS = Object.keys(
   ORDER_DATE_PRESETS
 ) as OrderDatePresetKey[];
+
+type SortDirection = "ASC" | "DESC";
+type SortTarget =
+  | "shopifyOrderNumber"
+  | "orderName"
+  | "orderDate"
+  | "totalPrice"
+  | "lastApiUpdate";
+type SortColumnConfig = Record<SortTarget, string>;
+const SORT_FALLBACK_COLUMNS: Record<SortTarget, string> = {
+  shopifyOrderNumber: "shopify_order_number",
+  orderName: "order_name",
+  orderDate: "order_date",
+  totalPrice: "total_price",
+  lastApiUpdate: "last_api_update",
+};
+
+const ORDER_BY_PARAM_KEYS = ["order_by", "orderBy"] as const;
+const ORDER_DIRECTION_PARAM_KEYS = [
+  "order_by_direction",
+  "orderByDirection",
+  "orderDirection",
+] as const;
+
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -285,6 +310,7 @@ type ShipmentsTableProps = {
   setItemsPerPage: React.Dispatch<React.SetStateAction<number>>;
   selectedWarehouse: string | null;
   shipmentsAreLoading: boolean;
+  searchParams: string;
   setSearchParams: React.Dispatch<React.SetStateAction<string>>;
 };
 
@@ -309,6 +335,7 @@ export function ShipmentsTable({
   lastPage,
   selectedWarehouse,
   shipmentsAreLoading,
+  searchParams,
 }: ShipmentsTableProps) {
   const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(
     null
@@ -382,6 +409,8 @@ export function ShipmentsTable({
     {}
   );
   const [detailAction, setDetailAction] = useState(0);
+  const [sortColumn, setSortColumn] = useState<SortTarget | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("ASC");
 
   const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null);
 
@@ -627,6 +656,116 @@ export function ShipmentsTable({
     };
   }, [searchFields]);
 
+  const sortColumnConfig = useMemo<SortColumnConfig>(() => {
+    const resolveColumn = (
+      candidates: Array<{
+        matchers: string[];
+        options?: { matchAll?: boolean };
+      }>
+    ): string | null => {
+      for (const candidate of candidates) {
+        const match = findSearchField(candidate.matchers, candidate.options);
+        if (match) {
+          return match.column;
+        }
+      }
+      return null;
+    };
+
+    const orderDateColumn =
+      orderDateFieldConfig.single?.column ??
+      orderDateFieldConfig.from?.column ??
+      orderDateFieldConfig.to?.column ??
+      resolveColumn([
+        { matchers: ["order_date"] },
+        { matchers: ["order", "date"], options: { matchAll: true } },
+      ]);
+
+    return {
+      shopifyOrderNumber:
+        resolveColumn([
+          { matchers: ["shopify_order_number"] },
+          { matchers: ["order_number"] },
+          {
+            matchers: ["shopify", "order", "number"],
+            options: { matchAll: true },
+          },
+        ]) ?? SORT_FALLBACK_COLUMNS.shopifyOrderNumber,
+      orderName:
+        resolveColumn([
+          { matchers: ["order_name"] },
+          { matchers: ["order", "name"], options: { matchAll: true } },
+        ]) ?? SORT_FALLBACK_COLUMNS.orderName,
+      orderDate: orderDateColumn ?? SORT_FALLBACK_COLUMNS.orderDate,
+      totalPrice:
+        resolveColumn([
+          { matchers: ["total_price"] },
+          { matchers: ["order_total"] },
+          { matchers: ["total", "price"], options: { matchAll: true } },
+        ]) ?? SORT_FALLBACK_COLUMNS.totalPrice,
+      lastApiUpdate:
+        resolveColumn([
+          { matchers: ["last_api_update"] },
+          { matchers: ["api_update"] },
+          {
+            matchers: ["last", "api", "update"],
+            options: { matchAll: true },
+          },
+        ]) ?? SORT_FALLBACK_COLUMNS.lastApiUpdate,
+    };
+  }, [findSearchField, orderDateFieldConfig]);
+
+  const sortTargetByColumn = useMemo(() => {
+    return (Object.entries(sortColumnConfig) as Array<[SortTarget, string]>)
+      .reduce((acc, [target, column]) => {
+        const resolved = column ?? SORT_FALLBACK_COLUMNS[target];
+        acc[resolved] = target;
+        return acc;
+      }, {} as Record<string, SortTarget>);
+  }, [sortColumnConfig]);
+
+  const resolveSortColumn = useCallback(
+    (target: SortTarget | null) =>
+      target
+        ? sortColumnConfig[target] ?? SORT_FALLBACK_COLUMNS[target]
+        : null,
+    [sortColumnConfig]
+  );
+
+  useEffect(() => {
+    const raw = searchParams
+      ? searchParams.startsWith("?")
+        ? searchParams.slice(1)
+        : searchParams
+      : "";
+    const params = new URLSearchParams(raw);
+
+    let detectedTarget: SortTarget | null = null;
+    for (const key of ORDER_BY_PARAM_KEYS) {
+      const candidate = params.get(key);
+      if (candidate) {
+        const mapped = sortTargetByColumn[candidate];
+        if (mapped) {
+          detectedTarget = mapped;
+          break;
+        }
+      }
+    }
+
+    let detectedDirection: SortDirection = "ASC";
+    for (const key of ORDER_DIRECTION_PARAM_KEYS) {
+      const candidate = params.get(key);
+      if (candidate) {
+        detectedDirection =
+          candidate.toUpperCase() === "DESC" ? "DESC" : "ASC";
+        break;
+      }
+    }
+
+    setSortColumn(detectedTarget);
+    setSortDirection(detectedDirection);
+  }, [searchParams, sortTargetByColumn]);
+
   const orderDateFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat("en-AU", {
@@ -806,10 +945,94 @@ export function ShipmentsTable({
       ? orderDateDraftSingle === orderDateSingleValue
       : true);
 
+  const buildQueryWithSort = useCallback(
+    (
+      baseQuery: string,
+      override?:
+        | {
+            target: SortTarget | null;
+            direction: SortDirection;
+          }
+        | undefined
+    ) => {
+      const normalizedBase =
+        baseQuery && baseQuery.startsWith("?")
+          ? baseQuery.slice(1)
+          : baseQuery;
+      const params = new URLSearchParams(normalizedBase);
+
+      ORDER_BY_PARAM_KEYS.forEach((key) => params.delete(key));
+      ORDER_DIRECTION_PARAM_KEYS.forEach((key) => params.delete(key));
+
+      const target =
+        override !== undefined ? override.target : sortColumn;
+      const direction =
+        override !== undefined ? override.direction : sortDirection;
+
+      const columnName = resolveSortColumn(target);
+
+      if (columnName) {
+        params.set("order_by", columnName);
+        params.set("order_by_direction", direction);
+      }
+
+      return params.toString();
+    },
+    [resolveSortColumn, sortColumn, sortDirection]
+  );
+
+  useEffect(() => {
+    if (!sortColumn) {
+      return;
+    }
+
+    const columnName = resolveSortColumn(sortColumn);
+    if (!columnName) {
+      return;
+    }
+
+    const raw = searchParams
+      ? searchParams.startsWith("?")
+        ? searchParams.slice(1)
+        : searchParams
+      : "";
+    const params = new URLSearchParams(raw);
+
+    let currentOrderBy: string | null = null;
+    for (const key of ORDER_BY_PARAM_KEYS) {
+      const value = params.get(key);
+      if (value) {
+        currentOrderBy = value;
+        break;
+      }
+    }
+
+    if (currentOrderBy === columnName) {
+      return;
+    }
+
+    const nextQuery = buildQueryWithSort(searchParams, {
+      target: sortColumn,
+      direction: sortDirection,
+    });
+
+    if (nextQuery !== searchParams) {
+      setSearchParams(nextQuery);
+    }
+  }, [
+    buildQueryWithSort,
+    resolveSortColumn,
+    searchParams,
+    setSearchParams,
+    sortColumn,
+    sortDirection,
+  ]);
+
   const executeSearch = useCallback(
     (values: Record<string, string>) => {
       if (!searchFields || Object.keys(searchFields).length === 0) {
-        setSearchParams("");
+        const nextQuery = buildQueryWithSort("");
+        setSearchParams(nextQuery);
         setCurrentPage(1);
         fetchShipments();
         return;
@@ -846,11 +1069,12 @@ export function ShipmentsTable({
         )
         .join("&");
 
-      setSearchParams(queryString);
+      const nextQuery = buildQueryWithSort(queryString);
+      setSearchParams(nextQuery);
       setCurrentPage(1);
       fetchShipments();
     },
-    [fetchShipments, searchFields, setCurrentPage, setSearchParams]
+    [buildQueryWithSort, fetchShipments, searchFields, setCurrentPage, setSearchParams]
   );
 
   const updateSearchState = useCallback(
@@ -878,6 +1102,85 @@ export function ShipmentsTable({
       })),
     [updateSearchState]
   );
+
+  const handleSortChange = useCallback(
+    (target: SortTarget) => {
+      const isSameColumn = sortColumn === target;
+      let nextTarget: SortTarget | null = target;
+      let nextDirection: SortDirection = "ASC";
+
+      if (isSameColumn) {
+        if (sortDirection === "ASC") {
+          nextDirection = "DESC";
+        } else {
+          nextTarget = null;
+          nextDirection = "ASC";
+        }
+      }
+
+      const nextQuery = buildQueryWithSort(searchParams, {
+        target: nextTarget,
+        direction: nextDirection,
+      });
+
+      setSortColumn(nextTarget);
+      setSortDirection(nextDirection);
+      setSearchParams(nextQuery);
+      setCurrentPage(1);
+      fetchShipments();
+    },
+    [
+      buildQueryWithSort,
+      fetchShipments,
+      searchParams,
+      setCurrentPage,
+      setSearchParams,
+      sortColumn,
+      sortDirection,
+    ]
+  );
+
+  const SortToggleButton = ({
+    target,
+    label,
+    className,
+  }: {
+    target: SortTarget;
+    label: string;
+    className?: string;
+  }) => {
+    const isActive = sortColumn === target;
+    const isDescending = isActive && sortDirection === "DESC";
+    const isAscending = isActive && sortDirection === "ASC";
+
+    return (
+      <button
+        type="button"
+        onClick={() => handleSortChange(target)}
+        className={cn(
+          "flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-900 transition-colors",
+          isActive ? "text-gray-900" : "text-gray-500",
+          className
+        )}
+      >
+        <span>{label}</span>
+        <span className="flex flex-col leading-none">
+          <ChevronUpIcon
+            className={cn(
+              "h-3 w-3 transition-colors",
+              isAscending ? "text-[#3D753A]" : "text-gray-400"
+            )}
+          />
+          <ChevronDownIcon
+            className={cn(
+              "h-3 w-3 -mt-[2px] transition-colors",
+              isDescending ? "text-[#3D753A]" : "text-gray-400"
+            )}
+          />
+        </span>
+      </button>
+    );
+  };
 
   const handleClearFilters = useCallback(() => {
     const template =
@@ -3482,6 +3785,54 @@ export function ShipmentsTable({
                   </svg>
                   <span className="sr-only">Help</span>
                 </Button>
+              </div>
+            </TableHead>
+          </TableRow>
+          <TableRow>
+            <TableHead className="px-3 pb-2">
+              <div className="flex items-center gap-x-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                <div className="w-8" />
+                <div className="w-16">
+                  <SortToggleButton
+                    target="shopifyOrderNumber"
+                    label="Order #"
+                    className="w-full justify-between pr-1"
+                  />
+                </div>
+                <div className="min-w-[220px] text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                  Actions
+                </div>
+                <div className="ml-5 w-56">
+                  <SortToggleButton
+                    target="orderName"
+                    label="Customer"
+                    className="w-full justify-between pr-1"
+                  />
+                </div>
+                <div className="w-88 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  Address
+                </div>
+                <div className="w-48">
+                  <SortToggleButton
+                    target="orderDate"
+                    label="Order Date"
+                    className="w-full justify-between pr-1"
+                  />
+                </div>
+                <div className="w-28">
+                  <SortToggleButton
+                    target="totalPrice"
+                    label="Total"
+                    className="w-full justify-between pr-1"
+                  />
+                </div>
+                <div className="w-16">
+                  <SortToggleButton
+                    target="lastApiUpdate"
+                    label="Last Update"
+                    className="w-full justify-between pr-1"
+                  />
+                </div>
               </div>
             </TableHead>
           </TableRow>

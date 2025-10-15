@@ -269,11 +269,59 @@ export default function DashboardPage() {
         shipmentsUrl.searchParams.set('type', typeSegment);
 
         if (searchParams) {
-          const params = searchParams.startsWith('?') ? searchParams.slice(1) : searchParams;
+          const params = searchParams.startsWith("?")
+            ? searchParams.slice(1)
+            : searchParams;
           const extraParams = new URLSearchParams(params);
+
+          let orderByParam: string | null = null;
+          const orderByKeys = ["order_by", "orderBy"];
+          for (const key of orderByKeys) {
+            const value = extraParams.get(key);
+            if (value !== null) {
+              orderByParam = value;
+              break;
+            }
+          }
+          orderByKeys.forEach((key) => extraParams.delete(key));
+
+          let orderDirectionParam: string | null = null;
+          const orderDirectionKeys = [
+            "order_by_direction",
+            "orderByDirection",
+            "orderDirection",
+          ];
+          for (const key of orderDirectionKeys) {
+            const value = extraParams.get(key);
+            if (value !== null) {
+              orderDirectionParam = value;
+              break;
+            }
+          }
+          orderDirectionKeys.forEach((key) => extraParams.delete(key));
+
           extraParams.forEach((value, key) => {
             shipmentsUrl.searchParams.set(key, value);
           });
+
+          if (orderByParam) {
+            shipmentsUrl.searchParams.set("order_by", orderByParam);
+            const normalizedDirection =
+              (orderDirectionParam ?? "ASC").toUpperCase() === "DESC"
+                ? "DESC"
+                : "ASC";
+            shipmentsUrl.searchParams.set(
+              "order_by_direction",
+              normalizedDirection
+            );
+          } else if (orderDirectionParam) {
+            const normalizedDirection =
+              orderDirectionParam.toUpperCase() === "DESC" ? "DESC" : "ASC";
+            shipmentsUrl.searchParams.set(
+              "order_by_direction",
+              normalizedDirection
+            );
+          }
         }
 
         const finalUrl = shipmentsUrl.toString();
@@ -402,6 +450,7 @@ export default function DashboardPage() {
             <CardContent className="p-0">
               <ShipmentsTable
                 setSearchParams={setSearchParams}
+                searchParams={searchParams}
                 selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
                 updateShipments={setShipments}
@@ -422,6 +471,7 @@ export default function DashboardPage() {
             <CardContent className="p-0">
               <ShipmentsTable
                 setSearchParams={setSearchParams}
+                searchParams={searchParams}
                 selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
                 updateShipments={setShipments}
@@ -442,6 +492,7 @@ export default function DashboardPage() {
             <CardContent className="p-0">
               <ShipmentsTable
                 setSearchParams={setSearchParams}
+                searchParams={searchParams}
                 selectedWarehouse={selectedWarehouse}
                 setAction={setAction}
                 updateShipments={setShipments}
@@ -474,6 +525,7 @@ export default function DashboardPage() {
                   setItemsPerPage={setItemsPerPage} // Add this line to pass the setItemsPerPage function to ShipmentsTable as a prop
                   setCurrentPage={setCurrentPage}
                   shipmentsAreLoading={shipmentsAreLoading}
+                  searchParams={searchParams}
                   setSearchParams={setSearchParams}
                 />
               </CardContent>
@@ -497,6 +549,7 @@ export default function DashboardPage() {
                 setItemsPerPage={setItemsPerPage}
                 setCurrentPage={setCurrentPage}
                 shipmentsAreLoading={shipmentsAreLoading}
+                searchParams={searchParams}
                 setSearchParams={setSearchParams}
               />
             </CardContent>
