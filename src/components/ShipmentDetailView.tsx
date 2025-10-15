@@ -264,6 +264,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
     []
   );
 
+
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [shipmentErrors, setShipmentErrors] = useState<ShipmentError[]>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(false);
@@ -1113,6 +1114,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
 
   return (
     <div className="grid grid-cols-3 gap-4 p-4">
+
       {/* Error Dialog */}
       <Dialog open={errorDialogOpen} onOpenChange={setErrorDialogOpen}>
         <DialogContent className="max-w-md">
