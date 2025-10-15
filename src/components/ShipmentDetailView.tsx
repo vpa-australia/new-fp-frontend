@@ -8,7 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
-import { AlertCircleIcon, BoxIcon, Loader, Loader2 } from "lucide-react";
+import {
+  AlertCircleIcon,
+  BoxIcon,
+  Loader,
+  Loader2,
+  RefreshCcw,
+} from "lucide-react";
 import { AlertDialog } from "./ui/alert-dialog";
 import {
   Dialog,
@@ -81,6 +87,7 @@ interface ShipmentDetail {
   serviceCodeDesired?: string | null;
   selectedQuoteId?: number | null;
   labelPrinted?: boolean;
+  potentialNewLabel?: boolean;
   comments?: ShipmentComment[];
   orderLines?: LineItem[];
   quotes?: ShipmentQuote[];
@@ -342,6 +349,32 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       }
     }
 
+    return false;
+  }, [detail, localShipment, normalizeLabelPrinted]);
+
+  const hasPotentialNewLabel = useMemo(() => {
+    const detailRecord =
+      detail && typeof detail === "object"
+        ? (detail as unknown as Record<string, unknown>)
+        : null;
+    const rootRecord =
+      localShipment && typeof localShipment === "object"
+        ? (localShipment as unknown as Record<string, unknown>)
+        : null;
+
+    const candidates: unknown[] = [
+      detailRecord?.potentialNewLabel,
+      detailRecord?.potential_new_label,
+      rootRecord?.potentialNewLabel,
+      rootRecord?.potential_new_label,
+    ];
+
+    for (const candidate of candidates) {
+      const normalized = normalizeLabelPrinted(candidate);
+      if (normalized !== null) {
+        return normalized;
+      }
+    }
     return false;
   }, [detail, localShipment, normalizeLabelPrinted]);
 
@@ -1203,13 +1236,24 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
                   {isLabelPrinted &&
                   quote.id ===
                     (selectedQuote ?? detail?.selectedQuoteId ?? null) ? (
-                    <span className="inline-flex items-center px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white bg-red-600 rounded-none">
+                    <span className="inline-flex items-center rounded-full bg-red-600 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
                       Printed
                     </span>
                   ) : null}
                 </div>
               ))}
             </RadioGroup>
+
+            {hasPotentialNewLabel ? (
+              <div className="mt-3 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-white">
+                  <RefreshCcw className="h-3 w-3" />
+                </span>
+                <span className="text-xs font-semibold uppercase text-orange-700">
+                  Potential Relabel
+                </span>
+              </div>
+            ) : null}
 
             {selectedQuoteDetails?.carrier?.name === "Manual" ? (
               <UploadFile

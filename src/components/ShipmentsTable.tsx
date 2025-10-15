@@ -96,6 +96,7 @@ export interface Shipment {
   serviceCode: string;
   tracking_code: string;
   labelPrinted: boolean;
+  potentialNewLabel?: boolean;
   unlDone: boolean;
   sent: boolean;
   invoicePrinted: boolean;
@@ -485,6 +486,72 @@ export function ShipmentsTable({
     },
     [searchFields]
   );
+
+  const fetchShipmentDetail = useCallback(
+    async (shipmentId: number, signal?: AbortSignal) => {
+      const token = getAuthToken();
+      const response = await apiFetch(
+        `/shipments/${shipmentId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          signal,
+        }
+      );
+
+      const responseData = (await response.json().catch(() => null)) as
+        | ShipmentDetailResponse
+        | null;
+
+      if (!response.ok || !responseData) {
+        const message =
+          responseData &&
+          typeof responseData === "object" &&
+          responseData !== null &&
+          "message" in responseData
+            ? String((responseData as { message?: unknown }).message ?? "")
+            : undefined;
+        throw new Error(message || "Failed to fetch shipment details");
+      }
+
+      return responseData;
+    },
+    [getAuthToken]
+  );
+
+  const handleShipmentDetailFetchError = useCallback(
+    (error: unknown) => {
+      console.error("Error fetching shipment details:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: getErrorMessage(
+          error,
+          "Failed to fetch shipment details."
+        ),
+      });
+    },
+    [toast]
+  );
+
+  const refreshOpenShipmentDetail = useCallback(async () => {
+    if (!selectedShipmentId) {
+      return;
+    }
+
+    setIsLoadingDetail(true);
+    try {
+      const data = await fetchShipmentDetail(selectedShipmentId);
+      setDetailedShipment(data);
+    } catch (error: unknown) {
+      handleShipmentDetailFetchError(error);
+      setDetailedShipment(null);
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  }, [fetchShipmentDetail, handleShipmentDetailFetchError, selectedShipmentId]);
 
   const orderDateFieldConfig = useMemo<OrderDateFieldConfig>(() => {
     if (!searchFields || Object.keys(searchFields).length === 0) {
@@ -1703,15 +1770,22 @@ export function ShipmentsTable({
       }
 
       if (successes.length > 0) {
+        if (selectedShipmentId && successes.includes(selectedShipmentId)) {
+          await refreshOpenShipmentDetail();
+        }
         toast({
           variant: "success",
           title: "Shipment Refreshed",
           description: "Shipment data has been refreshed successfully.",
         });
-        setAction((prev) => prev + 1);
       }
     },
-    [refreshShipmentsByIds, setAction, toast]
+    [
+      refreshOpenShipmentDetail,
+      refreshShipmentsByIds,
+      selectedShipmentId,
+      toast,
+    ]
   );
 
   const handleRefreshSelectedShipments = useCallback(async () => {
@@ -1729,6 +1803,9 @@ export function ShipmentsTable({
     const { successes, failures } = await refreshShipmentsByIds(selectedIds);
 
     if (successes.length > 0) {
+      if (selectedShipmentId && successes.includes(selectedShipmentId)) {
+        await refreshOpenShipmentDetail();
+      }
       toast({
         variant: "success",
         title: "Shipments Refreshed",
@@ -1736,7 +1813,6 @@ export function ShipmentsTable({
           successes.length === 1 ? "" : "s"
         } refreshed successfully.`,
       });
-      setAction((prev) => prev + 1);
 
       if (failures.length === 0) {
         setSelectedRows({});
@@ -1765,8 +1841,9 @@ export function ShipmentsTable({
     }
   }, [
     getSelectedShipmentIds,
+    refreshOpenShipmentDetail,
     refreshShipmentsByIds,
-    setAction,
+    selectedShipmentId,
     setSelectedRows,
     toast,
   ]);
@@ -1904,6 +1981,8 @@ export function ShipmentsTable({
 
   useEffect(() => {
     if (!selectedShipmentId) {
+      setDetailedShipment(null);
+      setIsLoadingDetail(false);
       return;
     }
 
@@ -1912,66 +1991,42 @@ export function ShipmentsTable({
 
     setIsLoadingDetail(true);
 
-    (async () => {
-      try {
-        const token = getAuthToken();
-
-        const response = await apiFetch(
-          `/shipments/${selectedShipmentId}?columns=otherShipments,orderLines,shipmentPackages,shipmentQuotes`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-            signal: abortController.signal,
-          }
-        );
-
-        if (abortController.signal.aborted || !isActive) {
-          return;
-        }
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch shipment details");
-        }
-
-        const data = (await response.json()) as ShipmentDetailResponse;
-        if (!isActive) {
+    fetchShipmentDetail(selectedShipmentId, abortController.signal)
+      .then((data) => {
+        if (!isActive || abortController.signal.aborted) {
           return;
         }
         setDetailedShipment(data);
-      } catch (error: unknown) {
+      })
+      .catch((error: unknown) => {
         if (
           abortController.signal.aborted ||
           (error instanceof DOMException && error.name === "AbortError")
         ) {
           return;
         }
-        console.error("Error fetching shipment details:", error);
         if (!isActive) {
           return;
         }
+        handleShipmentDetailFetchError(error);
         setDetailedShipment(null);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: getErrorMessage(
-            error,
-            "Failed to fetch shipment details."
-          ),
-        });
-      } finally {
+      })
+      .finally(() => {
         if (isActive) {
           setIsLoadingDetail(false);
         }
-      }
-    })();
+      });
 
     return () => {
       isActive = false;
       abortController.abort();
     };
-  }, [detailAction, getAuthToken, selectedShipmentId, toast]);
+  }, [
+    detailAction,
+    fetchShipmentDetail,
+    handleShipmentDetailFetchError,
+    selectedShipmentId,
+  ]);
 
   const handleShipmentDetailClick = useCallback(
     (e: React.MouseEvent, shipmentId: number) => {
@@ -3541,25 +3596,33 @@ export function ShipmentsTable({
                                 type="button"
                                 aria-label="Label actions"
                                 aria-busy={isLabelProcessing}
-                                className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
+                                className="relative flex items-center justify-center rounded-md p-1 transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-muted"
                                 disabled={isLabelProcessing}
                               >
                                 {isLabelProcessing ? (
                                   <Loader2 className="h-5 w-5 animate-spin text-white" />
-                                ) : shipment.labelPrinted ? (
-                                  <Image
-                                    alt="label printed"
-                                    width={20}
-                                    height={20}
-                                    src={"/label-green.avif"}
-                                  />
                                 ) : (
-                                  <Image
-                                    alt="label not printed"
-                                    width={20}
-                                    height={20}
-                                    src={"/label.avif"}
-                                  />
+                                  <>
+                                    <Image
+                                      alt={
+                                        shipment.labelPrinted
+                                          ? "label printed"
+                                          : "label not printed"
+                                      }
+                                      width={20}
+                                      height={20}
+                                      src={
+                                        shipment.labelPrinted
+                                          ? "/label-green.avif"
+                                          : "/label.avif"
+                                      }
+                                    />
+                                    {shipment.potentialNewLabel ? (
+                                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[8px] font-bold uppercase text-white">
+                                        !
+                                      </span>
+                                    ) : null}
+                                  </>
                                 )}
                               </button>
                             </DropdownMenuTrigger>
@@ -3567,10 +3630,10 @@ export function ShipmentsTable({
                           <TooltipContent>
                             {isLabelProcessing
                               ? "Processing Labels..."
+                              : shipment.potentialNewLabel
+                              ? "Potential Relabel"
                               : `Label ${
-                                  shipment.labelPrinted
-                                    ? "Printed"
-                                    : "Not Printed"
+                                  shipment.labelPrinted ? "Printed" : "Not Printed"
                                 }`}
                           </TooltipContent>
                         </Tooltip>
@@ -3664,7 +3727,7 @@ export function ShipmentsTable({
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              className="h-8 w-8 flex items-center justify-center rounded-full text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="h-8 w-8 flex items-center justify-center rounded-full text-white transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                               onClick={() => handleRefreshShipment(shipment.id)}
                               disabled={refreshingShipmentIds.has(shipment.id)}
                               aria-busy={refreshingShipmentIds.has(shipment.id)}
