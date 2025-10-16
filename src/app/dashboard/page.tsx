@@ -230,129 +230,334 @@ export default function DashboardPage() {
   const [isArchived, setIsArchived] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      try {
+    let isMounted = true;
 
-        setShipmentsAreLoading(true);
-
-        const token = requireAuthToken();
-
-        const warehouseSegment = (() => {
-          if (selectedWarehouseCategory === 'International') {
-            return 'Int';
+    const normalizeNumber = (
+      sources: Array<Record<string, unknown> | undefined>,
+      keys: string[]
+    ): number | undefined => {
+      for (const source of sources) {
+        if (!source || typeof source !== "object") {
+          continue;
+        }
+        for (const key of keys) {
+          const value = source[key];
+          if (typeof value === "number" && !Number.isNaN(value)) {
+            return value;
           }
-          if (selectedWarehouse && selectedWarehouse !== 'Archived') {
-            if (selectedWarehouse.toUpperCase() === 'BRI') {
-              return 'Brisbane';
-            }
-            return selectedWarehouse;
-          }
-          return 'All';
-        })();
-        const typeSegment = (() => {
-          if (isArchived || selectedWarehouse === 'Archived') {
-            return 'archived';
-          }
-          if (selectedWarehouseCategory === 'Local') {
-            return 'local';
-          }
-          if (selectedWarehouseCategory === 'International') {
-            return 'international';
-          }
-          return 'all';
-        })();
-
-        const shipmentsUrl = new URL(buildApiUrl(`/shipments/warehouse/${warehouseSegment}`));
-        shipmentsUrl.searchParams.set('perPage', String(itemsPerPage));
-        shipmentsUrl.searchParams.set('page', String(currentPage));
-        shipmentsUrl.searchParams.set('archive', isArchived ? '1' : '0');
-        shipmentsUrl.searchParams.set('type', typeSegment);
-
-        if (searchParams) {
-          const params = searchParams.startsWith("?")
-            ? searchParams.slice(1)
-            : searchParams;
-          const extraParams = new URLSearchParams(params);
-
-          let orderByParam: string | null = null;
-          const orderByKeys = ["order_by", "orderBy"];
-          for (const key of orderByKeys) {
-            const value = extraParams.get(key);
-            if (value !== null) {
-              orderByParam = value;
-              break;
+        }
+        const meta = source.meta;
+        if (meta && typeof meta === "object") {
+          for (const key of keys) {
+            const metaValue = (meta as Record<string, unknown>)[key];
+            if (typeof metaValue === "number" && !Number.isNaN(metaValue)) {
+              return metaValue;
             }
           }
-          orderByKeys.forEach((key) => extraParams.delete(key));
+        }
+      }
+      return undefined;
+    };
 
-          let orderDirectionParam: string | null = null;
-          const orderDirectionKeys = [
-            "order_by_direction",
-            "orderByDirection",
-            "orderDirection",
-          ];
-          for (const key of orderDirectionKeys) {
-            const value = extraParams.get(key);
-            if (value !== null) {
-              orderDirectionParam = value;
-              break;
-            }
+    const normalizeShipmentResponse = (
+      payload: unknown
+    ): { shipments: Shipment[]; total?: number; lastPage?: number } | null => {
+      if (payload == null) {
+        return null;
+      }
+
+      const visited = new Set<unknown>();
+      const rootObject =
+        typeof payload === "object" && !Array.isArray(payload)
+          ? (payload as Record<string, unknown>)
+          : undefined;
+
+      const extract = (
+        input: unknown
+      ): { shipments: Shipment[]; total?: number; lastPage?: number } | null => {
+        if (input == null) {
+          return null;
+        }
+        if (Array.isArray(input)) {
+          return {
+            shipments: input as Shipment[],
+            total: input.length,
+            lastPage: 1,
+          };
+        }
+        if (typeof input !== "object") {
+          return null;
+        }
+        if (visited.has(input)) {
+          return null;
+        }
+        visited.add(input);
+
+        const obj = input as Record<string, unknown>;
+        const candidateKeys = ["shipments", "data", "items", "results"];
+
+        for (const key of candidateKeys) {
+          if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+            continue;
           }
-          orderDirectionKeys.forEach((key) => extraParams.delete(key));
 
-          extraParams.forEach((value, key) => {
-            shipmentsUrl.searchParams.set(key, value);
-          });
+          const raw = obj[key];
 
-          if (orderByParam) {
-            shipmentsUrl.searchParams.set("order_by", orderByParam);
-            const normalizedDirection =
-              (orderDirectionParam ?? "ASC").toUpperCase() === "DESC"
-                ? "DESC"
-                : "ASC";
-            shipmentsUrl.searchParams.set(
-              "order_by_direction",
-              normalizedDirection
-            );
-          } else if (orderDirectionParam) {
-            const normalizedDirection =
-              orderDirectionParam.toUpperCase() === "DESC" ? "DESC" : "ASC";
-            shipmentsUrl.searchParams.set(
-              "order_by_direction",
-              normalizedDirection
-            );
+          if (Array.isArray(raw)) {
+            const sources = [obj, rootObject];
+            return {
+              shipments: raw as Shipment[],
+              total:
+                normalizeNumber(sources, [
+                  "total",
+                  "totalItems",
+                  "total_items",
+                  "count",
+                ]) ?? (raw as unknown[]).length,
+              lastPage:
+                normalizeNumber(sources, [
+                  "lastPage",
+                  "last_page",
+                  "pages",
+                  "totalPages",
+                  "total_pages",
+                ]) ?? 1,
+            };
+          }
+
+          if (
+            raw &&
+            typeof raw === "object" &&
+            Array.isArray((raw as Record<string, unknown>).data)
+          ) {
+            const nested = raw as Record<string, unknown>;
+            const shipmentsArray = (nested.data as Shipment[]) ?? [];
+            const sources = [nested, obj, rootObject];
+            return {
+              shipments: shipmentsArray,
+              total:
+                normalizeNumber(sources, [
+                  "total",
+                  "totalItems",
+                  "total_items",
+                  "count",
+                ]) ?? shipmentsArray.length,
+              lastPage:
+                normalizeNumber(sources, [
+                  "lastPage",
+                  "last_page",
+                  "pages",
+                  "totalPages",
+                  "total_pages",
+                ]) ?? 1,
+            };
           }
         }
 
-        const finalUrl = shipmentsUrl.toString();
+        const nestedKeys = ["data", "payload", "result", "results", "meta", "response"];
+        for (const key of nestedKeys) {
+          const nested = obj[key];
+          if (nested === undefined) {
+            continue;
+          }
+          const result = extract(nested);
+          if (result) {
+            return result;
+          }
+        }
 
-        const response = await apiFetch(finalUrl, {
+        return null;
+      };
+
+      return extract(payload);
+    };
+
+    const applyQueryParams = (url: URL) => {
+      url.searchParams.set("perPage", String(itemsPerPage));
+      url.searchParams.set("page", String(currentPage));
+      url.searchParams.set("archive", isArchived ? "1" : "0");
+
+      const typeSegment = (() => {
+        if (isArchived || selectedWarehouse === "Archived") {
+          return "archived";
+        }
+        if (selectedWarehouseCategory === "Local") {
+          return "local";
+        }
+        if (selectedWarehouseCategory === "International") {
+          return "international";
+        }
+        return "all";
+      })();
+      url.searchParams.set("type", typeSegment);
+
+      if (!searchParams) {
+        return;
+      }
+
+      const params = searchParams.startsWith("?")
+        ? searchParams.slice(1)
+        : searchParams;
+      const extraParams = new URLSearchParams(params);
+
+      let orderByParam: string | null = null;
+      const orderByKeys = ["order_by", "orderBy"];
+      for (const key of orderByKeys) {
+        const value = extraParams.get(key);
+        if (value !== null) {
+          orderByParam = value;
+          break;
+        }
+      }
+      orderByKeys.forEach((key) => extraParams.delete(key));
+
+      let orderDirectionParam: string | null = null;
+      const orderDirectionKeys = [
+        "order_by_direction",
+        "orderByDirection",
+        "orderDirection",
+      ];
+      for (const key of orderDirectionKeys) {
+        const value = extraParams.get(key);
+        if (value !== null) {
+          orderDirectionParam = value;
+          break;
+        }
+      }
+      orderDirectionKeys.forEach((key) => extraParams.delete(key));
+
+      extraParams.forEach((value, key) => {
+        url.searchParams.set(key, value);
+      });
+
+      if (orderByParam) {
+        url.searchParams.set("order_by", orderByParam);
+        const normalizedDirection =
+          (orderDirectionParam ?? "ASC").toUpperCase() === "DESC"
+            ? "DESC"
+            : "ASC";
+        url.searchParams.set("order_by_direction", normalizedDirection);
+      } else if (orderDirectionParam) {
+        const normalizedDirection =
+          orderDirectionParam.toUpperCase() === "DESC" ? "DESC" : "ASC";
+        url.searchParams.set("order_by_direction", normalizedDirection);
+      }
+    };
+
+    const fetchShipmentsData = async () => {
+      setShipmentsAreLoading(true);
+
+      const token = requireAuthToken();
+
+      const warehouseSegment = (() => {
+        if (selectedWarehouseCategory === "International") {
+          return "Int";
+        }
+        if (selectedWarehouse && selectedWarehouse !== "Archived") {
+          if (selectedWarehouse.toUpperCase() === "BRI") {
+            return "Brisbane";
+          }
+          return selectedWarehouse;
+        }
+        return "All";
+      })();
+
+      const fetchFromEndpoint = async (url: URL) => {
+        const response = await apiFetch(url.toString(), {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
           },
-          method: 'GET',
+          method: "GET",
         });
 
+        const payload = await response.json().catch(() => null);
+
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Failed to fetch shipments: ${response.statusText}`);
+          const message =
+            payload &&
+            typeof payload === "object" &&
+            payload !== null &&
+            "message" in payload
+              ? String((payload as { message?: unknown }).message ?? "")
+              : undefined;
+          throw new Error(
+            message || `Failed to fetch shipments: ${response.statusText}`
+          );
         }
 
-        const data = await response.json();
+        return payload;
+      };
 
-        console.log('API Response:', data);
+      const applyResponse = (payload: unknown) => {
+        const normalized = normalizeShipmentResponse(payload);
+        if (!normalized) {
+          throw new Error("Unexpected shipments response format");
+        }
+        if (!isMounted) {
+          return;
+        }
+        const shipmentsPayload = Array.isArray(normalized.shipments)
+          ? normalized.shipments
+          : [];
+        setShipments(shipmentsPayload);
+        setTotalItems(
+          typeof normalized.total === "number"
+            ? normalized.total
+            : shipmentsPayload.length
+        );
+        setLastPage(
+          typeof normalized.lastPage === "number"
+            ? normalized.lastPage
+            : 1
+        );
+      };
 
-        setShipments(data.shipments || []);
-        setTotalItems(data.total || 0);
-        setLastPage(data.lastPage || 1);
-      } catch (err: unknown) {
-        console.error('Error fetching shipments:', err);
-      } finally {
+      const searchUrl = new URL(buildApiUrl(`/shipments/search`));
+      searchUrl.searchParams.set("warehouse", warehouseSegment);
+      applyQueryParams(searchUrl);
+
+      try {
+        const payload = await fetchFromEndpoint(searchUrl);
+        applyResponse(payload);
+        return;
+      } catch (error) {
+        console.warn(
+          "Search endpoint did not return usable data, falling back to warehouse listing.",
+          error
+        );
+      }
+
+      const fallbackUrl = new URL(
+        buildApiUrl(`/shipments/warehouse/${warehouseSegment}`)
+      );
+      applyQueryParams(fallbackUrl);
+
+      const payload = await fetchFromEndpoint(fallbackUrl);
+      applyResponse(payload);
+    };
+
+    fetchShipmentsData().catch((err: unknown) => {
+      console.error("Error fetching shipments:", err);
+    }).finally(() => {
+      if (isMounted) {
         setShipmentsAreLoading(false);
       }
-    })();
-    }, [itemsPerPage, currentPage, selectedWarehouse, action, isArchived, searchParams, selectedWarehouseCategory, requireAuthToken]);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    itemsPerPage,
+    currentPage,
+    selectedWarehouse,
+    action,
+    isArchived,
+    searchParams,
+    selectedWarehouseCategory,
+    requireAuthToken,
+  ]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 p-6">
