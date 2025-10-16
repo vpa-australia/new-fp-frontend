@@ -38,7 +38,7 @@ import {
   ShippingServiceCodeSuccess,
   ShippingServiceCodesSuccess,
   UpdateServiceData,
-} from "./ShippingServiceCodesTab.types";
+} from "./ShippingServiceCodesTabTypes";
 
 export default function ShippingServiceCodesTab() {
 
