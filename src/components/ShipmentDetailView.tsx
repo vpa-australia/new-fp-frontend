@@ -25,7 +25,7 @@ import {
 } from "./ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { UploadFile, UploadableShipment } from "@/components/UploadFile";
-import { ShippingServiceCodesSuccess } from "@/app/dashboard/settings/components/ShippingServiceCodesTab.types";
+import { ShippingServiceCodesSuccess } from "@/app/dashboard/settings/components/ShippingServiceCodesTabTypes";
 import { apiFetch } from "@/lib/api/client";
 
 interface ShippingServiceCode {
