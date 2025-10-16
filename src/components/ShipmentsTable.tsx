@@ -808,6 +808,11 @@ export function ShipmentsTable({
     [findSearchField]
   );
 
+  const statusFieldUsesId = useMemo(
+    () => (statusField?.column ?? "").toLowerCase().includes("id"),
+    [statusField]
+  );
+
   const carrierOptions = useMemo(() => {
     if (!shipments || shipments.length === 0) {
       return [] as string[];
@@ -1308,12 +1313,23 @@ export function ShipmentsTable({
         return;
       }
 
-      updateSearchState((current) => ({
-        ...current,
-        [statusField.key]: value === "all" ? "" : value,
-      }), { execute: true });
+      const nextValue =
+        value === "all"
+          ? ""
+          : statusFieldUsesId
+          ? value
+          : statusOptions.find((option) => option.value === value)?.label ??
+            value;
+
+      updateSearchState(
+        (current) => ({
+          ...current,
+          [statusField.key]: nextValue,
+        }),
+        { execute: true }
+      );
     },
-    [statusField, updateSearchState]
+    [statusField, statusFieldUsesId, statusOptions, updateSearchState]
   );
 
   const handleCarrierFilterChange = useCallback(
@@ -1363,20 +1379,49 @@ export function ShipmentsTable({
 
   useEffect(() => {
     if (!statusField) {
+      if (selectedStatusFilter !== "all") {
+        setSelectedStatusFilter("all");
+      }
       return;
     }
 
-    const value = searchValues[statusField.key] ?? "";
+    const rawValue = (searchValues[statusField.key] ?? "").trim();
 
-    if (!value && selectedStatusFilter !== "all") {
+    if (!rawValue) {
+      if (selectedStatusFilter !== "all") {
+        setSelectedStatusFilter("all");
+      }
+      return;
+    }
+
+    const matchedOption = statusOptions.find((option) => {
+      if (statusFieldUsesId) {
+        return option.value === rawValue;
+      }
+
+      return (
+        option.label.toLowerCase() === rawValue.toLowerCase() ||
+        option.value === rawValue
+      );
+    });
+
+    if (matchedOption) {
+      if (selectedStatusFilter !== matchedOption.value) {
+        setSelectedStatusFilter(matchedOption.value);
+      }
+      return;
+    }
+
+    if (selectedStatusFilter !== "all") {
       setSelectedStatusFilter("all");
-      return;
     }
-
-    if (value && value !== selectedStatusFilter) {
-      setSelectedStatusFilter(value);
-    }
-  }, [searchValues, statusField, selectedStatusFilter]);
+  }, [
+    searchValues,
+    selectedStatusFilter,
+    statusField,
+    statusFieldUsesId,
+    statusOptions,
+  ]);
 
   useEffect(() => {
     if (!carrierField) {
