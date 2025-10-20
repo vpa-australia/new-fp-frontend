@@ -114,6 +114,24 @@ export default function PackageTab() {
         setIsEditPackageDialogOpen(true);
     }
 
+    const addNewPackage = () => {
+        setEditPackage({
+            id: 0,
+            code: '',
+            name: '',
+            description: '',
+            minWeight: 0,
+            maxWeight: 0,
+            length: 0,
+            height: 0,
+            width: 0,
+            active: 0,
+            warehouses: []
+
+        });
+        setIsEditPackageDialogOpen(true);
+    }
+
     const handleSubmitUpdate =  () =>{
         //is a new package
         setAddedActionDone(false);
@@ -319,6 +337,7 @@ export default function PackageTab() {
             <CardTitle>Warehouse Management</CardTitle>
         </CardHeader>
         <CardContent>
+            <Button onClick={()=>{ addNewPackage(); }}>Add New Package</Button>
             <Table>
                 <TableHeader>
                     <TableRow>
