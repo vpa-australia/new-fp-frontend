@@ -10,6 +10,7 @@ import CarriersTab from './components/CarriersTab';
 import ActionsTab from './components/ActionsTab';
 import ShippingServiceCodesTab from "./components/ShippingServiceCodesTab";
 import FreeShippingTab from "./components/FreeShippingTab";
+import PackageTab from "./components/PackageTab";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -57,6 +58,10 @@ export default function SettingsPage() {
             <Package2 className="mr-2 h-4 w-4" />
             Free Shipping
           </TabsTrigger>
+          <TabsTrigger value="packaging" className="flex items-center">
+            <Package2 className="mr-2 h-4 w-4" />
+            Packages
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="warehouses">
           <WarehousesTab />
@@ -78,6 +83,9 @@ export default function SettingsPage() {
 
         <TabsContent value="free-shipping">
           <FreeShippingTab />
+        </TabsContent>
+        <TabsContent value="packaging">
+          <PackageTab />
         </TabsContent>
       </Tabs>
     </div>
