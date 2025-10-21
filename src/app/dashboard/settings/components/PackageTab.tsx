@@ -35,21 +35,21 @@ interface Package {
     code: string;
     name: string;
     description: string;
-    minWeight: number;
-    maxWeight: number;
-    length: number;
-    height: number;
-    width: number;
+    minWeight: string;
+    maxWeight: string;
+    length: string;
+    height: string;
+    width: string;
     active: number;
     warehouses: string[];
 }
 
 interface PackagePost{
-    min_weight :number;
-    max_weight :number;
-    height :number;
-    width :number;
-    length :number;
+    min_weight :string;
+    max_weight :string;
+    height :string;
+    width :string;
+    length :string;
     code :string;
     name : string;
     description : string;
@@ -67,12 +67,12 @@ export default function PackageTab() {
         code: '',
         name: '',
         description:'',
-        minWeight: 0,
-        maxWeight: 0,
-        length: 0,
-        height: 0,
-        width: 0,
-        active: 0,
+        minWeight: '',
+        maxWeight: '',
+        length: '',
+        height: '',
+        width: '',
+        active: 1,
         warehouses: []
     });
     const [isEditPackageDialogOpen, setIsEditPackageDialogOpen] = useState(false);
@@ -120,12 +120,12 @@ export default function PackageTab() {
             code: '',
             name: '',
             description: '',
-            minWeight: 0,
-            maxWeight: 0,
-            length: 0,
-            height: 0,
-            width: 0,
-            active: 0,
+            minWeight: '',
+            maxWeight: '',
+            length: '',
+            height: '',
+            width: '',
+            active: 1,
             warehouses: []
 
         });
@@ -139,11 +139,11 @@ export default function PackageTab() {
         setIsSubmitting(true);
 
         const data: {package: PackagePost} = {package: {
-            min_weight: 0,
-            max_weight: 0,
-            height:0,
-            width: 0,
-            length:0,
+            min_weight: '',
+            max_weight: '',
+            height:'',
+            width: '',
+            length:'',
             code:'',
             name:'',
             description:'',
@@ -169,8 +169,12 @@ export default function PackageTab() {
                 added.push(item);
             } else {
                 packages.forEach((pack: Package)  => {
+                    console.log('editPackage.id', editPackage.id, 'pack.id', pack.id)
                     if(editPackage.id === pack.id){
                         if(pack.warehouses.includes(item.code)){
+                            if(!countries.includes(item.country)){
+                                countries.push(item.country);
+                            }
                             deleted.push(item);
                         }
                     }
@@ -186,7 +190,7 @@ export default function PackageTab() {
 
 
 
-           apiFetch('/platform/box/'+country+'/add', {
+           apiFetch('/platform/box/'+country+'/new', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -227,7 +231,7 @@ export default function PackageTab() {
 
                 if(whd.length > 0){
 
-                    apiFetch('/platform/box/'+editPackage.code + '/' +country + '/remove?'+wh.join('&'), {
+                    apiFetch('/platform/box/'+editPackage.code + '/' +country + '/remove?'+whd.join('&'), {
                         method: "POST",
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -252,6 +256,52 @@ export default function PackageTab() {
 
 
     });
+
+        /*
+        //if no warehouses were selected
+        if(countries.length === 0){
+
+            const c: string[] = [];
+
+            deleted.forEach((i: Warehouse) => {
+                if(!c.includes(i.country)){
+                    c.push(i.country);
+                }
+            });
+
+            c.forEach(country =>{
+
+
+
+            const whd: string[] = [];
+            deleted.forEach((i: Warehouse) => {
+                if(i.country === country){
+                    whd.push('locations[]='+i.code);
+                }
+            });
+
+            if(whd.length > 0){
+
+                apiFetch('/platform/box/'+editPackage.code + '/' +country + '/remove?'+whd.join('&'), {
+                    method: "POST",
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }
+
+                }).finally(() => {
+                    setAddedActionDone(true);
+                    setDeletedActionDone(true);
+                });
+
+            } else {
+                setAddedActionDone(true);
+                setDeletedActionDone(true);
+
+            }
+            });
+        }
+*/
+
     }
 
     const handleDeletePackage = async (pack : Package) => {
@@ -365,7 +415,7 @@ export default function PackageTab() {
                             <TableCell colSpan={7} className="text-center">No packages found</TableCell>
                         </TableRow>
                     ) : packages.map((pack) => (
-                        <TableRow key={pack.id}>
+                        <TableRow key={pack.id} className={(pack.active == 1 ? '' : 'text-gray-500')}>
                             <TableCell>{pack.code}</TableCell>
                             <TableCell>{pack.name || 'N/A'}</TableCell>
                             <TableCell>{pack.height}</TableCell>
@@ -383,7 +433,7 @@ export default function PackageTab() {
             </Table>
 
             {/* Edit User Dialog */}
-            <Dialog open={isEditPackageDialogOpen} >
+            <Dialog open={isEditPackageDialogOpen} onOpenChange={(b)=>{setIsEditPackageDialogOpen(b)}} >
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Edit Package</DialogTitle>
@@ -429,7 +479,7 @@ export default function PackageTab() {
                             <Input
                                 id="edit-height"
                                 value={editPackage.height ? editPackage.height: ''}
-                                onChange={(e) => setEditPackage({ ...editPackage, height: +e.target.value })}
+                                onChange={(e) => setEditPackage({ ...editPackage, height: e.target.value })}
                                 className="col-span-3"
                             />
                         </div>
@@ -440,7 +490,7 @@ export default function PackageTab() {
                             <Input
                                 id="edit-width"
                                 value={editPackage.width ? editPackage.width: ''}
-                                onChange={(e) => setEditPackage({ ...editPackage, width: +e.target.value })}
+                                onChange={(e) => setEditPackage({ ...editPackage, width: e.target.value })}
                                 className="col-span-3"
                             />
                         </div>
@@ -451,7 +501,7 @@ export default function PackageTab() {
                             <Input
                                 id="edit-width"
                                 value={editPackage.length ? editPackage.length: ''}
-                                onChange={(e) => setEditPackage({ ...editPackage, length: +e.target.value })}
+                                onChange={(e) => setEditPackage({ ...editPackage, length: e.target.value })}
                                 className="col-span-3"
                             />
                         </div>
@@ -462,7 +512,7 @@ export default function PackageTab() {
                             <Input
                                 id="edit-min-weight"
                                 value={editPackage.minWeight ? editPackage.minWeight: ''}
-                                onChange={(e) => setEditPackage({ ...editPackage, minWeight: +e.target.value })}
+                                onChange={(e) => setEditPackage({ ...editPackage, minWeight: e.target.value })}
                                 className="col-span-3"
                             />
                         </div>
@@ -473,7 +523,7 @@ export default function PackageTab() {
                             <Input
                                 id="edit-max-weight"
                                 value={editPackage.maxWeight ? editPackage.maxWeight: ''}
-                                onChange={(e) => setEditPackage({ ...editPackage, maxWeight: +e.target.value })}
+                                onChange={(e) => setEditPackage({ ...editPackage, maxWeight: e.target.value })}
                                 className="col-span-3"
                             />
                         </div>
@@ -514,7 +564,7 @@ export default function PackageTab() {
                             Cancel
                         </Button>
                         <Button onClick={handleSubmitUpdate} disabled={isSubmitting}>
-                            {isSubmitting ? 'Updating...' : 'Update User'}
+                            {isSubmitting ? 'Updating...' : 'Update Package'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
