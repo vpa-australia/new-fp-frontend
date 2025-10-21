@@ -533,9 +533,9 @@ export default function PackageTab() {
                             <div className="col-span-3 space-y-2">
                                 {warehouses.length > 0 ? (
                                     warehouses.map((warehouse) => (
-                                        <div key={`edit-wh-${warehouse}`} className="flex items-center space-x-2">
+                                        <div key={`edit-wh-${warehouse.code}`} className="flex items-center space-x-2">
                                             <Checkbox
-                                                id={`edit-wh-${warehouse}`}
+                                                id={`edit-wh-${warehouse.code}`}
                                                 checked={editPackage.warehouses.includes(warehouse.code)}
                                                 onCheckedChange={(checked) => {
                                                     let wh = [...editPackage.warehouses]
