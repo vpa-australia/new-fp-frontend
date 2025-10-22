@@ -439,9 +439,14 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
     []
   );
 
-  const quoteSelectionSyncRef = useRef<{ detailId: number | null; signature: string }>({
+  const quoteSelectionSyncRef = useRef<{
+    detailId: number | null;
+    signature: string;
+    persistedQuoteId: number | null;
+  }>({
     detailId: null,
     signature: "",
+    persistedQuoteId: null,
   });
 
   const findInitialSelectedQuote = useCallback(() => {
@@ -510,6 +515,93 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
     return quotes[0];
   }, [detail, quotes]);
 
+  const persistQuoteSelection = useCallback(
+    async (quoteId: number, { silent = false }: { silent?: boolean } = {}) => {
+      if (!detail?.id) {
+        if (!silent) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Shipment details are unavailable. Please try again.",
+          });
+        }
+        throw new Error("Shipment details are unavailable.");
+      }
+
+      try {
+        const token = getAuthToken();
+
+        const response = await apiFetch(
+          `/shipments/quote/${detail.id}?quote_id=${quoteId}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+
+        const result = (await response
+          .json()
+          .catch(() => null)) as ApiSuccessResponse | null;
+
+        if (!response.ok || result?.success === false) {
+          const message = result?.message ?? "Failed to update shipment quote";
+          throw new Error(message);
+        }
+
+        if (!silent) {
+          toast({
+            variant: "success",
+            title: "Success",
+            description: "Quote has been updated successfully",
+          });
+        }
+
+        const selectedQuoteDetails = quotes.find(
+          (quote) => quote.id === quoteId
+        );
+        updateShipmentData((current) => {
+          if (!current) {
+            return current;
+          }
+          const next: ShipmentDetail = {
+            ...current,
+            selectedQuoteId: quoteId,
+          };
+          if (selectedQuoteDetails) {
+            next.carrierCode = selectedQuoteDetails.carrierCode ?? null;
+            next.serviceCode = selectedQuoteDetails.serviceCode ?? null;
+            next.carrierCodeDesired =
+              selectedQuoteDetails.carrierCode ??
+              next.carrierCodeDesired ??
+              null;
+            next.serviceCodeDesired =
+              selectedQuoteDetails.serviceCode ??
+              next.serviceCodeDesired ??
+              null;
+          }
+          return next;
+        });
+      } catch (error) {
+        if (!silent) {
+          console.error("Failed to update shipment quote:", error);
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: getErrorMessage(
+              error,
+              "Failed to update quote. Please try again."
+            ),
+          });
+        }
+        throw error;
+      }
+    },
+    [detail, getAuthToken, quotes, toast, updateShipmentData]
+  );
+
   useEffect(() => {
     if (!detail || quotes.length === 0) {
       if (selectedQuote !== null) {
@@ -518,13 +610,17 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       quoteSelectionSyncRef.current = {
         detailId: detail?.id ?? null,
         signature: "",
+        persistedQuoteId: null,
       };
       return;
     }
 
     const signature = quotes.map((quote) => String(quote.id)).join(",");
-    const { detailId: syncedDetailId, signature: syncedSignature } =
-      quoteSelectionSyncRef.current;
+    const {
+      detailId: syncedDetailId,
+      signature: syncedSignature,
+      persistedQuoteId: syncedPersistedQuoteId,
+    } = quoteSelectionSyncRef.current;
 
     if (syncedDetailId === detail.id && syncedSignature === signature) {
       return;
@@ -536,11 +632,42 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       setSelectedQuote(nextId);
     }
 
+    const persistedId =
+      typeof detail.selectedQuoteId === "number" &&
+      !Number.isNaN(detail.selectedQuoteId)
+        ? detail.selectedQuoteId
+        : null;
+
+    const needsPersist =
+      nextId !== null &&
+      persistedId !== nextId &&
+      syncedPersistedQuoteId !== nextId;
+
+    if (needsPersist) {
+      quoteSelectionSyncRef.current.persistedQuoteId = nextId;
+      persistQuoteSelection(nextId, { silent: true }).catch((error) => {
+        console.error("Failed to auto-select shipment quote:", error);
+        if (
+          quoteSelectionSyncRef.current.detailId === detail.id &&
+          quoteSelectionSyncRef.current.persistedQuoteId === nextId
+        ) {
+          quoteSelectionSyncRef.current.persistedQuoteId = null;
+        }
+      });
+    }
+
     quoteSelectionSyncRef.current = {
       detailId: detail.id,
       signature,
+      persistedQuoteId: persistedId ?? nextId,
     };
-  }, [detail, quotes, findInitialSelectedQuote, selectedQuote]);
+  }, [
+    detail,
+    quotes,
+    findInitialSelectedQuote,
+    persistQuoteSelection,
+    selectedQuote,
+  ]);
 
   const getQuoteRadioValue = useCallback(
     (quote: ShipmentQuote) =>
@@ -661,16 +788,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
   // TODO: Add handlers for quote selection, warehouse selection, and comments
 
   const handleQuoteSelection = async () => {
-    if (!detail?.id) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Shipment details are unavailable. Please try again.",
-      });
-      return;
-    }
-
-    if (!selectedQuote) {
+    if (selectedQuote == null) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -680,67 +798,9 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
     }
 
     try {
-      const token = getAuthToken();
-
-      const response = await apiFetch(
-        `/shipments/quote/${detail.id}?quote_id=${selectedQuote}`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: "Bearer " + token,
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to update shipment quote");
-      }
-
-      const result = (await response
-        .json()
-        .catch(() => null)) as ApiSuccessResponse | null;
-      if (result?.success === false) {
-        throw new Error(result.message ?? "Failed to update shipment quote");
-      }
-
-      toast({
-        variant: "success",
-        title: "Success",
-        description: "Quote has been updated successfully",
-      });
-
-      const selectedQuoteDetails = quotes.find(
-        (quote) => quote.id === selectedQuote
-      );
-      updateShipmentData((current) => {
-        if (!current) {
-          return current;
-        }
-        const next: ShipmentDetail = {
-          ...current,
-          selectedQuoteId: selectedQuote,
-        };
-        if (selectedQuoteDetails) {
-          next.carrierCode = selectedQuoteDetails.carrierCode ?? null;
-          next.serviceCode = selectedQuoteDetails.serviceCode ?? null;
-          next.carrierCodeDesired =
-            selectedQuoteDetails.carrierCode ?? next.carrierCodeDesired ?? null;
-          next.serviceCodeDesired =
-            selectedQuoteDetails.serviceCode ?? next.serviceCodeDesired ?? null;
-        }
-        return next;
-      });
-    } catch (error) {
-      console.error("Failed to update shipment quote:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: getErrorMessage(
-          error,
-          "Failed to update quote. Please try again."
-        ),
-      });
+      await persistQuoteSelection(selectedQuote);
+    } catch {
+      // Errors are handled within persistQuoteSelection when silent is false.
     }
   };
 
