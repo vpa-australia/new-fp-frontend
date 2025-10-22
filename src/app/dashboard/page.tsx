@@ -561,16 +561,29 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 p-6">
-      <header className="mb-6 flex justify-between items-center"> {/* Added flex layout */}
-        <div className='flex gap-x-3 items-center'> {/* Wrapped existing header content */}
-          <Image src="/vpa-full-logo_410x.avif" alt='VPA Logo' width={80} height={20} />
-          <h1 className="text-3xl font-bold text-gray-900 italic">Fulfillments</h1>
+      <header className="mb-6 flex justify-between items-center">
+        {" "}
+        {/* Added flex layout */}
+        <div className="flex gap-x-3 items-center">
+          {" "}
+          {/* Wrapped existing header content */}
+          <Image
+            src="/vpa-full-logo_410x.avif"
+            alt="VPA Logo"
+            width={80}
+            height={20}
+          />
+          <h1 className="text-3xl font-bold text-gray-900 italic">
+            Fulfillments
+          </h1>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Avatar className="cursor-pointer">
               <AvatarImage src="" alt={userEmail} />
-              <AvatarFallback className='font-bold bg-gray-300'>{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
+              <AvatarFallback className="font-bold bg-gray-300">
+                {userEmail.charAt(0).toUpperCase()}
+              </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -580,7 +593,10 @@ export default function DashboardPage() {
               <UserIcon className="mr-2 h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/dashboard/settings')}>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => router.push("/dashboard/settings")}
+            >
               <CogIcon className="mr-2 h-4 w-4" />
               <span>Settings</span>
             </DropdownMenuItem>
@@ -597,9 +613,15 @@ export default function DashboardPage() {
         </DropdownMenu>
       </header>
       {/* Tabs and Table */}
-      <Tabs defaultValue="All" className="w-full" onValueChange={handleTopLevelTabChange}>
+      <Tabs
+        defaultValue="All"
+        className="w-full"
+        onValueChange={handleTopLevelTabChange}
+      >
         <div>
-        <TabsList className={`${selectedWarehouseCategory === "Local" ? 'mb-5' : ''} flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit`}>
+          <TabsList
+            className={`mb-5 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit`}
+          >
             <TabsTrigger
               value="All"
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
@@ -607,7 +629,7 @@ export default function DashboardPage() {
               <GripVertical className="h-5 w-5 mb-0.5" />
               <span className="text-xs font-medium">All</span>
             </TabsTrigger>
-            
+
             <TabsTrigger
               value="Local"
               className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
@@ -635,18 +657,18 @@ export default function DashboardPage() {
           <div className="flex flex-row justify-between items-center mt-3 mb-3">
             <TabsList className="mb-1 flex items-center justify-start space-x-2 p-1 rounded-lg bg-inherit">
               {orderedLocalWarehouses.map((warehouse) => (
-                  <TabsTrigger
-                    key={warehouse.id}
-                    value={warehouse.code}
-                    onClick={() => setSelectedWarehouse(warehouse.code)}
-                    className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
-                  >
-                    <MapPin className="h-5 w-5 mb-0.5" />
-                    <span className="text-xs font-medium">
-                      {warehouse.code.substring(0, 3).toUpperCase()}
-                    </span>
-                  </TabsTrigger>
-                ))}
+                <TabsTrigger
+                  key={warehouse.id}
+                  value={warehouse.code}
+                  onClick={() => setSelectedWarehouse(warehouse.code)}
+                  className="flex flex-col items-center justify-center p-2 rounded-md data-[state=active]:bg-[#44743F] data-[state=active]:text-white text-gray-600 hover:bg-gray-200 transition-colors w-20 h-16"
+                >
+                  <MapPin className="h-5 w-5 mb-0.5" />
+                  <span className="text-xs font-medium">
+                    {warehouse.code.substring(0, 3).toUpperCase()}
+                  </span>
+                </TabsTrigger>
+              ))}
             </TabsList>
           </div>
         )}
@@ -734,7 +756,6 @@ export default function DashboardPage() {
                   setSearchParams={setSearchParams}
                 />
               </CardContent>
-
             </Card>
           </TabsContent>
         ))}
@@ -761,7 +782,6 @@ export default function DashboardPage() {
           </Card>
         </TabsContent>
       </Tabs>
-
     </div>
   );
 }
