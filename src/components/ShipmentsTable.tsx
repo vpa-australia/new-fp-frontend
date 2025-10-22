@@ -15,18 +15,14 @@ import {
   GripVertical,
   FileText,
   QrCode,
-  SearchIcon,
   Send,
   Tag,
-  Truck,
   X,
   Printer,
   RotateCcw,
   Trash2,
   Lock,
   Unlock,
-  Loader,
-  Settings,
   Loader2,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,8 +38,15 @@ import {
   type ShipmentDetailResponse,
 } from "./ShipmentDetailView";
 import { useToast } from "@/hooks/use-toast";
-import { AiFillHdd } from "react-icons/ai";
 import { PiCubeFocusBold } from "react-icons/pi";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   FaLink,
   FaTimes,
@@ -53,28 +56,10 @@ import {
   FaBuilding,
 } from "react-icons/fa";
 import { FaLocationDot } from "react-icons/fa6";
-import { Input } from "./ui/input";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Label } from "@/components/ui/label";
 import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
 import { PdfViewer } from "./ui/pdf-viewer";
+import { Skeleton } from "@/components/ui/skeleton";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api/client";
@@ -101,20 +86,19 @@ export interface Shipment {
   unlDone: boolean;
   sent: boolean;
   invoicePrinted: boolean;
+  selectedQuoteId?: number | null;
   manifested: boolean;
   status: string | null;
   carrierCodeDesired: string;
-  store?:
-    | {
-        id: number;
-        shop: string;
-        name: string | null;
-        countryCode: string | null;
-        weightId: string | null;
-        measurementId: string | null;
-        active: number;
-      }
-    | null;
+  store?: {
+    id: number;
+    shop: string;
+    name: string | null;
+    countryCode: string | null;
+    weightId: string | null;
+    measurementId: string | null;
+    active: number;
+  } | null;
   quotes: Array<{
     carrierCodeDesired: string;
     carrierCode: string;
@@ -153,11 +137,29 @@ type CarriersResponse = {
   carriers?: Record<string, CarrierSummary>;
 };
 
+type SearchParameterOption =
+  | string
+  | number
+  | {
+      value?: string | number;
+      label?: string | null;
+      name?: string | null;
+      title?: string | null;
+      id?: string | number;
+      code?: string | number;
+      allowShipped?: boolean;
+      allow_shipped?: boolean;
+      greenTick?: boolean;
+      green_tick?: boolean;
+      [key: string]: unknown;
+    };
+
 type SearchParameter = {
   name: string;
   column: string;
   type: string;
-  weight: number;
+  weight?: number;
+  options?: SearchParameterOption[];
 };
 
 type SearchParametersResponse = {
@@ -177,17 +179,10 @@ type StatusApiResponse = {
   statuses?: StatusApiStatus[];
 };
 
-type OrderDatePresetKey =
-  | "today"
-  | "yesterday"
-  | "last7"
-  | "last30"
-  | "thisMonth"
-  | "lastMonth";
-
-type OrderDateRange = {
-  from: string;
-  to: string;
+type ApiSuccessResponse = {
+  success: boolean;
+  message?: string;
+  [key: string]: unknown;
 };
 
 type OrderDateFieldConfig = {
@@ -196,72 +191,82 @@ type OrderDateFieldConfig = {
   single: { key: string; column: string } | null;
 };
 
-const formatDateForApi = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return [year, month, day].join("-");
-};
+type ShipmentDetailForQuote = NonNullable<ShipmentDetailResponse["shipment"]>;
+type ShipmentQuoteDetail = NonNullable<
+  ShipmentDetailForQuote["quotes"]
+>[number];
 
-const ORDER_DATE_PRESETS: Record<
-  OrderDatePresetKey,
-  { label: string; getRange: () => OrderDateRange }
-> = {
-  today: {
-    label: "Today",
-    getRange: () => {
-      const now = new Date();
-      return { from: formatDateForApi(now), to: formatDateForApi(now) };
-    },
-  },
-  yesterday: {
-    label: "Yesterday",
-    getRange: () => {
-      const now = new Date();
-      now.setDate(now.getDate() - 1);
-      return { from: formatDateForApi(now), to: formatDateForApi(now) };
-    },
-  },
-  last7: {
-    label: "Last 7 Days",
-    getRange: () => {
-      const now = new Date();
-      const start = new Date(now);
-      start.setDate(start.getDate() - 6);
-      return { from: formatDateForApi(start), to: formatDateForApi(now) };
-    },
-  },
-  last30: {
-    label: "Last 30 Days",
-    getRange: () => {
-      const now = new Date();
-      const start = new Date(now);
-      start.setDate(start.getDate() - 29);
-      return { from: formatDateForApi(start), to: formatDateForApi(now) };
-    },
-  },
-  thisMonth: {
-    label: "This Month",
-    getRange: () => {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from: formatDateForApi(start), to: formatDateForApi(now) };
-    },
-  },
-  lastMonth: {
-    label: "Last Month",
-    getRange: () => {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const end = new Date(now.getFullYear(), now.getMonth(), 0);
-      return { from: formatDateForApi(start), to: formatDateForApi(end) };
-    },
-  },
-};
+const normalizeQuoteValue = (value?: string | null): string | null =>
+  typeof value === "string" ? value.trim().toLowerCase() : null;
 
-const ORDER_DATE_PRESET_KEYS = Object.keys(
-  ORDER_DATE_PRESETS
-) as OrderDatePresetKey[];
+const findDefaultQuoteForShipment = (
+  detail: ShipmentDetailForQuote
+): ShipmentQuoteDetail | null => {
+  const quotes = detail.quotes ?? [];
+
+  if (quotes.length === 0) {
+    return null;
+  }
+
+  const currentCarrier = normalizeQuoteValue(
+    detail.carrierCode ?? detail.carrierCodeDesired ?? null
+  );
+  const currentService = normalizeQuoteValue(
+    detail.serviceCode ?? detail.serviceCodeDesired ?? null
+  );
+  const desiredCarrier = normalizeQuoteValue(detail.carrierCodeDesired ?? null);
+  const desiredService = normalizeQuoteValue(detail.serviceCodeDesired ?? null);
+  const persistedQuoteId =
+    typeof detail.selectedQuoteId === "number" &&
+    !Number.isNaN(detail.selectedQuoteId)
+      ? detail.selectedQuoteId
+      : null;
+
+  if (persistedQuoteId !== null) {
+    const byId = quotes.find((quote) => quote.id === persistedQuoteId);
+    if (byId) {
+      return byId;
+    }
+  }
+
+  if (currentCarrier) {
+    const byCurrent = quotes.find((quote) => {
+      const quoteCarrier = normalizeQuoteValue(quote.carrierCode);
+      const quoteService = normalizeQuoteValue(quote.serviceCode);
+      if (quoteCarrier !== currentCarrier) {
+        return false;
+      }
+      if (currentService && quoteService !== currentService) {
+        return false;
+      }
+      return true;
+    });
+
+    if (byCurrent) {
+      return byCurrent;
+    }
+  }
+
+  if (desiredCarrier) {
+    const byDesired = quotes.find((quote) => {
+      const quoteCarrier = normalizeQuoteValue(quote.carrierCode);
+      const quoteService = normalizeQuoteValue(quote.serviceCode);
+      if (quoteCarrier !== desiredCarrier) {
+        return false;
+      }
+      if (desiredService && quoteService !== desiredService) {
+        return false;
+      }
+      return true;
+    });
+
+    if (byDesired) {
+      return byDesired;
+    }
+  }
+
+  return quotes[0] ?? null;
+};
 
 type SortDirection = "ASC" | "DESC";
 type SortTarget =
@@ -388,29 +393,13 @@ export function ShipmentsTable({
   const [carrierColors, setCarrierColors] = useState<Record<string, string>>(
     {}
   );
-  const [loadingSearchParams, setLoadingSearchParams] = useState(false);
+  const [, setLoadingSearchParams] = useState(false);
   const [searchFields, setSearchFields] = useState<
     Record<string, SearchParameter>
   >({});
-  const [searchValues, setSearchValues] = useState<Record<string, string>>({});
-  const [initialSearchValues, setInitialSearchValues] = useState<
-    Record<string, string>
-  >({});
-  const [selectedOrderDateRange, setSelectedOrderDateRange] = useState<
-    "all" | "custom" | OrderDatePresetKey
-  >("all");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
-  const [selectedCarrierFilter, setSelectedCarrierFilter] = useState("all");
-  const [selectedManifestFilter, setSelectedManifestFilter] = useState("all");
-  const [selectedStateFilter, setSelectedStateFilter] = useState("all");
-  const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>(
-    {}
-  );
   const [detailAction, setDetailAction] = useState(0);
   const [sortColumn, setSortColumn] = useState<SortTarget | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("ASC");
-  const showOrderDateFilters = false;
-
   const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null);
 
   useEffect(() => {
@@ -529,9 +518,9 @@ export function ShipmentsTable({
         }
       );
 
-      const responseData = (await response.json().catch(() => null)) as
-        | ShipmentDetailResponse
-        | null;
+      const responseData = (await response
+        .json()
+        .catch(() => null)) as ShipmentDetailResponse | null;
 
       if (!response.ok || !responseData) {
         const message =
@@ -715,19 +704,18 @@ export function ShipmentsTable({
   }, [findSearchField, orderDateFieldConfig]);
 
   const sortTargetByColumn = useMemo(() => {
-    return (Object.entries(sortColumnConfig) as Array<[SortTarget, string]>)
-      .reduce((acc, [target, column]) => {
-        const resolved = column ?? SORT_FALLBACK_COLUMNS[target];
-        acc[resolved] = target;
-        return acc;
-      }, {} as Record<string, SortTarget>);
+    return (
+      Object.entries(sortColumnConfig) as Array<[SortTarget, string]>
+    ).reduce((acc, [target, column]) => {
+      const resolved = column ?? SORT_FALLBACK_COLUMNS[target];
+      acc[resolved] = target;
+      return acc;
+    }, {} as Record<string, SortTarget>);
   }, [sortColumnConfig]);
 
   const resolveSortColumn = useCallback(
     (target: SortTarget | null) =>
-      target
-        ? sortColumnConfig[target] ?? SORT_FALLBACK_COLUMNS[target]
-        : null,
+      target ? sortColumnConfig[target] ?? SORT_FALLBACK_COLUMNS[target] : null,
     [sortColumnConfig]
   );
 
@@ -755,8 +743,7 @@ export function ShipmentsTable({
     for (const key of ORDER_DIRECTION_PARAM_KEYS) {
       const candidate = params.get(key);
       if (candidate) {
-        detectedDirection =
-          candidate.toUpperCase() === "DESC" ? "DESC" : "ASC";
+        detectedDirection = candidate.toUpperCase() === "DESC" ? "DESC" : "ASC";
         break;
       }
     }
@@ -779,175 +766,14 @@ export function ShipmentsTable({
     []
   );
 
-  const statusField = useMemo(
-    () =>
-      findSearchField(["status_id"], { matchAll: true }) ??
-      findSearchField(["status"]),
-    [findSearchField]
-  );
-
-  const carrierField = useMemo(
-    () =>
-      findSearchField(["carrier_code"], { matchAll: true }) ??
-      findSearchField(["carrier", "shipping"]),
-    [findSearchField]
-  );
-
-  const manifestField = useMemo(
-    () => findSearchField(["manifest"], { matchAll: false }),
-    [findSearchField]
-  );
-
-  const stateField = useMemo(
-    () =>
-      findSearchField(["state"], { matchAll: true }) ??
-      findSearchField(["region"], { matchAll: true }) ??
-      findSearchField(["state", "region"]),
-    [findSearchField]
-  );
-
-  const statusFieldUsesId = useMemo(
-    () => (statusField?.column ?? "").toLowerCase().includes("id"),
-    [statusField]
-  );
-
-  const carrierOptions = useMemo(() => {
-    if (!shipments || shipments.length === 0) {
-      return [] as string[];
-    }
-
-    const carriers = shipments
-      .map((shipment) => shipment.carrierCode)
-      .filter((code): code is string =>
-        Boolean(code && code.trim().length > 0)
-      );
-
-    return Array.from(new Set(carriers)).sort((a, b) => a.localeCompare(b));
-  }, [shipments]);
-
-  const stateOptions = useMemo(() => {
-    if (!shipments || shipments.length === 0) {
-      return [] as string[];
-    }
-
-    const states = shipments
-      .map((shipment) => shipment.region)
-      .filter((state): state is string =>
-        Boolean(state && state.trim().length > 0)
-      );
-
-    return Array.from(new Set(states)).sort((a, b) => a.localeCompare(b));
-  }, [shipments]);
-
-  const statusFilterLabel = useMemo(() => {
-    if (selectedStatusFilter === "all") {
-      return "All Status";
-    }
-
-    const match = statusOptions.find(
-      (option) => option.value === selectedStatusFilter
-    );
-
-    return match?.label ?? "Custom Status";
-  }, [selectedStatusFilter, statusOptions]);
-
-  const carrierFilterLabel = useMemo(() => {
-    if (selectedCarrierFilter === "all") {
-      return "All Shipping";
-    }
-    return selectedCarrierFilter.toUpperCase();
-  }, [selectedCarrierFilter]);
-
-  const manifestFilterLabel = useMemo(() => {
-    if (selectedManifestFilter === "all") {
-      return "All Manifest";
-    }
-
-    return selectedManifestFilter === "true" ? "Manifested" : "Not Manifested";
-  }, [selectedManifestFilter]);
-
-  const stateFilterLabel = useMemo(() => {
-    if (selectedStateFilter === "all") {
-      return "All States";
-    }
-
-    return selectedStateFilter.toUpperCase();
-  }, [selectedStateFilter]);
-
-  const orderDateLabel = useMemo(() => {
-    if (selectedOrderDateRange === "all") {
-      return "Order Date";
-    }
-    if (selectedOrderDateRange === "custom") {
-      return "Custom Range";
-    }
-    return ORDER_DATE_PRESETS[selectedOrderDateRange].label;
-  }, [selectedOrderDateRange]);
-
-  const orderDateFromKey = orderDateFieldConfig.from?.key ?? null;
-  const orderDateToKey = orderDateFieldConfig.to?.key ?? null;
-  const orderDateSingleKey = orderDateFieldConfig.single?.key ?? null;
-
-  const orderDateFromValue = orderDateFromKey
-    ? searchValues[orderDateFromKey] ?? ""
-    : "";
-  const orderDateToValue = orderDateToKey
-    ? searchValues[orderDateToKey] ?? ""
-    : "";
-  const orderDateSingleValue = orderDateSingleKey
-    ? searchValues[orderDateSingleKey] ?? ""
-    : "";
-
-  const orderDateInputsDisabled =
-    loadingSearchParams ||
-    (!orderDateFromKey && !orderDateToKey && !orderDateSingleKey);
-
-  const [orderDateDraftFrom, setOrderDateDraftFrom] = useState("");
-  const [orderDateDraftTo, setOrderDateDraftTo] = useState("");
-  const [orderDateDraftSingle, setOrderDateDraftSingle] = useState("");
   const [refreshingShipmentIds, setRefreshingShipmentIds] = useState<
     Set<number>
   >(new Set());
   const [invoiceProcessingShipmentIds, setInvoiceProcessingShipmentIds] =
     useState<Set<number>>(new Set());
-  const [labelProcessingShipmentIds, setLabelProcessingShipmentIds] =
-    useState<Set<number>>(new Set());
-
-  useEffect(() => {
-    if (orderDateFromKey && orderDateToKey) {
-      setOrderDateDraftFrom(orderDateFromValue);
-      setOrderDateDraftTo(orderDateToValue);
-      setOrderDateDraftSingle("");
-      return;
-    }
-
-    if (orderDateSingleKey) {
-      setOrderDateDraftSingle(orderDateSingleValue);
-      setOrderDateDraftFrom("");
-      setOrderDateDraftTo("");
-      return;
-    }
-
-    setOrderDateDraftFrom("");
-    setOrderDateDraftTo("");
-    setOrderDateDraftSingle("");
-  }, [
-    orderDateFromKey,
-    orderDateToKey,
-    orderDateSingleKey,
-    orderDateFromValue,
-    orderDateToValue,
-    orderDateSingleValue,
-  ]);
-
-  const orderDateDraftApplyDisabled =
-    orderDateInputsDisabled ||
-    (orderDateFromKey && orderDateToKey
-      ? orderDateDraftFrom === orderDateFromValue &&
-        orderDateDraftTo === orderDateToValue
-      : orderDateSingleKey
-      ? orderDateDraftSingle === orderDateSingleValue
-      : true);
+  const [labelProcessingShipmentIds, setLabelProcessingShipmentIds] = useState<
+    Set<number>
+  >(new Set());
 
   const buildQueryWithSort = useCallback(
     (
@@ -960,16 +786,13 @@ export function ShipmentsTable({
         | undefined
     ) => {
       const normalizedBase =
-        baseQuery && baseQuery.startsWith("?")
-          ? baseQuery.slice(1)
-          : baseQuery;
+        baseQuery && baseQuery.startsWith("?") ? baseQuery.slice(1) : baseQuery;
       const params = new URLSearchParams(normalizedBase);
 
       ORDER_BY_PARAM_KEYS.forEach((key) => params.delete(key));
       ORDER_DIRECTION_PARAM_KEYS.forEach((key) => params.delete(key));
 
-      const target =
-        override !== undefined ? override.target : sortColumn;
+      const target = override !== undefined ? override.target : sortColumn;
       const direction =
         override !== undefined ? override.direction : sortDirection;
 
@@ -1031,81 +854,6 @@ export function ShipmentsTable({
     sortColumn,
     sortDirection,
   ]);
-
-  const executeSearch = useCallback(
-    (values: Record<string, string>) => {
-      if (!searchFields || Object.keys(searchFields).length === 0) {
-        const nextQuery = buildQueryWithSort("");
-        setSearchParams(nextQuery);
-        setCurrentPage(1);
-        fetchShipments();
-        return;
-      }
-
-      const filters = Object.entries(values)
-        .filter(([key, value]) => {
-          if (!searchFields[key]) {
-            return false;
-          }
-
-          if (value === undefined || value === null) {
-            return false;
-          }
-
-          if (typeof value === "string") {
-            return value.trim().length > 0;
-          }
-
-          return true;
-        })
-        .reduce((acc, [key, value]) => {
-          const column = searchFields[key]?.column;
-          if (column) {
-            acc[column] = typeof value === "string" ? value.trim() : value;
-          }
-          return acc;
-        }, {} as Record<string, string>);
-
-      const queryString = Object.entries(filters)
-        .map(
-          ([key, value]) =>
-            `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
-        )
-        .join("&");
-
-      const nextQuery = buildQueryWithSort(queryString);
-      setSearchParams(nextQuery);
-      setCurrentPage(1);
-      fetchShipments();
-    },
-    [buildQueryWithSort, fetchShipments, searchFields, setCurrentPage, setSearchParams]
-  );
-
-  const updateSearchState = useCallback(
-    (
-      updater: (current: Record<string, string>) => Record<string, string>,
-      options: { execute?: boolean } = {}
-    ) => {
-      let nextValues: Record<string, string> = {};
-      setSearchValues((current) => {
-        nextValues = updater({ ...current });
-        return nextValues;
-      });
-      if (options.execute) {
-        executeSearch(nextValues);
-      }
-    },
-    [executeSearch]
-  );
-
-  const updateSearchValue = useCallback(
-    (fieldKey: string, value: string) =>
-      updateSearchState((current) => ({
-        ...current,
-        [fieldKey]: value,
-      })),
-    [updateSearchState]
-  );
 
   const handleSortChange = useCallback(
     (target: SortTarget) => {
@@ -1186,497 +934,147 @@ export function ShipmentsTable({
     );
   };
 
-  const handleClearFilters = useCallback(() => {
-    const template =
-      Object.keys(initialSearchValues).length > 0
-        ? initialSearchValues
-        : searchValues;
-
-    const clearedValues = Object.keys(template).reduce((acc, key) => {
-      acc[key] = "";
-      return acc;
-    }, {} as Record<string, string>);
-
-    setSelectedOrderDateRange("all");
-    setSelectedStatusFilter("all");
-    setSelectedCarrierFilter("all");
-    setSelectedManifestFilter("all");
-    setSelectedStateFilter("all");
-
-    updateSearchState(() => ({ ...clearedValues }), { execute: true });
-  }, [initialSearchValues, searchValues, updateSearchState]);
-
-  const handleOrderDateFilterChange = useCallback(
-    (value: string) => {
-      if (value === "custom") {
-        setSelectedOrderDateRange("custom");
-        return;
-      }
-
-      const nextSelected =
-        value === "all" ? "all" : (value as OrderDatePresetKey);
-
-      setSelectedOrderDateRange(nextSelected);
-
-      if (
-        !orderDateFieldConfig.from &&
-        !orderDateFieldConfig.to &&
-        !orderDateFieldConfig.single
-      ) {
-        return;
-      }
-
-      updateSearchState((current) => {
-        const next = { ...current };
-
-        if (orderDateFieldConfig.from) {
-          next[orderDateFieldConfig.from.key] = "";
-        }
-        if (orderDateFieldConfig.to) {
-          next[orderDateFieldConfig.to.key] = "";
-        }
-        if (orderDateFieldConfig.single) {
-          next[orderDateFieldConfig.single.key] = "";
-        }
-
-        if (nextSelected !== "all") {
-          const range =
-            ORDER_DATE_PRESETS[nextSelected as OrderDatePresetKey].getRange();
-
-          if (range) {
-            if (orderDateFieldConfig.from && orderDateFieldConfig.to) {
-              next[orderDateFieldConfig.from.key] = range.from;
-              next[orderDateFieldConfig.to.key] = range.to;
-            } else if (orderDateFieldConfig.single) {
-              next[orderDateFieldConfig.single.key] = range.from;
-            }
-          }
-        }
-
-        return next;
-      }, { execute: true });
-    },
-    [orderDateFieldConfig, updateSearchState]
-  );
-
-  const handleOrderDateInputChange = useCallback(
-    (field: "from" | "to" | "single", value: string) => {
-      if (field === "from") {
-        setOrderDateDraftFrom(value);
-        return;
-      }
-      if (field === "to") {
-        setOrderDateDraftTo(value);
-        return;
-      }
-      setOrderDateDraftSingle(value);
-    },
-    []
-  );
-
-  const handleApplyOrderDateInputs = useCallback(() => {
-    if (orderDateFromKey && orderDateToKey) {
-      const hasValues = Boolean(orderDateDraftFrom || orderDateDraftTo);
-      setSelectedOrderDateRange(hasValues ? "custom" : "all");
-      updateSearchState((current) => ({
-        ...current,
-        [orderDateFromKey]: orderDateDraftFrom,
-        [orderDateToKey]: orderDateDraftTo,
-      }), { execute: true });
-      return;
-    }
-
-    if (orderDateSingleKey) {
-      const hasValue = Boolean(orderDateDraftSingle);
-      setSelectedOrderDateRange(hasValue ? "custom" : "all");
-      updateSearchState((current) => ({
-        ...current,
-        [orderDateSingleKey]: orderDateDraftSingle,
-      }), { execute: true });
-    }
-  }, [
-    updateSearchState,
-    orderDateDraftFrom,
-    orderDateDraftSingle,
-    orderDateDraftTo,
-    orderDateFromKey,
-    orderDateSingleKey,
-    orderDateToKey,
-  ]);
-
-  const handleStatusFilterChange = useCallback(
-    (value: string) => {
-      setSelectedStatusFilter(value);
-      if (!statusField) {
-        return;
-      }
-
-      const nextValue =
-        value === "all"
-          ? ""
-          : statusFieldUsesId
-          ? value
-          : statusOptions.find((option) => option.value === value)?.label ??
-            value;
-
-      updateSearchState(
-        (current) => ({
-          ...current,
-          [statusField.key]: nextValue,
-        }),
-        { execute: true }
-      );
-    },
-    [statusField, statusFieldUsesId, statusOptions, updateSearchState]
-  );
-
-  const handleCarrierFilterChange = useCallback(
-    (value: string) => {
-      setSelectedCarrierFilter(value);
-      if (!carrierField) {
-        return;
-      }
-
-      updateSearchState((current) => ({
-        ...current,
-        [carrierField.key]: value === "all" ? "" : value,
-      }), { execute: true });
-    },
-    [carrierField, updateSearchState]
-  );
-
-  const handleManifestFilterChange = useCallback(
-    (value: string) => {
-      setSelectedManifestFilter(value);
-      if (!manifestField) {
-        return;
-      }
-
-      updateSearchState((current) => ({
-        ...current,
-        [manifestField.key]: value === "all" ? "" : value,
-      }), { execute: true });
-    },
-    [manifestField, updateSearchState]
-  );
-
-  const handleStateFilterChange = useCallback(
-    (value: string) => {
-      setSelectedStateFilter(value);
-      if (!stateField) {
-        return;
-      }
-
-      updateSearchState((current) => ({
-        ...current,
-        [stateField.key]: value === "all" ? "" : value,
-      }), { execute: true });
-    },
-    [stateField, updateSearchState]
-  );
-
   useEffect(() => {
-    if (!statusField) {
-      if (selectedStatusFilter !== "all") {
-        setSelectedStatusFilter("all");
-      }
-      return;
-    }
+    let cancelled = false;
 
-    const rawValue = (searchValues[statusField.key] ?? "").trim();
-
-    if (!rawValue) {
-      if (selectedStatusFilter !== "all") {
-        setSelectedStatusFilter("all");
-      }
-      return;
-    }
-
-    const matchedOption = statusOptions.find((option) => {
-      if (statusFieldUsesId) {
-        return option.value === rawValue;
+    const normalizeStatusOptionFromParam = (
+      option: SearchParameterOption
+    ): StatusOption | null => {
+      if (option == null) {
+        return null;
       }
 
-      return (
-        option.label.toLowerCase() === rawValue.toLowerCase() ||
-        option.value === rawValue
-      );
-    });
-
-    if (matchedOption) {
-      if (selectedStatusFilter !== matchedOption.value) {
-        setSelectedStatusFilter(matchedOption.value);
-      }
-      return;
-    }
-
-    if (selectedStatusFilter !== "all") {
-      setSelectedStatusFilter("all");
-    }
-  }, [
-    searchValues,
-    selectedStatusFilter,
-    statusField,
-    statusFieldUsesId,
-    statusOptions,
-  ]);
-
-  useEffect(() => {
-    if (!carrierField) {
-      return;
-    }
-
-    const value = searchValues[carrierField.key] ?? "";
-
-    if (!value && selectedCarrierFilter !== "all") {
-      setSelectedCarrierFilter("all");
-      return;
-    }
-
-    if (value && value !== selectedCarrierFilter) {
-      setSelectedCarrierFilter(value);
-    }
-  }, [carrierField, searchValues, selectedCarrierFilter]);
-
-  useEffect(() => {
-    if (!manifestField) {
-      return;
-    }
-
-    const value = searchValues[manifestField.key] ?? "";
-    let normalized = value.trim().toLowerCase();
-    if (normalized === "1") {
-      normalized = "true";
-    } else if (normalized === "0") {
-      normalized = "false";
-    }
-
-    if (!normalized && selectedManifestFilter !== "all") {
-      setSelectedManifestFilter("all");
-      return;
-    }
-
-    if (normalized && normalized !== selectedManifestFilter) {
-      setSelectedManifestFilter(normalized);
-    }
-  }, [manifestField, searchValues, selectedManifestFilter]);
-
-  useEffect(() => {
-    if (!stateField) {
-      return;
-    }
-
-    const value = searchValues[stateField.key] ?? "";
-
-    if (!value && selectedStateFilter !== "all") {
-      setSelectedStateFilter("all");
-      return;
-    }
-
-    if (value && value !== selectedStateFilter) {
-      setSelectedStateFilter(value);
-    }
-  }, [searchValues, selectedStateFilter, stateField]);
-
-  useEffect(() => {
-    const hasOrderFields =
-      orderDateFieldConfig.from ||
-      orderDateFieldConfig.to ||
-      orderDateFieldConfig.single;
-
-    if (!hasOrderFields) {
-      return;
-    }
-
-    let fromValue = "";
-    let toValue = "";
-
-    if (orderDateFieldConfig.from && orderDateFieldConfig.to) {
-      fromValue = searchValues[orderDateFieldConfig.from.key] ?? "";
-      toValue = searchValues[orderDateFieldConfig.to.key] ?? "";
-    } else if (orderDateFieldConfig.single) {
-      const singleValue = searchValues[orderDateFieldConfig.single.key] ?? "";
-      fromValue = singleValue;
-      toValue = singleValue;
-    }
-
-    if (!fromValue && !toValue) {
-      if (selectedOrderDateRange !== "all") {
-        setSelectedOrderDateRange("all");
-      }
-      return;
-    }
-
-    const matchedPreset = ORDER_DATE_PRESET_KEYS.find((key) => {
-      const range = ORDER_DATE_PRESETS[key].getRange();
-      return range.from === fromValue && range.to === toValue;
-    });
-
-    if (matchedPreset) {
-      if (selectedOrderDateRange !== matchedPreset) {
-        setSelectedOrderDateRange(matchedPreset);
-      }
-      return;
-    }
-
-    const customValue: typeof selectedOrderDateRange = "custom";
-    if (selectedOrderDateRange !== customValue) {
-      setSelectedOrderDateRange(customValue);
-    }
-  }, [orderDateFieldConfig, searchValues, selectedOrderDateRange]);
-
-  useEffect(() => {
-    const fetchSearchParameters = async () => {
-      setLoadingSearchParams(true);
-      try {
-        const token = getAuthToken();
-
-        const response = await apiFetch("/shipments/search/parameters", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch search parameters");
+      if (typeof option === "string" || typeof option === "number") {
+        const value = String(option).trim();
+        if (!value) {
+          return null;
         }
-
-        const data = (await response.json()) as SearchParametersResponse;
-        if (data && data.success && data.searchParameters) {
-          setSearchFields(data.searchParameters);
-
-          const parameterEntries = Object.entries(data.searchParameters);
-
-          // Prefer standard customer/address fields when deciding defaults
-          const essentialFieldKeywords = [
-            "customer",
-            "address",
-            "first_name",
-            "last_name",
-            "firstname",
-            "lastname",
-          ];
-          const defaultFieldKeywords = [
-            "customer",
-            "address",
-            "suburb",
-            "postcode",
-            "city",
-            "state",
-            "first_name",
-            "last_name",
-            "firstname",
-            "lastname",
-          ];
-
-          const findMatchingKeys = (keywords: string[]) =>
-            parameterEntries
-              .filter(([key, field]) => {
-                const haystack =
-                  `${key} ${field.name} ${field.column}`.toLowerCase();
-                return keywords.some((keyword) => haystack.includes(keyword));
-              })
-              .map(([key]) => key);
-
-          const essentialFieldKeys = new Set(
-            findMatchingKeys(essentialFieldKeywords)
-          );
-
-          const defaultFieldKeys = new Set(
-            findMatchingKeys(defaultFieldKeywords)
-          );
-
-          const topWeightedKeys = parameterEntries
-            .slice()
-            .sort(([, a], [, b]) => b.weight - a.weight)
-            .slice(0, 5)
-            .map(([key]) => key);
-
-          topWeightedKeys.forEach((key) => defaultFieldKeys.add(key));
-          essentialFieldKeys.forEach((key) => defaultFieldKeys.add(key));
-
-          const applyDefaultVisibility = (
-            target: Record<string, boolean>
-          ): Record<string, boolean> => {
-            parameterEntries.forEach(([key]) => {
-              target[key] = defaultFieldKeys.has(key);
-            });
-            return target;
-          };
-
-          // Initialize visible fields and search values
-          let initialVisibleFields: Record<string, boolean> = {};
-          const initialSearchValueMap: Record<string, string> = {};
-
-          // Try to load saved visible fields from localStorage
-          const savedVisibleFields = localStorage.getItem(
-            "searchVisibleFields"
-          );
-
-          if (savedVisibleFields) {
-            try {
-              // Parse saved fields and validate they still exist in the API response
-              const parsedFields = JSON.parse(savedVisibleFields);
-              initialVisibleFields = parameterEntries.reduce((acc, [key]) => {
-                acc[key] = parsedFields[key] === true;
-                return acc;
-              }, {} as Record<string, boolean>);
-
-              // If no fields are visible (all false), show defaults
-              if (
-                !Object.values(initialVisibleFields).some(
-                  (value) => value === true
-                )
-              ) {
-                initialVisibleFields =
-                  applyDefaultVisibility(initialVisibleFields);
-              }
-            } catch (error: unknown) {
-              console.error("Error parsing saved search fields:", error);
-              initialVisibleFields = applyDefaultVisibility({});
-            }
-          } else {
-            initialVisibleFields = applyDefaultVisibility({});
-          }
-
-          // Always ensure essential fields remain visible
-          essentialFieldKeys.forEach((key) => {
-            if (key in initialVisibleFields) {
-              initialVisibleFields[key] = true;
-            }
-          });
-
-          localStorage.setItem(
-            "searchVisibleFields",
-            JSON.stringify(initialVisibleFields)
-          );
-
-          // Initialize all search values as empty
-          parameterEntries.forEach(([key]) => {
-            initialSearchValueMap[key] = ""; // Empty values by default
-          });
-
-          setVisibleFields({ ...initialVisibleFields });
-          const blankValues = { ...initialSearchValueMap };
-          setInitialSearchValues(blankValues);
-          setSearchValues(blankValues);
-        }
-      } catch (error: unknown) {
-        console.error("Error fetching search parameters:", error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to fetch search parameters.",
-        });
-      } finally {
-        setLoadingSearchParams(false);
+        return {
+          value,
+          label: value,
+          allowShipped: false,
+          greenTick: false,
+        };
       }
+
+      if (typeof option === "object") {
+        const record = option as Record<string, unknown>;
+        const rawValue =
+          record.value ??
+          record.id ??
+          record.code ??
+          record.label ??
+          record.name ??
+          record.title ??
+          null;
+        const value =
+          rawValue !== null && rawValue !== undefined
+            ? String(rawValue).trim()
+            : "";
+        if (!value) {
+          return null;
+        }
+        const labelSource =
+          record.label ?? record.name ?? record.title ?? value;
+        const label =
+          labelSource !== null && labelSource !== undefined
+            ? String(labelSource)
+            : value;
+
+        const allowShipped =
+          record.allowShipped === true || record.allow_shipped === true;
+        const greenTick =
+          record.greenTick === true || record.green_tick === true;
+
+        return {
+          value,
+          label,
+          allowShipped,
+          greenTick,
+        };
+      }
+
+      return null;
     };
 
-    fetchSearchParameters();
+    const mergeStatusOptionWithBaseline = (
+      option: StatusOption,
+      baselineByValue: Map<string, StatusOption>,
+      baselineByLabel: Map<string, StatusOption>
+    ): StatusOption => {
+      const byValue = baselineByValue.get(option.value);
+      if (byValue) {
+        return byValue;
+      }
 
-    const fetchStatusOptions = async () => {
+      const labelMatch = baselineByLabel.get(option.label.trim().toLowerCase());
+      if (labelMatch) {
+        return labelMatch;
+      }
+
+      return option;
+    };
+
+    const applyStatusOptionsFromParams = (
+      params: Record<string, SearchParameter> | undefined,
+      baselineByValue: Map<string, StatusOption>,
+      baselineByLabel: Map<string, StatusOption>
+    ): boolean => {
+      if (!params) {
+        return false;
+      }
+
+      const statusEntry = Object.values(params).find((field) => {
+        const haystack = `${field.name ?? ""} ${
+          field.column ?? ""
+        }`.toLowerCase();
+        return haystack.includes("status");
+      });
+
+      if (!statusEntry || !Array.isArray(statusEntry.options)) {
+        return false;
+      }
+
+      const normalized = statusEntry.options
+        .map((option) => normalizeStatusOptionFromParam(option))
+        .map((option) =>
+          option
+            ? mergeStatusOptionWithBaseline(
+                option,
+                baselineByValue,
+                baselineByLabel
+              )
+            : null
+        )
+        .filter((option): option is StatusOption => option !== null);
+
+      if (normalized.length === 0) {
+        return false;
+      }
+
+      if (!cancelled) {
+        const unique = new Map<string, StatusOption>();
+        normalized.forEach((option) => {
+          if (!unique.has(option.value)) {
+            unique.set(option.value, option);
+          }
+        });
+        setStatusOptions(Array.from(unique.values()));
+      }
+      return true;
+    };
+
+    const fetchStatusBaseline = async () => {
+      const empty = {
+        options: [] as StatusOption[],
+        byValue: new Map<string, StatusOption>(),
+        byLabel: new Map<string, StatusOption>(),
+      };
+
+      if (cancelled) {
+        return empty;
+      }
+
       setIsLoadingStatuses(true);
       try {
         const token = getAuthToken();
@@ -1693,25 +1091,103 @@ export function ShipmentsTable({
         }
 
         const data = (await response.json()) as StatusApiResponse;
+        if (cancelled) {
+          return empty;
+        }
+
         if (data && data.success && data.statuses) {
-          const formattedStatuses = data.statuses.map((status) => ({
+          const baseline = data.statuses.map((status) => ({
             value: status.id.toString(),
             label: status.name,
             allowShipped: status.allowShipped,
             greenTick: status.greenTick,
           }));
 
-          setStatusOptions(formattedStatuses);
+          const byValue = new Map<string, StatusOption>();
+          const byLabel = new Map<string, StatusOption>();
+          baseline.forEach((option) => {
+            byValue.set(option.value, option);
+            byLabel.set(option.label.trim().toLowerCase(), option);
+          });
+
+          if (!cancelled) {
+            setStatusOptions(baseline);
+          }
+
+          return { options: baseline, byValue, byLabel };
         }
       } catch (error: unknown) {
-        console.error("Error fetching status options:", error);
-        setStatusOptions([]);
+        if (!cancelled) {
+          console.error("Error fetching status options:", error);
+          setStatusOptions([]);
+        }
       } finally {
-        setIsLoadingStatuses(false);
+        if (!cancelled) {
+          setIsLoadingStatuses(false);
+        }
       }
+
+      return empty;
     };
 
-    fetchStatusOptions();
+    const fetchSearchParameters = async (
+      baselineOptions: StatusOption[],
+      baselineByValue: Map<string, StatusOption>,
+      baselineByLabel: Map<string, StatusOption>
+    ) => {
+      if (cancelled) {
+        return;
+      }
+
+      setLoadingSearchParams(true);
+
+      try {
+        const token = getAuthToken();
+
+        const response = await apiFetch("/shipments/search/parameters", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch search parameters");
+        }
+
+        const data = (await response.json()) as SearchParametersResponse;
+        if (!cancelled && data && data.success && data.searchParameters) {
+          setSearchFields(data.searchParameters);
+
+          const appliedStatusOptions = applyStatusOptionsFromParams(
+            data.searchParameters,
+            baselineByValue,
+            baselineByLabel
+          );
+
+          if (
+            !appliedStatusOptions &&
+            baselineOptions.length > 0 &&
+            !cancelled
+          ) {
+            setStatusOptions(baselineOptions);
+          }
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          console.error("Error fetching search parameters:", error);
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Failed to fetch search parameters.",
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSearchParams(false);
+        }
+      }
+    };
 
     const fetchCarrierSummaries = async () => {
       try {
@@ -1729,7 +1205,7 @@ export function ShipmentsTable({
         }
 
         const data = (await response.json()) as CarriersResponse;
-        if (data.success && data.carriers) {
+        if (!cancelled && data.success && data.carriers) {
           const mapped = Object.values(data.carriers).reduce<
             Record<string, string>
           >((acc, carrier) => {
@@ -1744,12 +1220,24 @@ export function ShipmentsTable({
           setCarrierColors(mapped);
         }
       } catch (error) {
-        console.error("Error fetching carriers:", error);
-        setCarrierColors({});
+        if (!cancelled) {
+          console.error("Error fetching carriers:", error);
+          setCarrierColors({});
+        }
       }
     };
 
+    const runSearchBootstrap = async () => {
+      const { options, byValue, byLabel } = await fetchStatusBaseline();
+      await fetchSearchParameters(options, byValue, byLabel);
+    };
+
+    runSearchBootstrap();
     fetchCarrierSummaries();
+
+    return () => {
+      cancelled = true;
+    };
   }, [getAuthToken, toast]);
 
   // Calculate which edge is closest and snap to it
@@ -1907,6 +1395,29 @@ export function ShipmentsTable({
     }
   }, [edge]);
 
+  const selectedCount = useMemo(() => {
+    if (!shipments || shipments.length === 0) {
+      return 0;
+    }
+    return shipments.reduce(
+      (count, shipment) => count + (selectedRows[shipment.id] ? 1 : 0),
+      0
+    );
+  }, [selectedRows, shipments]);
+
+  const headerCheckboxState = useMemo(() => {
+    if (!shipments || shipments.length === 0) {
+      return false;
+    }
+    if (selectedCount === 0) {
+      return false;
+    }
+    if (selectedCount === shipments.length) {
+      return true;
+    }
+    return "indeterminate" as const;
+  }, [selectedCount, shipments]);
+
   const handleSelectRow = useCallback(
     (id: number, checked: boolean) => {
       setSelectedRows((prev) => ({ ...prev, [id]: checked }));
@@ -1916,15 +1427,23 @@ export function ShipmentsTable({
 
   const handleSelectAll = useCallback(
     (checked: boolean) => {
-      const newSelectedRows: Record<number, boolean> = {};
-      if (checked) {
-        shipments?.forEach((shipment) => {
-          newSelectedRows[shipment.id] = true;
-        });
+      if (!shipments || shipments.length === 0) {
+        setSelectedRows({});
+        return;
       }
+
+      if (!checked) {
+        setSelectedRows({});
+        return;
+      }
+
+      const newSelectedRows: Record<number, boolean> = {};
+      shipments.forEach((shipment) => {
+        newSelectedRows[shipment.id] = true;
+      });
       setSelectedRows(newSelectedRows);
     },
-    [shipments, setSelectedRows]
+    [shipments]
   );
 
   const handleStatusChange = useCallback(
@@ -1961,10 +1480,9 @@ export function ShipmentsTable({
         });
         const normalizedStatus =
           newStatusId === "-" || newStatusId === "" ? null : newStatusId;
-        const ids = (Array.isArray(shipmentId)
-          ? shipmentId
-          : [shipmentId]
-        ).map((id) => Number(id));
+        const ids = (Array.isArray(shipmentId) ? shipmentId : [shipmentId]).map(
+          (id) => Number(id)
+        );
         updateShipmentsByIds(ids, (shipment) => ({
           ...shipment,
           status: normalizedStatus,
@@ -2063,10 +1581,7 @@ export function ShipmentsTable({
             } catch {
               // ignore non-JSON error bodies
             }
-            console.error(
-              `Failed to refresh shipment ${shipmentId}:`,
-              message
-            );
+            console.error(`Failed to refresh shipment ${shipmentId}:`, message);
             failures.push({ id: shipmentId, message });
             continue;
           }
@@ -2077,10 +1592,7 @@ export function ShipmentsTable({
           console.error(`Error refreshing shipment ${shipmentId}:`, error);
           failures.push({
             id: shipmentId,
-            message: getErrorMessage(
-              error,
-              "Failed to refresh shipment."
-            ),
+            message: getErrorMessage(error, "Failed to refresh shipment."),
           });
         }
       }
@@ -2098,16 +1610,13 @@ export function ShipmentsTable({
 
   const handleRefreshShipment = useCallback(
     async (shipmentId: number) => {
-      const { successes, failures } = await refreshShipmentsByIds([
-        shipmentId,
-      ]);
+      const { successes, failures } = await refreshShipmentsByIds([shipmentId]);
 
       if (failures.length > 0) {
         toast({
           variant: "destructive",
           title: "Refresh Failed",
-          description:
-            failures[0]?.message ?? "Failed to refresh shipment.",
+          description: failures[0]?.message ?? "Failed to refresh shipment.",
         });
         return;
       }
@@ -2257,7 +1766,13 @@ export function ShipmentsTable({
         ),
       });
     }
-  }, [getAuthToken, selectedRows, setSelectedRows, toast, updateShipmentsByIds]);
+  }, [
+    getAuthToken,
+    selectedRows,
+    setSelectedRows,
+    toast,
+    updateShipmentsByIds,
+  ]);
 
   const handleMarkShipmentsAsNotShipped = useCallback(async () => {
     const selectedIds = Object.entries(selectedRows)
@@ -2320,7 +1835,13 @@ export function ShipmentsTable({
         ),
       });
     }
-  }, [getAuthToken, selectedRows, setSelectedRows, toast, updateShipmentsByIds]);
+  }, [
+    getAuthToken,
+    selectedRows,
+    setSelectedRows,
+    toast,
+    updateShipmentsByIds,
+  ]);
 
   useEffect(() => {
     if (!selectedShipmentId) {
@@ -2536,6 +2057,130 @@ export function ShipmentsTable({
     [getAuthToken, setAction, toast]
   );
 
+  const ensureQuotesSelected = useCallback(
+    async (shipmentIds: number[]) => {
+      if (shipmentIds.length === 0) {
+        return;
+      }
+
+      const idsNeedingSelection = shipmentIds.filter((id) => {
+        const shipment = shipments.find((item) => item.id === id);
+        return !shipment || shipment.selectedQuoteId == null;
+      });
+
+      if (idsNeedingSelection.length === 0) {
+        return;
+      }
+
+      const token = getAuthToken();
+      const failures: string[] = [];
+
+      for (const shipmentId of idsNeedingSelection) {
+        try {
+          const detailResponse = await apiFetch(
+            `/shipments/${shipmentId}?columns=shipmentQuotes`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/json",
+              },
+            }
+          );
+
+          const payload = (await detailResponse.json().catch(() => null)) as
+            | (ShipmentDetailResponse & {
+                message?: unknown;
+              })
+            | null;
+
+          if (!detailResponse.ok || !payload) {
+            const message =
+              payload &&
+              typeof payload === "object" &&
+              payload !== null &&
+              "message" in payload
+                ? String((payload as { message?: unknown }).message ?? "")
+                : `Failed to load shipment ${shipmentId}.`;
+            throw new Error(message);
+          }
+
+          const detail = payload.shipment ?? null;
+          if (!detail) {
+            throw new Error("Shipment details were not available.");
+          }
+
+          const existingId =
+            typeof detail.selectedQuoteId === "number" &&
+            !Number.isNaN(detail.selectedQuoteId)
+              ? detail.selectedQuoteId
+              : null;
+
+          if (existingId !== null) {
+            updateShipmentsByIds([shipmentId], (shipment) => ({
+              ...shipment,
+              selectedQuoteId: existingId,
+              carrierCode: detail.carrierCode ?? shipment.carrierCode,
+              serviceCode: detail.serviceCode ?? shipment.serviceCode,
+            }));
+            continue;
+          }
+
+          const quote = findDefaultQuoteForShipment(detail);
+          if (!quote) {
+            throw new Error(
+              "No quotes are available for this shipment. Please select one manually."
+            );
+          }
+
+          const patchResponse = await apiFetch(
+            `/shipments/quote/${shipmentId}?quote_id=${quote.id}`,
+            {
+              method: "PATCH",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/json",
+              },
+            }
+          );
+
+          const patchPayload = (await patchResponse
+            .json()
+            .catch(() => null)) as ApiSuccessResponse | null;
+
+          if (!patchResponse.ok || patchPayload?.success === false) {
+            const message =
+              patchPayload?.message ??
+              `Failed to select quote for shipment ${shipmentId}.`;
+            throw new Error(message);
+          }
+
+          updateShipmentsByIds([shipmentId], (shipment) => ({
+            ...shipment,
+            selectedQuoteId: quote.id,
+            carrierCode: quote.carrierCode ?? shipment.carrierCode,
+            serviceCode: quote.serviceCode ?? shipment.serviceCode,
+          }));
+        } catch (error) {
+          console.error(
+            `Failed to auto-select quote for shipment ${shipmentId}:`,
+            error
+          );
+          failures.push(
+            getErrorMessage(
+              error,
+              `Failed to select a quote for shipment ${shipmentId}. Please choose one manually.`
+            )
+          );
+        }
+      }
+
+      if (failures.length > 0) {
+        throw new Error(failures.join("\n"));
+      }
+    },
+    [getAuthToken, shipments, updateShipmentsByIds]
+  );
+
   type QuickPrintOptions = {
     suppressSuccessToast?: boolean;
     title?: string;
@@ -2568,6 +2213,8 @@ export function ShipmentsTable({
       }
 
       try {
+        await ensureQuotesSelected(shipmentIds);
+
         const response = await apiFetch(
           `/pdf/labels/quickPrint?${params.toString()}`,
           {
@@ -2619,7 +2266,7 @@ export function ShipmentsTable({
         throw error;
       }
     },
-    [getAuthToken, setAction, toast]
+    [ensureQuotesSelected, getAuthToken, setAction, toast]
   );
 
   const markLabelProcessing = useCallback(
@@ -3146,7 +2793,12 @@ export function ShipmentsTable({
         markLabelProcessing([shipmentId], false);
       }
     },
-    [generateLabelsForShipments, markLabelProcessing, toast, updateShipmentsByIds]
+    [
+      generateLabelsForShipments,
+      markLabelProcessing,
+      toast,
+      updateShipmentsByIds,
+    ]
   );
 
   const handleReprintLabel = useCallback(
@@ -3196,8 +2848,20 @@ export function ShipmentsTable({
 
   if (shipmentsAreLoading) {
     return (
-      <div className="flex flex-1 justify-center items-center h-[90vh] w-full">
-        <Loader className="animate-spin" />
+      <div className="w-full space-y-4 p-6">
+        <Skeleton className="h-12 w-full rounded-lg" />
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-3 rounded-lg border bg-card/40 p-3"
+            >
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <Skeleton className="h-4 flex-1 rounded-full" />
+              <Skeleton className="h-4 w-24 rounded-full" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -3418,436 +3082,26 @@ export function ShipmentsTable({
       </div>
       <Table className="">
         <TableHeader>
-          <TableRow className="">
-            <TableHead className="mb-3">
-              <div className="flex items-center space-x-10 pb-3 px-3">
-                <Checkbox
-                  checked={headerCheckboxState}
-                  onCheckedChange={(checked) =>
-                    handleSelectAll(Boolean(checked))
-                  }
-                  aria-label="Select all rows"
-                  className="h-8 w-8 rounded-full data-[state=checked]:bg-[#3D753A] data-[state=checked]:text-primary-foreground border-gray-300 focus-visible:ring-sky-500"
-                />
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="cursor-pointer rounded-full h-10 w-10 bg-[#3D753A] text-white hover:text-white hover:bg-black"
-                    >
-                      <SearchIcon className="h-5 w-5 hover:text-white" />
-                      <span className="sr-only">Search Shipments</span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Search Shipments</DialogTitle>
-                      {/* <DialogDescription>
-                        Enter your search criteria below.
-                      </DialogDescription> */}
-                    </DialogHeader>
-                    <div className="mt-2">
-                      <Button
-                        variant="outline"
-                        type="button"
-                        onClick={handleClearFilters}
-                      >
-                        CLEAR
-                      </Button>
-                    </div>
-                    <div className="py-4 pt-0 space-y-4">
-                      {loadingSearchParams ? (
-                        <div className="flex justify-center items-center py-4">
-                          <Loader className="h-6 w-6 animate-spin mr-2" />
-                          <span>Loading search fields...</span>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            {Object.entries(searchFields)
-                              .sort((a, b) => b[1].weight - a[1].weight) // Sort by weight (highest first)
-                              .filter(([key]) => visibleFields[key])
-                              .map(([key, field]) => (
-                                <div key={key} className="flex flex-col gap-2">
-                                  <div className="flex justify-between items-center">
-                                    <Label htmlFor={key}>{field.name}</Label>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        const updatedFields = {
-                                          ...visibleFields,
-                                          [key]: false,
-                                        };
-                                        setVisibleFields(updatedFields);
-                                        // Save to localStorage
-                                        localStorage.setItem(
-                                          "searchVisibleFields",
-                                          JSON.stringify(updatedFields)
-                                        );
-                                        updateSearchState((current) => ({
-                                          ...current,
-                                          [key]: "",
-                                        }), { execute: true });
-                                      }}
-                                      className="h-6 w-6 p-0"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                  {field.type === "date" ? (
-                                    <Input
-                                      id={key}
-                                      type="date"
-                                      value={searchValues[key] || ""}
-                                      className="w-full"
-                                      onChange={(e) => {
-                                        updateSearchValue(key, e.target.value);
-                                      }}
-                                    />
-                                  ) : field.type === "boolean" ? (
-                                    <Select
-                                      value={searchValues[key] || ""}
-                                      onValueChange={(value) => {
-                                        updateSearchValue(key, value);
-                                      }}
-                                    >
-                                      <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="true">
-                                          Yes
-                                        </SelectItem>
-                                        <SelectItem value="false">
-                                          No
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <Input
-                                      id={key}
-                                      placeholder={field.name}
-                                      value={searchValues[key] || ""}
-                                      className="w-full"
-                                      onChange={(e) => {
-                                        updateSearchValue(key, e.target.value);
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                              ))}
-                          </div>
-
-                          {!loadingSearchParams &&
-                            Object.keys(searchFields).some(
-                              (key) => !visibleFields[key]
-                            ) && (
-                              <div className="mt-2">
-                                <Select
-                                  onValueChange={(value) => {
-                                    const updatedFields = {
-                                      ...visibleFields,
-                                      [value]: true,
-                                    };
-                                    setVisibleFields(updatedFields);
-                                    // Save to localStorage
-                                    localStorage.setItem(
-                                      "searchVisibleFields",
-                                      JSON.stringify(updatedFields)
-                                    );
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Add search field" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {Object.entries(searchFields)
-                                      .filter(([key]) => !visibleFields[key])
-                                      .map(([key, field]) => (
-                                        <SelectItem key={key} value={key}>
-                                          {field.name}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                        </>
-                      )}
-                    </div>
-                    <DialogFooter className="justify-end space-x-2">
-                      <DialogClose asChild>
-                        <Button variant="outline">CLOSE</Button>
-                      </DialogClose>
-                      <Button
-                        variant="outline"
-                        type="button"
-                        onClick={() => {
-                          handleClearFilters();
-                          if (searchFields) {
-                            const topFields = Object.entries(searchFields)
-                              .sort((a, b) => b[1].weight - a[1].weight)
-                              .slice(0, 5)
-                              .map(([k]) => k);
-                            const initialVisibility = Object.keys(
-                              searchFields
-                            ).reduce((acc, key) => {
-                              acc[key] = topFields.includes(key);
-                              return acc;
-                            }, {} as Record<string, boolean>);
-                            setVisibleFields(initialVisibility);
-                            localStorage.setItem(
-                              "searchVisibleFields",
-                              JSON.stringify(initialVisibility)
-                            );
-                          }
-                        }}
-                      >
-                        CLEAR
-                      </Button>
-                      <Button
-                        type="button"
-                        className="bg-[#3D753A] hover:bg-black text-white"
-                        onClick={() => executeSearch(searchValues)}
-                      >
-                        SEARCH
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <Select
-                  value={String(itemsPerPage)}
-                  onValueChange={(value) => setItemsPerPage(Number(value))}
-                >
-                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                    <SelectValue className="text-white" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="flex items-center gap-2">
-                  {showOrderDateFilters && (
-                    <>
-                      <Select
-                        value={selectedOrderDateRange}
-                        onValueChange={handleOrderDateFilterChange}
-                        disabled={
-                          loadingSearchParams ||
-                          (!orderDateFieldConfig.from &&
-                            !orderDateFieldConfig.to &&
-                            !orderDateFieldConfig.single)
-                        }
-                      >
-                        <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                          <div className="text-white flex items-center">
-                            <FaCalendarDay className="h-5 w-5 mr-2 text-white" />
-                            {orderDateLabel}
-                          </div>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Order Dates</SelectItem>
-                          {ORDER_DATE_PRESET_KEYS.map((key) => (
-                            <SelectItem key={key} value={key}>
-                              {ORDER_DATE_PRESETS[key].label}
-                            </SelectItem>
-                          ))}
-                          {selectedOrderDateRange === "custom" && (
-                            <SelectItem value="custom" disabled>
-                              Custom Range
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                      {orderDateFromKey && orderDateToKey ? (
-                        <>
-                          <Input
-                            type="date"
-                            value={orderDateDraftFrom}
-                            onChange={(event) =>
-                              handleOrderDateInputChange(
-                                "from",
-                                event.target.value
-                              )
-                            }
-                            disabled={orderDateInputsDisabled}
-                            className="h-10 w-[150px] rounded-full border px-3 text-sm"
-                          />
-                          <span className="text-sm text-gray-500">to</span>
-                          <Input
-                            type="date"
-                            value={orderDateDraftTo}
-                            onChange={(event) =>
-                              handleOrderDateInputChange(
-                                "to",
-                                event.target.value
-                              )
-                            }
-                            disabled={orderDateInputsDisabled}
-                            className="h-10 w-[150px] rounded-full border px-3 text-sm"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleApplyOrderDateInputs}
-                            disabled={orderDateDraftApplyDisabled}
-                            className="h-10 px-4"
-                          >
-                            Apply
-                          </Button>
-                        </>
-                      ) : orderDateSingleKey ? (
-                        <>
-                          <Input
-                            type="date"
-                            value={orderDateDraftSingle}
-                            onChange={(event) =>
-                              handleOrderDateInputChange(
-                                "single",
-                                event.target.value
-                              )
-                            }
-                            disabled={orderDateInputsDisabled}
-                            className="h-10 w-[150px] rounded-full border px-3 text-sm"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleApplyOrderDateInputs}
-                            disabled={orderDateDraftApplyDisabled}
-                            className="h-10 px-4"
-                          >
-                            Apply
-                          </Button>
-                        </>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-                <Select
-                  value={selectedStatusFilter}
-                  onValueChange={handleStatusFilterChange}
-                  disabled={isLoadingStatuses || !statusField}
-                >
-                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                    <div className="text-white flex items-center">
-                      <GrStatusGood className="h-5 w-5 mr-2 text-white" />
-                      {statusFilterLabel}
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    {statusOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={selectedCarrierFilter}
-                  onValueChange={handleCarrierFilterChange}
-                  disabled={
-                    loadingSearchParams ||
-                    !carrierField ||
-                    carrierOptions.length === 0
-                  }
-                >
-                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                    <div className="text-white flex items-center">
-                      <Truck className="h-5 w-5 mr-2 text-white" />{" "}
-                      {carrierFilterLabel}
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Shipping</SelectItem>
-                    {carrierOptions.map((carrier) => (
-                      <SelectItem key={carrier} value={carrier}>
-                        {carrier.toUpperCase()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={selectedManifestFilter}
-                  onValueChange={handleManifestFilterChange}
-                  disabled={!manifestField}
-                >
-                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                    <div className="text-white flex items-center">
-                      <AiFillHdd className="h-5 w-5 mr-2 text-white" />{" "}
-                      {manifestFilterLabel}
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Manifest</SelectItem>
-                    <SelectItem value="true">Manifested</SelectItem>
-                    <SelectItem value="false">Not Manifested</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={selectedStateFilter}
-                  onValueChange={handleStateFilterChange}
-                  disabled={
-                    loadingSearchParams ||
-                    !stateField ||
-                    stateOptions.length === 0
-                  }
-                >
-                  <SelectTrigger className="h-10 rounded-full bg-[#3D753A] text-white hover:bg-black px-4 text-sm w-auto">
-                    <div className="text-white flex items-center">
-                      <Settings className="text-white" />
-                      <span className="ml-2">{stateFilterLabel}</span>
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All States</SelectItem>
-                    {stateOptions.map((state) => (
-                      <SelectItem key={state} value={state}>
-                        {state.toUpperCase()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full h-10 w-10 bg-white text-gray-700 hover:bg-gray-50"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-6 h-6"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z"
-                    />
-                  </svg>
-                  <span className="sr-only">Help</span>
-                </Button>
-              </div>
-            </TableHead>
-          </TableRow>
           <TableRow>
             <TableHead className="px-3 pb-2">
               <div className="flex items-center gap-x-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                <div className="w-8" />
-                <div className="w-16">
-                  <SortToggleButton
-                    target="shopifyOrderNumber"
-                    label="Order #"
-                    className="w-full justify-between pr-1"
-                  />
+                <div className="flex items-center gap-x-3">
+                  <div className="w-8 flex items-center justify-start">
+                    <Checkbox
+                      checked={headerCheckboxState}
+                      onCheckedChange={(checked) =>
+                        handleSelectAll(Boolean(checked))
+                      }
+                      aria-label="Select all shipments"
+                    />
+                  </div>
+                  <div className="w-16">
+                    <SortToggleButton
+                      target="shopifyOrderNumber"
+                      label="Order #"
+                      className="w-full justify-between pr-1"
+                    />
+                  </div>
                 </div>
                 <div className="min-w-[220px] text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                   Actions
@@ -3889,10 +3143,12 @@ export function ShipmentsTable({
         </TableHeader>
         <TableBody>
           {shipments?.map((shipment) => {
-            const isInvoiceProcessing =
-              invoiceProcessingShipmentIds.has(shipment.id);
-            const isLabelProcessing =
-              labelProcessingShipmentIds.has(shipment.id);
+            const isInvoiceProcessing = invoiceProcessingShipmentIds.has(
+              shipment.id
+            );
+            const isLabelProcessing = labelProcessingShipmentIds.has(
+              shipment.id
+            );
             return (
               <React.Fragment key={shipment.id}>
                 <TableRow
@@ -4034,7 +3290,9 @@ export function ShipmentsTable({
                               : shipment.potentialNewLabel
                               ? "Potential Relabel"
                               : `Label ${
-                                  shipment.labelPrinted ? "Printed" : "Not Printed"
+                                  shipment.labelPrinted
+                                    ? "Printed"
+                                    : "Not Printed"
                                 }`}
                           </TooltipContent>
                         </Tooltip>
@@ -4634,4 +3892,3 @@ export function ShipmentsTable({
     </>
   );
 }
-
