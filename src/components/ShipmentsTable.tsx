@@ -329,9 +329,7 @@ export function ShipmentsTable({
   updateShipments,
   shipments,
   currentPage,
-  itemsPerPage,
   setCurrentPage,
-  setItemsPerPage,
   lastPage,
   selectedWarehouse,
   shipmentsAreLoading,
@@ -1909,10 +1907,6 @@ export function ShipmentsTable({
     }
   }, [edge]);
 
-  const isAllSelected =
-    shipments?.length > 0 &&
-    shipments.every((shipment) => selectedRows[shipment.id]);
-
   const handleSelectRow = useCallback(
     (id: number, checked: boolean) => {
       setSelectedRows((prev) => ({ ...prev, [id]: checked }));
@@ -3428,7 +3422,7 @@ export function ShipmentsTable({
             <TableHead className="mb-3">
               <div className="flex items-center space-x-10 pb-3 px-3">
                 <Checkbox
-                  checked={isAllSelected}
+                  checked={headerCheckboxState}
                   onCheckedChange={(checked) =>
                     handleSelectAll(Boolean(checked))
                   }
@@ -4640,3 +4634,4 @@ export function ShipmentsTable({
     </>
   );
 }
+
