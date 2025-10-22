@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiFetch } from "@/lib/api/client";
 import { useAuth } from '@/contexts/AuthContext';
@@ -77,14 +77,12 @@ export default function PackageTab() {
     });
     const [isEditPackageDialogOpen, setIsEditPackageDialogOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
+    const [, setIsDeleting] = useState(false);
     const [addedActionDone, setAddedActionDone] = useState(false);
     const [deletedActionDone, setDeletedActionDone] = useState(false);
     const { requireAuthToken } = useAuth();
 
-
-
-    const getPackages = async () => {
+    const getPackages = useCallback(async () => {
 
         const token = requireAuthToken();
 
@@ -107,7 +105,7 @@ export default function PackageTab() {
         // Convert the warehouses object to an array
         const packagesArray = data.packages;
         setPackages(packagesArray);
-    }
+    }, [requireAuthToken]);
 
     const handleUpdatePackage = (pack: Package) => {
         setEditPackage(pack);
@@ -196,7 +194,7 @@ export default function PackageTab() {
                     'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify(data),
-            }).then(res => {
+            }).then(() => {
                const wh: string[] = [];
                added.forEach((i: Warehouse) => {
                    if(i.country === country){
@@ -379,7 +377,7 @@ export default function PackageTab() {
         if (typeof window !== 'undefined') {
             fetchWarehouses();
         }
-    }, [requireAuthToken]);
+    }, [requireAuthToken, getPackages]);
 
 
     return  <Card>
