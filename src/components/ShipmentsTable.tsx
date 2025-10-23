@@ -4071,19 +4071,20 @@ export function ShipmentsTable({
             const originalRegionCode = extractOriginalRegionCode(
               shipment.originalAddress
             );
-            const locationParts = [
-              shipment.address1,
-              shipment.suburb,
-              originalRegionCode,
-            ].filter(
+            const addressParts = [shipment.address1, shipment.suburb].filter(
               (part): part is string =>
                 typeof part === "string" && part.trim().length > 0
             );
-            const locationText = locationParts.join(", ");
-            const truncatedLocationText =
-              locationText.length > 45
-                ? `${locationText.slice(0, 45)}...`
-                : locationText;
+            const addressText = addressParts.join(", ");
+            const truncatedAddressText =
+              addressText.length > 45
+                ? `${addressText.slice(0, 45)}...`
+                : addressText;
+            const displayRegionCode =
+              originalRegionCode ??
+              (typeof shipment.region === "string"
+                ? shipment.region.trim() || null
+                : null);
             return (
               <React.Fragment key={shipment.id}>
                 <TableRow
@@ -4408,9 +4409,14 @@ export function ShipmentsTable({
                         <FaLocationDot className="w-4 h-4" />
                         <span
                           className="font-medium"
-                          title={locationText || undefined}
+                          title={addressText || undefined}
                         >
-                          {truncatedLocationText || "-"}
+                          {truncatedAddressText || "-"}
+                        </span>
+                      </div>
+                      <div className="w-20 flex items-center">
+                        <span className="font-medium">
+                          {displayRegionCode || "-"}
                         </span>
                       </div>
                       {/* <div className="text-xs">{shipment.suburb}, {shipment.region} {shipment.postCode} {shipment.country}</div> */}
