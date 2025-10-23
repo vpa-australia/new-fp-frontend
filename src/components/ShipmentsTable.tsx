@@ -75,6 +75,17 @@ import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api/client";
 
+type ShipmentOriginalAddressObject = {
+  regionCode?: string | null;
+  region_code?: string | null;
+  region?: string | null;
+  state?: string | null;
+  province?: string | null;
+  provinceCode?: string | null;
+  province_code?: string | null;
+  [key: string]: unknown;
+};
+
 export interface Shipment {
   id: number;
   shopifyId: number;
@@ -127,6 +138,7 @@ export interface Shipment {
   totalPrice: string;
   lastApiUpdate: number;
   statusId?: number | null;
+  originalAddress?: ShipmentOriginalAddressObject | string | null;
 }
 
 interface StatusOption {
@@ -334,6 +346,73 @@ const toBoolean = (value: unknown): boolean | null => {
       return false;
     }
   }
+  return null;
+};
+
+const normalizeRegionFragment = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed;
+};
+
+const extractRegionCodeFromAddressObject = (
+  address: ShipmentOriginalAddressObject | null | undefined
+): string | null => {
+  if (!address || typeof address !== "object") {
+    return null;
+  }
+
+  const candidate =
+    address.regionCode ??
+    address.region_code ??
+    address.provinceCode ??
+    address.province_code ??
+    address.state ??
+    address.region ??
+    address.province;
+
+  return normalizeRegionFragment(candidate);
+};
+
+const extractOriginalRegionCode = (originalAddress: unknown): string | null => {
+  if (!originalAddress) {
+    return null;
+  }
+
+  if (typeof originalAddress === "string") {
+    const trimmed = originalAddress.trim();
+    if (!trimmed) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(
+        trimmed
+      ) as ShipmentOriginalAddressObject | null;
+      const extracted = extractRegionCodeFromAddressObject(parsed);
+      if (extracted) {
+        return extracted;
+      }
+    } catch {
+      // If the string is not JSON, fall back to treating it as the region fragment itself.
+      const normalized = normalizeRegionFragment(trimmed);
+      if (normalized) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  if (typeof originalAddress === "object") {
+    return extractRegionCodeFromAddressObject(
+      originalAddress as ShipmentOriginalAddressObject
+    );
+  }
+
   return null;
 };
 
@@ -1155,10 +1234,8 @@ export function ShipmentsTable({
     });
 
     entries.sort((a, b) => {
-      const orderA =
-        searchParameterOrder.get(a.key) ?? Number.MAX_SAFE_INTEGER;
-      const orderB =
-        searchParameterOrder.get(b.key) ?? Number.MAX_SAFE_INTEGER;
+      const orderA = searchParameterOrder.get(a.key) ?? Number.MAX_SAFE_INTEGER;
+      const orderB = searchParameterOrder.get(b.key) ?? Number.MAX_SAFE_INTEGER;
       if (orderA !== orderB) {
         return orderA - orderB;
       }
@@ -1178,20 +1255,13 @@ export function ShipmentsTable({
       return;
     }
 
-    if (
-      selectedSearchFieldKey &&
-      searchFields[selectedSearchFieldKey]
-    ) {
+    if (selectedSearchFieldKey && searchFields[selectedSearchFieldKey]) {
       return;
     }
 
     const [firstKey] = searchParameterEntries[0];
     setSelectedSearchFieldKey(firstKey);
-  }, [
-    searchFields,
-    searchParameterEntries,
-    selectedSearchFieldKey,
-  ]);
+  }, [searchFields, searchParameterEntries, selectedSearchFieldKey]);
 
   useEffect(() => {
     const normalizedBase =
@@ -1257,8 +1327,7 @@ export function ShipmentsTable({
   const isApplyDisabled =
     areSearchParamsLoading || !selectedSearchFieldKey || !hasDraftValue;
   const isClearDisabled =
-    areSearchParamsLoading ||
-    (activeFilters.length === 0 && !hasDraftValue);
+    areSearchParamsLoading || (activeFilters.length === 0 && !hasDraftValue);
 
   const updateSearchParamsWith = useCallback(
     (updater: (params: URLSearchParams) => void) => {
@@ -3007,12 +3076,7 @@ export function ShipmentsTable({
     } finally {
       markLabelProcessing(selectedIds, false);
     }
-  }, [
-    getSelectedShipmentIds,
-    markLabelProcessing,
-    quickPrintShipments,
-    toast,
-  ]);
+  }, [getSelectedShipmentIds, markLabelProcessing, quickPrintShipments, toast]);
 
   type InvoicePrintOptions = {
     previewTitle?: string;
@@ -3332,7 +3396,9 @@ export function ShipmentsTable({
 
       const performRequest = async (
         method: "POST" | "PUT"
-      ): Promise<LabelGenerationRequestSuccess | LabelGenerationRequestFailure> => {
+      ): Promise<
+        LabelGenerationRequestSuccess | LabelGenerationRequestFailure
+      > => {
         try {
           const init: RequestInit = {
             method,
@@ -3437,8 +3503,9 @@ export function ShipmentsTable({
 
     try {
       markLabelProcessing(selectedIds, true);
-      const { statusChangedShipmentIds } =
-        await generateLabelsForShipments(selectedIds);
+      const { statusChangedShipmentIds } = await generateLabelsForShipments(
+        selectedIds
+      );
       const didStatusChange = statusChangedShipmentIds.length > 0;
 
       if (didStatusChange) {
@@ -3492,10 +3559,10 @@ export function ShipmentsTable({
     async (shipmentId: number) => {
       try {
         markLabelProcessing([shipmentId], true);
-        const { statusChangedShipmentIds } =
-          await generateLabelsForShipments([shipmentId]);
-        const didStatusChange =
-          statusChangedShipmentIds.includes(shipmentId);
+        const { statusChangedShipmentIds } = await generateLabelsForShipments([
+          shipmentId,
+        ]);
+        const didStatusChange = statusChangedShipmentIds.includes(shipmentId);
 
         if (didStatusChange) {
           updateShipmentsByIds([shipmentId], (shipment) => ({
@@ -3649,7 +3716,9 @@ export function ShipmentsTable({
               ) : (
                 <Input
                   value={selectedFieldRawValue}
-                  onChange={(event) => handleDraftValueUpdate(event.target.value)}
+                  onChange={(event) =>
+                    handleDraftValueUpdate(event.target.value)
+                  }
                   placeholder={
                     selectedSearchField?.name
                       ? `Search ${selectedSearchField.name}`
@@ -3705,7 +3774,9 @@ export function ShipmentsTable({
                   type="button"
                   className="rounded-full p-1 text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-1"
                   onClick={() => handleRemoveFilter(filter.key)}
-                  aria-label={`Remove ${filter.parameter.name ?? filter.key} filter`}
+                  aria-label={`Remove ${
+                    filter.parameter.name ?? filter.key
+                  } filter`}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -3961,6 +4032,9 @@ export function ShipmentsTable({
                 <div className="w-88 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   Address
                 </div>
+                <div className="w-20 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  &nbsp;
+                </div>
                 <div className="w-48">
                   <SortToggleButton
                     target="orderDate"
@@ -3994,6 +4068,22 @@ export function ShipmentsTable({
             const isLabelProcessing = labelProcessingShipmentIds.has(
               shipment.id
             );
+            const originalRegionCode = extractOriginalRegionCode(
+              shipment.originalAddress
+            );
+            const locationParts = [
+              shipment.address1,
+              shipment.suburb,
+              originalRegionCode,
+            ].filter(
+              (part): part is string =>
+                typeof part === "string" && part.trim().length > 0
+            );
+            const locationText = locationParts.join(", ");
+            const truncatedLocationText =
+              locationText.length > 45
+                ? `${locationText.slice(0, 45)}...`
+                : locationText;
             return (
               <React.Fragment key={shipment.id}>
                 <TableRow
@@ -4302,241 +4392,6 @@ export function ShipmentsTable({
                         <TooltipContent>Status Check</TooltipContent>
                       </Tooltip>
 
-                      {/* <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Dialog
-                          open={openPdfDialogId === shipment.id}
-                          onOpenChange={(open) => {
-                            if (open) {
-                              setOpenPdfDialogId(shipment.id);
-                              setPdfFormState({
-                                file: null,
-                                name: "",
-                                title: "",
-                                trackingCode: shipment.tracking_code || "",
-                                carrierCode: shipment.carrierCode || "",
-                              });
-                            } else {
-                              setOpenPdfDialogId((current) =>
-                                current === shipment.id ? null : current
-                              );
-                              setPdfFormState({
-                                file: null,
-                                name: "",
-                                title: "",
-                                trackingCode: "",
-                                carrierCode: "",
-                              });
-                            }
-                          }}
-                        >
-                          <DialogTrigger asChild>
-                            <div
-                              className="cursor-pointer"
-                              onClick={() => {
-                                setOpenPdfDialogId(shipment.id);
-                                setPdfFormState({
-                                  file: null,
-                                  name: "",
-                                  title: "",
-                                  trackingCode: shipment.tracking_code || "",
-                                  carrierCode: shipment.carrierCode || "",
-                                });
-                              }}
-                            >
-                              {statusOptions.filter(
-                                (option) => option.value == shipment.status
-                              )[0]?.greenTick == true ? (
-                                <Image
-                                  alt="upload pdf"
-                                  width={22}
-                                  height={22}
-                                  src={"/upload-green.avif"}
-                                />
-                              ) : (
-                                <Image
-                                  alt="upload pdf"
-                                  width={22}
-                                  height={22}
-                                  src={"/upload.avif"}
-                                />
-                              )}
-                            </div>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Upload PDF for Shipment</DialogTitle>
-                            </DialogHeader>
-                            <form
-                              className="space-y-4"
-                              onSubmit={async (event) => {
-                                event.preventDefault();
-                                if (!pdfFormState.file) {
-                                  toast({
-                                    title: "Error",
-                                    description: "Please select a PDF file",
-                                    variant: "destructive",
-                                  });
-                                  return;
-                                }
-
-                                try {
-                                  await handlePdfUpload({
-                                    file: pdfFormState.file,
-                                    shipmentId: shipment.id,
-                                    trackingCode: pdfFormState.trackingCode,
-                                    carrierCode: pdfFormState.carrierCode,
-                                    name:
-                                      pdfFormState.name ||
-                                      pdfFormState.file.name,
-                                    title: pdfFormState.title || "Uploaded PDF",
-                                  });
-
-                                  setPdfFormState({
-                                    file: null,
-                                    name: "",
-                                    title: "",
-                                    trackingCode: shipment.tracking_code || "",
-                                    carrierCode: shipment.carrierCode || "",
-                                  });
-                                  setOpenPdfDialogId(null);
-                                } catch {
-                                  // errors handled in handlePdfUpload
-                                }
-                              }}
-                            >
-                              <div className="grid gap-4 py-4">
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label>Document Name</Label>
-                                    <Input
-                                      placeholder="Enter document name"
-                                      className="mt-1"
-                                      value={pdfFormState.name}
-                                      onChange={(event) =>
-                                        setPdfFormState((prev) => ({
-                                          ...prev,
-                                          name: event.target.value,
-                                        }))
-                                      }
-                                      required
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>Document Title</Label>
-                                    <Input
-                                      placeholder="Enter document title"
-                                      className="mt-1"
-                                      value={pdfFormState.title}
-                                      onChange={(event) =>
-                                        setPdfFormState((prev) => ({
-                                          ...prev,
-                                          title: event.target.value,
-                                        }))
-                                      }
-                                      required
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>Tracking Code</Label>
-                                    <Input
-                                      placeholder="Enter tracking code"
-                                      className="mt-1"
-                                      value={pdfFormState.trackingCode}
-                                      onChange={(event) =>
-                                        setPdfFormState((prev) => ({
-                                          ...prev,
-                                          trackingCode: event.target.value,
-                                        }))
-                                      }
-                                      required
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>Carrier Code</Label>
-                                    <Input
-                                      placeholder="Enter carrier code"
-                                      className="mt-1"
-                                      value={pdfFormState.carrierCode}
-                                      onChange={(event) =>
-                                        setPdfFormState((prev) => ({
-                                          ...prev,
-                                          carrierCode: event.target.value,
-                                        }))
-                                      }
-                                      required
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <input
-                                      ref={(node) => {
-                                        fileInputRefs.current[shipment.id] =
-                                          node;
-                                      }}
-                                      type="file"
-                                      accept=".pdf"
-                                      className="hidden"
-                                      onChange={(event) => {
-                                        const file =
-                                          event.target.files?.[0] || null;
-                                        setPdfFormState((prev) => ({
-                                          ...prev,
-                                          file,
-                                          name:
-                                            file && !prev.name
-                                              ? file.name.replace(
-                                                  /\.[^/.]+$/,
-                                                  ""
-                                                )
-                                              : prev.name,
-                                        }));
-                                      }}
-                                      required
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      className="w-full justify-start"
-                                      onClick={() =>
-                                        fileInputRefs.current[
-                                          shipment.id
-                                        ]?.click()
-                                      }
-                                    >
-                                      <FileText className="h-4 w-4 mr-2" />
-                                      {pdfFormState.file
-                                        ? pdfFormState.file.name
-                                        : "Choose PDF File"}
-                                    </Button>
-                                    <p
-                                      className={`text-sm mt-1 ${
-                                        pdfFormState.file
-                                          ? "text-green-600 font-medium"
-                                          : "text-muted-foreground"
-                                      }`}
-                                    >
-                                      {pdfFormState.file
-                                        ? `Selected: ${pdfFormState.file.name}`
-                                        : "No file selected"}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <DialogFooter className="justify-end space-x-2">
-                                <DialogClose asChild>
-                                  <Button variant="outline" type="button">
-                                    Close
-                                  </Button>
-                                </DialogClose>
-                                <Button type="submit">Upload PDF</Button>
-                              </DialogFooter>
-                            </form>
-                          </DialogContent>
-                        </Dialog>
-                      </TooltipTrigger>
-                      <TooltipContent>Upload PDF</TooltipContent>
-                    </Tooltip> */}
-
                       <div className="ml-5 w-56 flex items-center gap-x-1">
                         {shipment.company ? (
                           <FaBuilding className="w-4 h-4" />
@@ -4551,19 +4406,11 @@ export function ShipmentsTable({
                       </div>
                       <div className="w-88 flex">
                         <FaLocationDot className="w-4 h-4" />
-                        <span className="font-medium">
-                          {(shipment.address1 + ", " + shipment.suburb).length >
-                          45
-                            ? `${(
-                                shipment.address1 +
-                                ", " +
-                                shipment.suburb
-                              ).substring(0, 45)}...`
-                            : (
-                                shipment.address1 +
-                                ", " +
-                                shipment.suburb
-                              ).substring(0, 45)}
+                        <span
+                          className="font-medium"
+                          title={locationText || undefined}
+                        >
+                          {truncatedLocationText || "-"}
                         </span>
                       </div>
                       {/* <div className="text-xs">{shipment.suburb}, {shipment.region} {shipment.postCode} {shipment.country}</div> */}
