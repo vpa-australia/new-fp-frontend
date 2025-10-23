@@ -2181,6 +2181,37 @@ export function ShipmentsTable({
     return "indeterminate" as const;
   }, [selectedCount, shipments]);
 
+  const paginationPages = useMemo((): Array<number | "..."> => {
+    if (!Number.isFinite(lastPage) || lastPage <= 1) {
+      return [];
+    }
+
+    const pages: Array<number | "..."> = [];
+    const windowSize = 2;
+    const start = Math.max(1, currentPage - windowSize);
+    const end = Math.min(lastPage, currentPage + windowSize);
+
+    if (start > 1) {
+      pages.push(1);
+      if (start > 2) {
+        pages.push("...");
+      }
+    }
+
+    for (let page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+
+    if (end < lastPage) {
+      if (end < lastPage - 1) {
+        pages.push("...");
+      }
+      pages.push(lastPage);
+    }
+
+    return pages;
+  }, [currentPage, lastPage]);
+
   const handleSelectRow = useCallback(
     (id: number, checked: boolean) => {
       setSelectedRows((prev) => ({ ...prev, [id]: checked }));
@@ -3973,17 +4004,6 @@ export function ShipmentsTable({
               <p>Mark Not Shipped</p>
             </TooltipContent>
           </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="icon">
-                <Send className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side={getTooltipSide()}>
-              <p>Manifest</p>
-            </TooltipContent>
-          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="outline" size="icon">
@@ -3995,6 +4015,24 @@ export function ShipmentsTable({
             </TooltipContent>
           </Tooltip>
         </div>
+      </div>
+      <div className="fixed bottom-6 right-6 z-50">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Manifest shipments"
+              disabled={isLoadingStatuses || selectedWarehouse === "All"}
+              variant="destructive"
+              size="lg"
+              className="shadow-2xl h-14 w-14 rounded-full"
+            >
+              <Send className="h-6 w-6" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            <p>Manifest</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
       <Table className="">
         <TableHeader>
@@ -4564,29 +4602,49 @@ export function ShipmentsTable({
           })}
         </TableBody>
       </Table>
-      <div className="flex items-center justify-between pt-3 px-4 border-t">
-        <div className="text-sm text-gray-600">
-          {/* Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}-{Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} shipments */}
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setCurrentPage(currentPage + 1)}
-              disabled={currentPage === lastPage}
-            >
-              Next
-            </Button>
+      {lastPage > 1 ? (
+        <div className="flex items-center justify-center gap-3 pt-3 px-4 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          <div className="flex items-center gap-1">
+            {paginationPages.map((page, index) =>
+              page === "..." ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="px-2 text-sm text-muted-foreground"
+                >
+                  &hellip;
+                </span>
+              ) : (
+                <Button
+                  key={`page-${page}`}
+                  variant={page === currentPage ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(page)}
+                  disabled={page === currentPage}
+                  aria-current={page === currentPage ? "page" : undefined}
+                >
+                  {page}
+                </Button>
+              )
+            )}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.min(currentPage + 1, lastPage))}
+            disabled={currentPage === lastPage}
+          >
+            Next
+          </Button>
         </div>
-      </div>
+      ) : null}
     </>
   );
 }
