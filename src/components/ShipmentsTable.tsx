@@ -1,6 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  FormEvent,
+} from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -24,6 +32,7 @@ import {
   Lock,
   Unlock,
   Loader2,
+  Search,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -59,6 +68,8 @@ import { FaLocationDot } from "react-icons/fa6";
 import { MdRefresh } from "react-icons/md";
 import { GrStatusGood } from "react-icons/gr";
 import { PdfViewer } from "./ui/pdf-viewer";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
@@ -165,6 +176,337 @@ type SearchParameter = {
 type SearchParametersResponse = {
   success: boolean;
   searchParameters?: Record<string, SearchParameter>;
+};
+type NormalizedSearchOption = {
+  value: string;
+  label: string;
+};
+
+const normalizeSearchParameterOption = (
+  option: SearchParameterOption
+): NormalizedSearchOption | null => {
+  if (option == null) {
+    return null;
+  }
+
+  if (typeof option === "string" || typeof option === "number") {
+    const value = String(option).trim();
+    if (!value) {
+      return null;
+    }
+    return {
+      value,
+      label: value,
+    };
+  }
+
+  if (typeof option === "object") {
+    const record = option as Record<string, unknown>;
+    const rawValue =
+      record.value ??
+      record.id ??
+      record.code ??
+      record.label ??
+      record.name ??
+      record.title ??
+      null;
+    const value =
+      rawValue != null && rawValue !== undefined ? String(rawValue).trim() : "";
+    if (!value) {
+      return null;
+    }
+
+    const rawLabel = record.label ?? record.name ?? record.title ?? rawValue;
+    const label =
+      rawLabel != null && rawLabel !== undefined ? String(rawLabel) : value;
+
+    return {
+      value,
+      label,
+    };
+  }
+
+  return null;
+};
+
+const normalizeSearchParameterOptions = (
+  options?: SearchParameterOption[]
+): NormalizedSearchOption[] => {
+  if (!Array.isArray(options)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: NormalizedSearchOption[] = [];
+
+  options.forEach((option) => {
+    const normalizedOption = normalizeSearchParameterOption(option);
+    if (!normalizedOption) {
+      return;
+    }
+    if (seen.has(normalizedOption.value)) {
+      return;
+    }
+    seen.add(normalizedOption.value);
+    normalized.push(normalizedOption);
+  });
+
+  return normalized;
+};
+
+const STATUS_INDICATOR_KEYS = new Set([
+  "statuschanged",
+  "status_changed",
+  "statusupdates",
+  "status_updates",
+  "statuschangeids",
+  "status_change_ids",
+  "updatedshipmentids",
+  "updated_shipments",
+  "updated_shipments_ids",
+  "changedshipments",
+  "changed_shipments",
+]);
+
+const SHIPMENT_COLLECTION_KEYS = new Set([
+  "shipments",
+  "items",
+  "data",
+  "results",
+  "payload",
+  "response",
+  "records",
+  "updatedshipments",
+  "updated_shipments",
+]);
+
+const POSITIVE_STATUS_TOKENS = [
+  "printed",
+  "label printed",
+  "label_printed",
+  "labelled",
+  "label-generated",
+  "label generated",
+  "labelled printed",
+  "printed successfully",
+  "printed_successfully",
+];
+
+const toNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const toBoolean = (value: unknown): boolean | null => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (value === 1) {
+      return true;
+    }
+    if (value === 0) {
+      return false;
+    }
+    return null;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return null;
+    }
+    if (["true", "1", "yes", "y"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "n"].includes(normalized)) {
+      return false;
+    }
+  }
+  return null;
+};
+
+const extractStatusChangedShipmentIds = (
+  payload: unknown,
+  fallbackIds: number[]
+): number[] => {
+  const changed = new Set<number>();
+  const visited = new Set<unknown>();
+
+  const pushId = (candidate: unknown) => {
+    const id = toNumber(candidate);
+    if (id != null) {
+      changed.add(id);
+    }
+  };
+
+  const indicatesPrintedStatus = (rawStatus: unknown): boolean => {
+    if (typeof rawStatus !== "string") {
+      return false;
+    }
+
+    const normalized = rawStatus.trim().toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+
+    if (normalized.startsWith("not ") || normalized.includes("not printed")) {
+      return false;
+    }
+
+    if (POSITIVE_STATUS_TOKENS.some((token) => normalized.includes(token))) {
+      return true;
+    }
+
+    return normalized.includes("printed") || normalized.includes("labelled");
+  };
+
+  const considerShipmentLike = (value: unknown) => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+
+    const candidate = value as Record<string, unknown>;
+    const id =
+      toNumber(candidate.id) ??
+      toNumber(candidate.shipmentId) ??
+      toNumber(candidate.shipment_id);
+
+    if (id == null) {
+      return;
+    }
+
+    const statusFlag =
+      toBoolean(candidate.statusChanged) ??
+      toBoolean(candidate.status_changed) ??
+      toBoolean(candidate.statusUpdated) ??
+      toBoolean(candidate.status_updated) ??
+      toBoolean(candidate.statusHasChanged) ??
+      toBoolean(candidate.status_has_changed);
+
+    const labelFlag =
+      toBoolean(candidate.labelPrinted) ??
+      toBoolean(candidate.label_printed) ??
+      toBoolean(candidate.labelStatus) ??
+      toBoolean(candidate.label_status);
+
+    const statusValue =
+      candidate.status ??
+      candidate.statusCode ??
+      candidate.status_code ??
+      candidate.state ??
+      candidate.currentStatus ??
+      candidate.current_status;
+
+    if (
+      statusFlag === true ||
+      labelFlag === true ||
+      indicatesPrintedStatus(statusValue)
+    ) {
+      changed.add(id);
+    }
+  };
+
+  const traverse = (value: unknown): void => {
+    if (value == null) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      if (visited.has(value)) {
+        return;
+      }
+      visited.add(value);
+      value.forEach((entry) => {
+        considerShipmentLike(entry);
+        traverse(entry);
+      });
+      return;
+    }
+
+    if (typeof value !== "object") {
+      return;
+    }
+
+    if (visited.has(value)) {
+      return;
+    }
+    visited.add(value);
+
+    const obj = value as Record<string, unknown>;
+    considerShipmentLike(obj);
+
+    Object.entries(obj).forEach(([key, child]) => {
+      const normalizedKey = key.trim().toLowerCase();
+
+      if (STATUS_INDICATOR_KEYS.has(normalizedKey)) {
+        const boolValue = toBoolean(child);
+        if (boolValue === true) {
+          fallbackIds.forEach((id) => changed.add(id));
+          return;
+        }
+        if (Array.isArray(child)) {
+          child.forEach((entry) => pushId(entry));
+        } else {
+          pushId(child);
+        }
+        return;
+      }
+
+      if (SHIPMENT_COLLECTION_KEYS.has(normalizedKey)) {
+        traverse(child);
+        return;
+      }
+
+      traverse(child);
+    });
+  };
+
+  traverse(payload);
+
+  if (changed.size === 0) {
+    if (Array.isArray(payload)) {
+      payload.forEach((entry) => pushId(entry));
+    } else {
+      pushId(payload);
+    }
+  }
+
+  return Array.from(changed.values());
+};
+
+type LabelGenerationResult = {
+  statusChangedShipmentIds: number[];
+  payload?: unknown;
+};
+
+const resolveInputTypeForSearchField = (
+  field: SearchParameter
+): "text" | "number" | "date" => {
+  const type = field.type ? field.type.toLowerCase() : "";
+  if (type.includes("date")) {
+    return "date";
+  }
+  if (
+    type.includes("number") ||
+    type.includes("numeric") ||
+    type.includes("decimal") ||
+    type.includes("int")
+  ) {
+    return "number";
+  }
+  return "text";
 };
 
 type StatusApiStatus = {
@@ -291,6 +633,11 @@ const ORDER_DIRECTION_PARAM_KEYS = [
   "orderDirection",
 ] as const;
 
+const RESERVED_QUERY_KEYS = new Set<string>([
+  ...ORDER_BY_PARAM_KEYS,
+  ...ORDER_DIRECTION_PARAM_KEYS,
+]);
+
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -393,9 +740,15 @@ export function ShipmentsTable({
   const [carrierColors, setCarrierColors] = useState<Record<string, string>>(
     {}
   );
-  const [, setLoadingSearchParams] = useState(false);
+  const [areSearchParamsLoading, setLoadingSearchParams] = useState(false);
   const [searchFields, setSearchFields] = useState<
     Record<string, SearchParameter>
+  >({});
+  const [selectedSearchFieldKey, setSelectedSearchFieldKey] = useState<
+    string | null
+  >(null);
+  const [draftSearchValues, setDraftSearchValues] = useState<
+    Record<string, string>
   >({});
   const [detailAction, setDetailAction] = useState(0);
   const [sortColumn, setSortColumn] = useState<SortTarget | null>(null);
@@ -717,6 +1070,347 @@ export function ShipmentsTable({
     (target: SortTarget | null) =>
       target ? sortColumnConfig[target] ?? SORT_FALLBACK_COLUMNS[target] : null,
     [sortColumnConfig]
+  );
+
+  const searchParameterEntries = useMemo(() => {
+    const entries = Object.entries(searchFields);
+    if (entries.length === 0) {
+      return [] as Array<[string, SearchParameter]>;
+    }
+
+    const weightOf = (field: SearchParameter) =>
+      typeof field.weight === "number" && !Number.isNaN(field.weight)
+        ? field.weight
+        : Number.MAX_SAFE_INTEGER;
+
+    return entries.sort((a, b) => {
+      const weightDiff = weightOf(a[1]) - weightOf(b[1]);
+      if (weightDiff !== 0) {
+        return weightDiff;
+      }
+      const nameA = String(a[1].name ?? a[0]).toLowerCase();
+      const nameB = String(b[1].name ?? b[0]).toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  }, [searchFields]);
+
+  const searchParameterOrder = useMemo(() => {
+    const map = new Map<string, number>();
+    searchParameterEntries.forEach(([key], index) => {
+      map.set(key, index);
+    });
+    return map;
+  }, [searchParameterEntries]);
+
+  const normalizedOptionsByKey = useMemo(() => {
+    const map: Record<string, NormalizedSearchOption[]> = {};
+    Object.entries(searchFields).forEach(([key, field]) => {
+      const normalized = normalizeSearchParameterOptions(field.options);
+      if (normalized.length > 0) {
+        map[key] = normalized;
+      }
+    });
+    return map;
+  }, [searchFields]);
+
+  const activeFilters = useMemo(() => {
+    const normalizedBase =
+      searchParams && searchParams.startsWith("?")
+        ? searchParams.slice(1)
+        : searchParams ?? "";
+
+    if (!normalizedBase) {
+      return [] as Array<{
+        key: string;
+        value: string;
+        parameter: SearchParameter;
+      }>;
+    }
+
+    const params = new URLSearchParams(normalizedBase);
+    const seenKeys = new Set<string>();
+    const entries: Array<{
+      key: string;
+      value: string;
+      parameter: SearchParameter;
+    }> = [];
+
+    params.forEach((_, key) => {
+      if (seenKeys.has(key)) {
+        return;
+      }
+      seenKeys.add(key);
+      if (RESERVED_QUERY_KEYS.has(key)) {
+        return;
+      }
+      const parameter = searchFields[key];
+      if (!parameter) {
+        return;
+      }
+      const value = params.get(key);
+      if (value === null) {
+        return;
+      }
+      entries.push({ key, value, parameter });
+    });
+
+    entries.sort((a, b) => {
+      const orderA =
+        searchParameterOrder.get(a.key) ?? Number.MAX_SAFE_INTEGER;
+      const orderB =
+        searchParameterOrder.get(b.key) ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      const labelA = String(a.parameter.name ?? a.key).toLowerCase();
+      const labelB = String(b.parameter.name ?? b.key).toLowerCase();
+      return labelA.localeCompare(labelB);
+    });
+
+    return entries;
+  }, [searchFields, searchParameterOrder, searchParams]);
+
+  useEffect(() => {
+    if (searchParameterEntries.length === 0) {
+      if (selectedSearchFieldKey !== null) {
+        setSelectedSearchFieldKey(null);
+      }
+      return;
+    }
+
+    if (
+      selectedSearchFieldKey &&
+      searchFields[selectedSearchFieldKey]
+    ) {
+      return;
+    }
+
+    const [firstKey] = searchParameterEntries[0];
+    setSelectedSearchFieldKey(firstKey);
+  }, [
+    searchFields,
+    searchParameterEntries,
+    selectedSearchFieldKey,
+  ]);
+
+  useEffect(() => {
+    const normalizedBase =
+      searchParams && searchParams.startsWith("?")
+        ? searchParams.slice(1)
+        : searchParams ?? "";
+
+    if (!normalizedBase) {
+      setDraftSearchValues((previous) => {
+        if (Object.keys(previous).length === 0) {
+          return previous;
+        }
+        return {};
+      });
+      return;
+    }
+
+    const params = new URLSearchParams(normalizedBase);
+    const next: Record<string, string> = {};
+    params.forEach((value, key) => {
+      if (searchFields[key]) {
+        next[key] = value;
+      }
+    });
+
+    setDraftSearchValues((previous) => {
+      const prevKeys = Object.keys(previous);
+      const nextKeys = Object.keys(next);
+      if (
+        prevKeys.length === nextKeys.length &&
+        prevKeys.every((key) => previous[key] === next[key])
+      ) {
+        return previous;
+      }
+      return next;
+    });
+  }, [searchFields, searchParams]);
+
+  const selectedSearchField = selectedSearchFieldKey
+    ? searchFields[selectedSearchFieldKey] ?? null
+    : null;
+
+  const selectedFieldOptions: NormalizedSearchOption[] = selectedSearchFieldKey
+    ? normalizedOptionsByKey[selectedSearchFieldKey] ?? []
+    : [];
+
+  const selectedFieldRawValue = selectedSearchFieldKey
+    ? draftSearchValues[selectedSearchFieldKey] ?? ""
+    : "";
+
+  const hasOptionList = selectedFieldOptions.length > 0;
+  const normalizedFieldValue = hasOptionList
+    ? selectedFieldRawValue
+    : selectedFieldRawValue.trim();
+  const hasDraftValue = hasOptionList
+    ? selectedFieldRawValue !== undefined && selectedFieldRawValue !== ""
+    : normalizedFieldValue.length > 0;
+
+  const selectedInputType = selectedSearchField
+    ? resolveInputTypeForSearchField(selectedSearchField)
+    : "text";
+
+  const isApplyDisabled =
+    areSearchParamsLoading || !selectedSearchFieldKey || !hasDraftValue;
+  const isClearDisabled =
+    areSearchParamsLoading ||
+    (activeFilters.length === 0 && !hasDraftValue);
+
+  const updateSearchParamsWith = useCallback(
+    (updater: (params: URLSearchParams) => void) => {
+      const normalizedBase =
+        searchParams && searchParams.startsWith("?")
+          ? searchParams.slice(1)
+          : searchParams ?? "";
+      const params = new URLSearchParams(normalizedBase);
+      const before = params.toString();
+
+      updater(params);
+
+      const nextQuery = params.toString();
+      if (nextQuery === before) {
+        return;
+      }
+
+      setSearchParams(nextQuery);
+      setCurrentPage(1);
+      fetchShipments();
+    },
+    [fetchShipments, searchParams, setCurrentPage, setSearchParams]
+  );
+
+  const handleDraftValueUpdate = useCallback(
+    (value: string) => {
+      if (!selectedSearchFieldKey) {
+        return;
+      }
+      setDraftSearchValues((previous) => {
+        if (previous[selectedSearchFieldKey] === value) {
+          return previous;
+        }
+        return {
+          ...previous,
+          [selectedSearchFieldKey]: value,
+        };
+      });
+    },
+    [selectedSearchFieldKey, setDraftSearchValues]
+  );
+
+  const handleFilterSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!selectedSearchFieldKey) {
+        return;
+      }
+
+      const rawValue = draftSearchValues[selectedSearchFieldKey] ?? "";
+      const valueForQuery = hasOptionList ? rawValue : rawValue.trim();
+
+      if (!valueForQuery) {
+        updateSearchParamsWith((params) => {
+          if (params.has(selectedSearchFieldKey)) {
+            params.delete(selectedSearchFieldKey);
+          }
+        });
+        setDraftSearchValues((previous) => {
+          if (!(selectedSearchFieldKey in previous)) {
+            return previous;
+          }
+          const next = { ...previous };
+          delete next[selectedSearchFieldKey];
+          return next;
+        });
+        return;
+      }
+
+      updateSearchParamsWith((params) => {
+        params.delete(selectedSearchFieldKey);
+        params.set(selectedSearchFieldKey, valueForQuery);
+      });
+
+      if (valueForQuery !== rawValue) {
+        setDraftSearchValues((previous) => ({
+          ...previous,
+          [selectedSearchFieldKey]: valueForQuery,
+        }));
+      }
+    },
+    [
+      draftSearchValues,
+      hasOptionList,
+      selectedSearchFieldKey,
+      setDraftSearchValues,
+      updateSearchParamsWith,
+    ]
+  );
+
+  const handleRemoveFilter = useCallback(
+    (key: string) => {
+      setDraftSearchValues((previous) => {
+        if (!(key in previous)) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+      updateSearchParamsWith((params) => {
+        if (params.has(key)) {
+          params.delete(key);
+        }
+      });
+    },
+    [setDraftSearchValues, updateSearchParamsWith]
+  );
+
+  const handleResetFilters = useCallback(() => {
+    setDraftSearchValues((previous) => {
+      if (Object.keys(previous).length === 0) {
+        return previous;
+      }
+      return {};
+    });
+    updateSearchParamsWith((params) => {
+      let modified = false;
+      Object.keys(searchFields).forEach((key) => {
+        if (params.has(key)) {
+          params.delete(key);
+          modified = true;
+        }
+      });
+
+      if (
+        !modified &&
+        selectedSearchFieldKey &&
+        params.has(selectedSearchFieldKey)
+      ) {
+        params.delete(selectedSearchFieldKey);
+      }
+    });
+  }, [
+    searchFields,
+    selectedSearchFieldKey,
+    setDraftSearchValues,
+    updateSearchParamsWith,
+  ]);
+
+  const getFilterValueLabel = useCallback(
+    (key: string, value: string) => {
+      const options = normalizedOptionsByKey[key];
+      if (options) {
+        const match = options.find((option) => option.value === value);
+        if (match) {
+          return match.label;
+        }
+      }
+      return value;
+    },
+    [normalizedOptionsByKey]
   );
 
   useEffect(() => {
@@ -2308,10 +3002,6 @@ export function ShipmentsTable({
         incrementAction: false,
         includeAlreadyPrinted: true,
       });
-      updateShipmentsByIds(selectedIds, (shipment) => ({
-        ...shipment,
-        labelPrinted: true,
-      }));
     } catch {
       // quickPrintShipments already reports the failure
     } finally {
@@ -2322,7 +3012,6 @@ export function ShipmentsTable({
     markLabelProcessing,
     quickPrintShipments,
     toast,
-    updateShipmentsByIds,
   ]);
 
   type InvoicePrintOptions = {
@@ -2622,7 +3311,7 @@ export function ShipmentsTable({
   );
 
   const generateLabelsForShipments = useCallback(
-    async (shipmentIds: number[]) => {
+    async (shipmentIds: number[]): Promise<LabelGenerationResult> => {
       if (shipmentIds.length === 0) {
         throw new Error("No shipment ids provided for label generation.");
       }
@@ -2631,13 +3320,19 @@ export function ShipmentsTable({
       const baseUrl = "/pdf/labels/generateLabels";
       const query = `shipment_ids=${shipmentIds.join(",")}`;
 
+      type LabelGenerationRequestSuccess = {
+        ok: true;
+        payload: unknown;
+      };
+      type LabelGenerationRequestFailure = {
+        ok: false;
+        status: number | null;
+        message: string;
+      };
+
       const performRequest = async (
         method: "POST" | "PUT"
-      ): Promise<{
-        ok: boolean;
-        status: number | null;
-        message?: string;
-      }> => {
+      ): Promise<LabelGenerationRequestSuccess | LabelGenerationRequestFailure> => {
         try {
           const init: RequestInit = {
             method,
@@ -2656,28 +3351,37 @@ export function ShipmentsTable({
           }
 
           const response = await apiFetch(`${baseUrl}?${query}`, init);
+          const contentType =
+            response.headers.get("content-type")?.toLowerCase() ?? "";
+          const payload =
+            contentType.includes("application/json") ||
+            contentType.includes("text/json")
+              ? await response.json().catch(() => null)
+              : null;
 
-          if (response.ok) {
-            return { ok: true, status: response.status };
+          if (!response.ok) {
+            const message =
+              (payload &&
+              typeof payload === "object" &&
+              payload !== null &&
+              "message" in payload
+                ? String(
+                    (payload as { message?: unknown }).message ??
+                      "Failed to generate labels."
+                  )
+                : undefined) ??
+              `Failed to generate labels: ${response.status} ${response.statusText}`;
+
+            return {
+              ok: false,
+              status: response.status,
+              message,
+            };
           }
 
-          const errorData = await response.json().catch(() => null);
-          const message =
-            (errorData &&
-            typeof errorData === "object" &&
-            errorData !== null &&
-            "message" in errorData
-              ? String(
-                  (errorData as { message?: unknown }).message ??
-                    "Failed to generate labels."
-                )
-              : undefined) ??
-            `Failed to generate labels: ${response.status} ${response.statusText}`;
-
           return {
-            ok: false,
-            status: response.status,
-            message,
+            ok: true,
+            payload,
           };
         } catch (error: unknown) {
           return {
@@ -2705,6 +3409,16 @@ export function ShipmentsTable({
       if (!result.ok) {
         throw new Error(result.message);
       }
+
+      const statusChangedShipmentIds = extractStatusChangedShipmentIds(
+        result.payload,
+        shipmentIds
+      );
+
+      return {
+        statusChangedShipmentIds,
+        payload: result.payload,
+      };
     },
     [getAuthToken]
   );
@@ -2723,11 +3437,16 @@ export function ShipmentsTable({
 
     try {
       markLabelProcessing(selectedIds, true);
-      await generateLabelsForShipments(selectedIds);
-      updateShipmentsByIds(selectedIds, (shipment) => ({
-        ...shipment,
-        labelPrinted: true,
-      }));
+      const { statusChangedShipmentIds } =
+        await generateLabelsForShipments(selectedIds);
+      const didStatusChange = statusChangedShipmentIds.length > 0;
+
+      if (didStatusChange) {
+        updateShipmentsByIds(statusChangedShipmentIds, (shipment) => ({
+          ...shipment,
+          labelPrinted: true,
+        }));
+      }
 
       toast({
         variant: "success",
@@ -2742,12 +3461,12 @@ export function ShipmentsTable({
           incrementAction: false,
           title: "Generated Labels Preview",
         });
-        updateShipmentsByIds(selectedIds, (shipment) => ({
-          ...shipment,
-          labelPrinted: true,
-        }));
       } catch {
         // quick print helper already handles error reporting
+      }
+
+      if (didStatusChange) {
+        setAction((prev) => prev + 1);
       }
     } catch (error: unknown) {
       console.error("Error generating labels:", error);
@@ -2763,6 +3482,7 @@ export function ShipmentsTable({
     generateLabelsForShipments,
     getSelectedShipmentIds,
     markLabelProcessing,
+    setAction,
     quickPrintShipments,
     toast,
     updateShipmentsByIds,
@@ -2772,11 +3492,18 @@ export function ShipmentsTable({
     async (shipmentId: number) => {
       try {
         markLabelProcessing([shipmentId], true);
-        await generateLabelsForShipments([shipmentId]);
-        updateShipmentsByIds([shipmentId], (shipment) => ({
-          ...shipment,
-          labelPrinted: true,
-        }));
+        const { statusChangedShipmentIds } =
+          await generateLabelsForShipments([shipmentId]);
+        const didStatusChange =
+          statusChangedShipmentIds.includes(shipmentId);
+
+        if (didStatusChange) {
+          updateShipmentsByIds([shipmentId], (shipment) => ({
+            ...shipment,
+            labelPrinted: true,
+          }));
+          setAction((prev) => prev + 1);
+        }
         toast({
           variant: "success",
           title: "Labels Generated",
@@ -2796,6 +3523,7 @@ export function ShipmentsTable({
     [
       generateLabelsForShipments,
       markLabelProcessing,
+      setAction,
       toast,
       updateShipmentsByIds,
     ]
@@ -2810,17 +3538,13 @@ export function ShipmentsTable({
           incrementAction: false,
           includeAlreadyPrinted: true,
         });
-        updateShipmentsByIds([shipmentId], (shipment) => ({
-          ...shipment,
-          labelPrinted: true,
-        }));
       } catch {
         // quickPrintShipments already reports the failure
       } finally {
         markLabelProcessing([shipmentId], false);
       }
     },
-    [markLabelProcessing, quickPrintShipments, updateShipmentsByIds]
+    [markLabelProcessing, quickPrintShipments]
   );
 
   const resolveShipmentRowColor = useCallback(
@@ -2874,6 +3598,127 @@ export function ShipmentsTable({
         pdfUrl={pdfUrl}
         title={pdfTitle}
       />
+      <div className="border-b border-gray-200 bg-white px-4 py-3">
+        <form
+          onSubmit={handleFilterSubmit}
+          className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-3">
+            <div className="w-full md:w-52">
+              <Select
+                value={selectedSearchFieldKey ?? undefined}
+                onValueChange={(value) => setSelectedSearchFieldKey(value)}
+                disabled={
+                  areSearchParamsLoading || searchParameterEntries.length === 0
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose filter" />
+                </SelectTrigger>
+                <SelectContent>
+                  {searchParameterEntries.map(([key, parameter]) => (
+                    <SelectItem key={key} value={key}>
+                      {parameter.name ?? key}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full md:w-60">
+              {hasOptionList ? (
+                <Select
+                  value={
+                    selectedFieldRawValue === ""
+                      ? undefined
+                      : selectedFieldRawValue
+                  }
+                  onValueChange={handleDraftValueUpdate}
+                  disabled={areSearchParamsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select value" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedFieldOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={selectedFieldRawValue}
+                  onChange={(event) => handleDraftValueUpdate(event.target.value)}
+                  placeholder={
+                    selectedSearchField?.name
+                      ? `Search ${selectedSearchField.name}`
+                      : "Enter value"
+                  }
+                  type={selectedInputType}
+                  disabled={areSearchParamsLoading || !selectedSearchField}
+                />
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 md:justify-end">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isApplyDisabled}
+              className="flex items-center gap-2"
+            >
+              <Search className="h-4 w-4" />
+              Apply
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isClearDisabled}
+              onClick={handleResetFilters}
+            >
+              Clear
+            </Button>
+          </div>
+        </form>
+        {areSearchParamsLoading ? (
+          <div className="mt-3 flex gap-2">
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-6 w-24" />
+          </div>
+        ) : activeFilters.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {activeFilters.map((filter) => (
+              <Badge
+                key={`${filter.key}-${filter.value}`}
+                variant="secondary"
+                className="flex items-center gap-2"
+              >
+                <span className="text-xs font-medium text-gray-700">
+                  {filter.parameter.name ?? filter.key}:
+                </span>
+                <span className="text-xs text-gray-700">
+                  {getFilterValueLabel(filter.key, filter.value)}
+                </span>
+                <button
+                  type="button"
+                  className="rounded-full p-1 text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-1"
+                  onClick={() => handleRemoveFilter(filter.key)}
+                  aria-label={`Remove ${filter.parameter.name ?? filter.key} filter`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        {!areSearchParamsLoading && searchParameterEntries.length === 0 ? (
+          <p className="mt-3 text-xs text-gray-500">
+            No searchable fields are available for this view yet.
+          </p>
+        ) : null}
+      </div>
       <div
         ref={toolbarRef}
         className={cn(
@@ -3892,3 +4737,5 @@ export function ShipmentsTable({
     </>
   );
 }
+
+
